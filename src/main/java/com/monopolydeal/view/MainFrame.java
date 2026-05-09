@@ -11,7 +11,6 @@ public class MainFrame extends JFrame {
     private final GameClient client;
     private CardLayout cardLayout;
     private JPanel mainPanel;
-
     private LobbyPanel lobbyPanel;
     private GamePanel gamePanel;
     private String localPlayerId;
@@ -29,16 +28,12 @@ public class MainFrame extends JFrame {
         setSize(1280, 800);
         setMinimumSize(new Dimension(1024, 768));
         setLocationRelativeTo(null);
-
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
-
         lobbyPanel = new LobbyPanel(client);
         gamePanel = new GamePanel(client);
-
         mainPanel.add(lobbyPanel, "LOBBY");
         mainPanel.add(gamePanel, "GAME");
-
         add(mainPanel);
         cardLayout.show(mainPanel, "LOBBY");
     }
@@ -49,19 +44,11 @@ public class MainFrame extends JFrame {
                 try {
                     MessageProtocol.MessageType type = MessageProtocol.getType(message);
                     String payload = MessageProtocol.getPayload(message);
-
                     switch (type) {
                         case ROOM_UPDATE:
                             lobbyPanel.updateRoom(payload);
                             break;
                         case GAME_STATE_UPDATE:
-                            JsonObject stateObj = JsonParser.parseString(payload).getAsJsonObject();
-                            if (stateObj.has("activePlayerId")) {
-                                String activeId = stateObj.get("activePlayerId").getAsString();
-                                if (activeId != null && !activeId.isEmpty()) {
-                                    gamePanel.setLocalPlayerId(activeId);
-                                }
-                            }
                             cardLayout.show(mainPanel, "GAME");
                             gamePanel.updateGameState(payload);
                             break;
@@ -70,11 +57,6 @@ public class MainFrame extends JFrame {
                             break;
                         case ERROR:
                             handleError(payload);
-                            break;
-                        case TURN_TIMEOUT:
-                            break;
-                        case GAME_DRAW:
-                            handleGameDraw(payload);
                             break;
                         default:
                             break;
@@ -90,73 +72,20 @@ public class MainFrame extends JFrame {
         try {
             JsonObject result = JsonParser.parseString(payload).getAsJsonObject();
             String winnerNickname = result.get("winnerNickname").getAsString();
-            String gameDuration = result.get("gameDuration").getAsString();
-
-            String message = String.format(
-                    "Game Over!\n\nWinner: %s\nDuration: %s\n\nWould you like to return to the lobby?",
-                    winnerNickname, gameDuration
-            );
-
-            int choice = JOptionPane.showConfirmDialog(
-                    this,
-                    message,
-                    "Game Over",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-
-            if (choice == JOptionPane.YES_OPTION) {
-                cardLayout.show(mainPanel, "LOBBY");
-            }
+            JOptionPane.showMessageDialog(this, "Game Over!\nWinner: " + winnerNickname);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Game Over!", "Game Over", JOptionPane.INFORMATION_MESSAGE);
-            cardLayout.show(mainPanel, "LOBBY");
+            JOptionPane.showMessageDialog(this, "Game Over!");
         }
+        cardLayout.show(mainPanel, "LOBBY");
     }
 
     private void handleError(String payload) {
         try {
             JsonObject error = JsonParser.parseString(payload).getAsJsonObject();
             String errorMessage = error.has("message") ? error.get("message").getAsString() : "Unknown error";
-            JOptionPane.showMessageDialog(
-                    this,
-                    errorMessage,
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            JOptionPane.showMessageDialog(this, errorMessage, "Error", JOptionPane.ERROR_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "An error occurred",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            JOptionPane.showMessageDialog(this, "An error occurred", "Error", JOptionPane.ERROR_MESSAGE);
         }
-    }
-
-    private void handleGameDraw(String payload) {
-        try {
-            JsonObject drawResult = JsonParser.parseString(payload).getAsJsonObject();
-            String reason = drawResult.has("reason") ? drawResult.get("reason").getAsString() : "Game ended in a draw";
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Game ended in a draw.\nReason: " + reason,
-                    "Game Draw",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-
-            cardLayout.show(mainPanel, "LOBBY");
-        } catch (Exception e) {
-            cardLayout.show(mainPanel, "LOBBY");
-        }
-    }
-
-    public void showLobby() {
-        cardLayout.show(mainPanel, "LOBBY");
-    }
-
-    public void showGame() {
-        cardLayout.show(mainPanel, "GAME");
     }
 }

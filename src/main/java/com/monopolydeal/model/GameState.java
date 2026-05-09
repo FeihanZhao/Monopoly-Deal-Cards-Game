@@ -19,6 +19,7 @@ public class GameState {
     private boolean gameOver;
     private String winnerId;
     private String winnerNickname;
+    private String viewerId;
 
     public GameState() {
         this.phase = GamePhase.INIT;
@@ -35,6 +36,7 @@ public class GameState {
         this.gameOver = false;
         this.winnerId = "";
         this.winnerNickname = "";
+        this.viewerId = "";
     }
 
     public String getRoomCode() { return roomCode; }
@@ -76,16 +78,11 @@ public class GameState {
     public String getWinnerNickname() { return winnerNickname; }
     public void setWinnerNickname(String winnerNickname) { this.winnerNickname = winnerNickname; }
 
+    public String getViewerId() { return viewerId; }
+    public void setViewerId(String viewerId) { this.viewerId = viewerId; }
+
     public void addPlayerState(String playerId, PlayerState state) {
         playerStates.put(playerId, state);
-    }
-
-    public void updatePlayerState(String playerId, PlayerState state) {
-        playerStates.put(playerId, state);
-    }
-
-    public void removePlayerState(String playerId) {
-        playerStates.remove(playerId);
     }
 
     public PlayerState getPlayerState(String playerId) {
@@ -100,13 +97,6 @@ public class GameState {
         return playerStates.size();
     }
 
-    public void addAction(ActionRecord action) {
-        actionHistory.add(0, action);
-        if (actionHistory.size() > 50) {
-            actionHistory.remove(actionHistory.size() - 1);
-        }
-    }
-
     public void setActionHistory(List<ActionRecord> actions) {
         actionHistory.clear();
         actionHistory.addAll(actions);
@@ -114,15 +104,6 @@ public class GameState {
 
     public List<ActionRecord> getActionHistory() {
         return Collections.unmodifiableList(actionHistory);
-    }
-
-    public List<ActionRecord> getRecentActions(int count) {
-        int endIndex = Math.min(count, actionHistory.size());
-        return new ArrayList<>(actionHistory.subList(0, endIndex));
-    }
-
-    public void clearActionHistory() {
-        actionHistory.clear();
     }
 
     public static class PlayerState {
