@@ -36,16 +36,16 @@ import java.util.Map;
  */
 public class CardRenderer extends JPanel {
 
-    // ── Card dimensions ────────────────────────────────────────────────────────
+    // Card dimensions
     public static final int CARD_W = 90;
     public static final int CARD_H = 130;
     public static final int CORNER_RADIUS = 12;
 
-    // ── Lift offsets (pixels the card moves upward) ────────────────────────────
+    // Lift offsets (pixels the card moves upward)
     private static final int LIFT_HOVER    = 12;
     private static final int LIFT_SELECTED = 22;
 
-    // ── Colour palette: cardColorKey → { background, border, text } ───────────
+    // Colour palette: cardColorKey → { background, border, text } 
     /**
      * CardPalette holds the three colours needed to paint a card face.
      * 'gradient' is an optional secondary colour; when non-null the background
@@ -77,7 +77,7 @@ public class CardRenderer extends JPanel {
     private static final Map<String, CardPalette> PALETTES = new HashMap<>();
 
     static {
-        // ── Property colours ───────────────────────────────────────────────────
+        // Property colours
         PALETTES.put("BROWN",
                 new CardPalette(new Color(0x8B5E3C), new Color(0x5D3A1A),
                         new Color(0xFFFFFF)));
@@ -112,7 +112,7 @@ public class CardRenderer extends JPanel {
                 new CardPalette(new Color(0x90EE90), new Color(0x4CAF50),
                         new Color(0x1A1A1A)));
 
-        // ── Card types (used when no specific property colour is available) ────
+        // Card types (used when no specific property colour is available)
         PALETTES.put("MONEY",
                 new CardPalette(new Color(0x2E7D32), new Color(0x1B5E20),
                         new Color(0xFFFFFF)));
@@ -123,19 +123,19 @@ public class CardRenderer extends JPanel {
                 new CardPalette(new Color(0xBF360C), new Color(0x870000),
                         new Color(0xFFFFFF)));
 
-        // ── Wild: rainbow gradient ─────────────────────────────────────────────
+        // Wild: rainbow gradient
         // Handled as a special case in paintCardBackground(); palette entry
         // is provided as a fallback only.
         PALETTES.put("WILD",
                 new CardPalette(new Color(0xFF6B6B), new Color(0x4D96FF),
                         new Color(0xFFFFFF)));
 
-        // ── Default / unknown ──────────────────────────────────────────────────
+        // Default / unknown 
         PALETTES.put("NONE",
                 new CardPalette(Color.GRAY, Color.DARK_GRAY, Color.WHITE));
     }
 
-    // ── Icon map: cardType → unicode symbol rendered at large size ─────────────
+    // Icon map: cardType → unicode symbol rendered at large size
     private static final Map<String, String> TYPE_ICONS = new HashMap<>();
 
     static {
@@ -145,23 +145,23 @@ public class CardRenderer extends JPanel {
         TYPE_ICONS.put("RENT",     "💸");
     }
 
-    // ── Card data ──────────────────────────────────────────────────────────────
+    // Card data
     private final String cardId;
     private final String cardName;
     private final String cardType;   // "MONEY" | "PROPERTY" | "ACTION" | "RENT"
     private final String colorKey;   // CardColor.name()
     private final int    value;      // monetary value (0 for non-money cards)
 
-    // ── Interaction state ──────────────────────────────────────────────────────
+    // Interaction state
     private boolean selected  = false;
     private boolean hovered   = false;
 
-    // ── Animation ─────────────────────────────────────────────────────────────
+    // Animation
     /** Current vertical lift in pixels; animated toward targetLift. */
     private float   currentLift = 0f;
     private Timer   animTimer;
 
-    // ── Callback ───────────────────────────────────────────────────────────────
+    // ── Callback
     /** Called with this card's ID when the user clicks a playable card. */
     @FunctionalInterface
     public interface PlayListener {
@@ -170,14 +170,13 @@ public class CardRenderer extends JPanel {
 
     private PlayListener playListener;
 
-    // ── Cached rendering assets ────────────────────────────────────────────────
+    // Cached rendering assets
     /** Off-screen buffer; rebuilt only when size changes. */
     private BufferedImage offscreenBuffer;
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    
     // Constructors
-    // ═══════════════════════════════════════════════════════════════════════════
-
+    
     /**
      * Primary constructor – build from raw fields.
      *
@@ -211,10 +210,8 @@ public class CardRenderer extends JPanel {
                 cardJson.has("value") ? cardJson.get("value").getAsInt() : 0
         );
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
+   
     // Initialisation
-    // ═══════════════════════════════════════════════════════════════════════════
 
     private void initComponent() {
         // Fixed preferred size; the card never grows or shrinks.
@@ -226,7 +223,7 @@ public class CardRenderer extends JPanel {
         // parent panel's background.
         setOpaque(false);
 
-        // ── Hover detection ────────────────────────────────────────────────────
+        // Hover detection
         addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) {
                 if (isEnabled()) { hovered = true;  animateLift(); }
@@ -241,7 +238,7 @@ public class CardRenderer extends JPanel {
             }
         });
 
-        // ── Smooth lift animation timer ────────────────────────────────────────
+        // Smooth lift animation timer
         // Fires every 16 ms (~60 fps); moves currentLift 20% toward targetLift.
         animTimer = new Timer(16, e -> {
             float target = getTargetLift();
@@ -259,9 +256,7 @@ public class CardRenderer extends JPanel {
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
     // Public API
-    // ═══════════════════════════════════════════════════════════════════════════
 
     /** Attach a listener that fires when this card is clicked. */
     public void setPlayListener(PlayListener listener) {
@@ -287,7 +282,7 @@ public class CardRenderer extends JPanel {
         return cardId;
     }
 
-    // ── Override setEnabled so the cursor changes and the card dims ────────────
+    // Override setEnabled so the cursor changes and the card dims
     @Override
     public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
@@ -297,9 +292,7 @@ public class CardRenderer extends JPanel {
         repaint();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
     // Animation helpers
-    // ═══════════════════════════════════════════════════════════════════════════
 
     private float getTargetLift() {
         if (selected) return LIFT_SELECTED;
@@ -311,10 +304,8 @@ public class CardRenderer extends JPanel {
         if (!animTimer.isRunning()) animTimer.start();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
     // Painting
-    // ═══════════════════════════════════════════════════════════════════════════
-
+    
     /**
      * All painting is done here.  We translate the graphics context upward by
      * currentLift so the card appears to float; the component bounds are tall
@@ -341,16 +332,16 @@ public class CardRenderer extends JPanel {
                 0, cardTop, CARD_W, CARD_H, CORNER_RADIUS, CORNER_RADIUS);
         g2.setClip(cardShape);
 
-        // ── 1. Drop shadow ─────────────────────────────────────────────────────
+        // 1. Drop shadow
         paintDropShadow(g2, cardTop);
 
-        // ── 2. Card background ─────────────────────────────────────────────────
+        // 2. Card background
         paintCardBackground(g2, cardTop);
 
-        // ── 3. Selected glow overlay ───────────────────────────────────────────
+        // 3. Selected glow overlay
         if (selected) paintSelectionGlow(g2, cardTop);
 
-        // ── 4. Disabled dim overlay ────────────────────────────────────────────
+        // 4. Disabled dim overlay
         if (!isEnabled()) {
             g2.setColor(new Color(0, 0, 0, 120));
             g2.fill(cardShape);
@@ -359,25 +350,25 @@ public class CardRenderer extends JPanel {
         // Remove clip so text can paint inside without artifacts.
         g2.setClip(null);
 
-        // ── 5. Card type label (top-left badge) ────────────────────────────────
+        // 5. Card type label (top-left badge)
         paintTypeBadge(g2, cardTop);
 
-        // ── 6. Centre icon ─────────────────────────────────────────────────────
+        // 6. Centre icon 
         paintIcon(g2, cardTop);
 
-        // ── 7. Card name ───────────────────────────────────────────────────────
+        // 7. Card name
         paintName(g2, cardTop);
 
-        // ── 8. Value badge (bottom, money cards only) ──────────────────────────
+        // 8. Value badge (bottom, money cards only)
         if (value > 0) paintValueBadge(g2, cardTop);
 
-        // ── 9. Gold border when selected ───────────────────────────────────────
+        // 9. Gold border when selected
         paintBorder(g2, cardTop);
 
         g2.dispose();
     }
 
-    // ── Shadow ─────────────────────────────────────────────────────────────────
+    // Shadow
     private void paintDropShadow(Graphics2D g2, int cardTop) {
         int shadowOffset = selected ? 8 : (hovered ? 6 : 3);
         int shadowAlpha  = selected ? 120 : (hovered ? 100 : 70);
@@ -390,7 +381,7 @@ public class CardRenderer extends JPanel {
         }
     }
 
-    // ── Background (gradient or wild rainbow) ──────────────────────────────────
+    // Background (gradient or wild rainbow)
     private void paintCardBackground(Graphics2D g2, int cardTop) {
         Shape shape = new RoundRectangle2D.Float(
                 0, cardTop, CARD_W, CARD_H, CORNER_RADIUS, CORNER_RADIUS);
@@ -419,7 +410,7 @@ public class CardRenderer extends JPanel {
         g2.fill(shape);
     }
 
-    // ── Golden glow overlay when selected ─────────────────────────────────────
+    // Golden glow overlay when selected
     private void paintSelectionGlow(Graphics2D g2, int cardTop) {
         // Inner radial glow: semi-transparent golden highlight in the centre.
         RadialGradientPaint glow = new RadialGradientPaint(
@@ -433,7 +424,7 @@ public class CardRenderer extends JPanel {
                 0, cardTop, CARD_W, CARD_H, CORNER_RADIUS, CORNER_RADIUS));
     }
 
-    // ── Type badge (top-left corner) ───────────────────────────────────────────
+    // Type badge (top-left corner)
     private void paintTypeBadge(Graphics2D g2, int cardTop) {
         String label = cardType;   // "MONEY", "PROPERTY", etc.
         Font  font   = new Font("SansSerif", Font.BOLD, 8);
@@ -453,7 +444,7 @@ public class CardRenderer extends JPanel {
         g2.drawString(label, bx + 4, by + fm.getAscent() + 1);
     }
 
-    // ── Centre emoji icon ──────────────────────────────────────────────────────
+    // Centre emoji icon
     private void paintIcon(Graphics2D g2, int cardTop) {
         String icon = TYPE_ICONS.getOrDefault(cardType, "🃏");
 
@@ -472,7 +463,7 @@ public class CardRenderer extends JPanel {
         g2.drawString(icon, x, y);
     }
 
-    // ── Card name (centre, below icon) ────────────────────────────────────────
+    // Card name (centre, below icon)
     private void paintName(Graphics2D g2, int cardTop) {
         CardPalette palette = resolvePalette();
         g2.setColor(palette.text);
@@ -499,7 +490,7 @@ public class CardRenderer extends JPanel {
         }
     }
 
-    // ── Value badge (bottom-centre, money cards) ───────────────────────────────
+    // Value badge (bottom-centre, money cards)
     private void paintValueBadge(Graphics2D g2, int cardTop) {
         String label = "$" + value + "M";
         Font   font  = new Font("SansSerif", Font.BOLD, 12);
@@ -519,7 +510,7 @@ public class CardRenderer extends JPanel {
         g2.drawString(label, bx + 7, by + fm.getAscent() + 2);
     }
 
-    // ── Outer border ───────────────────────────────────────────────────────────
+    // Outer border
     private void paintBorder(Graphics2D g2, int cardTop) {
         RoundRectangle2D.Float border = new RoundRectangle2D.Float(
                 0.5f, cardTop + 0.5f,
@@ -543,9 +534,7 @@ public class CardRenderer extends JPanel {
         g2.draw(border);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
     // Helpers
-    // ═══════════════════════════════════════════════════════════════════════════
 
     /**
      * Resolves the colour palette for this card.
@@ -590,9 +579,7 @@ public class CardRenderer extends JPanel {
                 : new String[]{line1.toString(), line2.toString()};
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
     // Static factory methods (convenience)
-    // ═══════════════════════════════════════════════════════════════════════════
 
     /**
      * Creates a CardRenderer for a money card.
