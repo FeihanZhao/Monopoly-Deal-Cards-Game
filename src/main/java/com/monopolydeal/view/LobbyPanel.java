@@ -35,7 +35,8 @@ public class LobbyPanel extends JPanel {
         this.isReady = false;
 
         setLayout(new BorderLayout());
-        setBackground(new Color(30, 30, 30));
+    
+        setBackground(new Color(20, 20, 40));
 
         createLoginPanel();
         createRoomPanel();
@@ -44,26 +45,39 @@ public class LobbyPanel extends JPanel {
     }
 
     private void createLoginPanel() {
-        loginPanel = new JPanel(new GridBagLayout());
-        loginPanel.setBackground(new Color(30, 30, 30));
-        loginPanel.setBorder(new EmptyBorder(50, 50, 50, 50));
+        loginPanel = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+         
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(15, 12, 35),
+                        getWidth(), getHeight(), new Color(35, 30, 60));
+                g2d.setPaint(gradient);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
+        loginPanel.setBorder(new EmptyBorder(60, 60, 60, 60));
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.insets = new Insets(15, 15, 15, 15);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JLabel titleLabel = new JLabel("Monopoly Deal");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 48));
+        titleLabel.setFont(new Font("Arial Black", Font.BOLD, 52));
         titleLabel.setForeground(new Color(255, 215, 0));
+      
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
         loginPanel.add(titleLabel, gbc);
 
-        JLabel subtitleLabel = new JLabel("Card Game");
-        subtitleLabel.setFont(new Font("Arial", Font.ITALIC, 20));
-        subtitleLabel.setForeground(Color.WHITE);
+        JLabel subtitleLabel = new JLabel("Premium Card Game");
+        subtitleLabel.setFont(new Font("Arial", Font.ITALIC, 24));
+        subtitleLabel.setForeground(new Color(180, 180, 220));
         subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridy = 1;
         loginPanel.add(subtitleLabel, gbc);
@@ -72,33 +86,37 @@ public class LobbyPanel extends JPanel {
         gbc.gridy = 2;
         gbc.gridx = 0;
         JLabel nicknameLabel = new JLabel("Nickname:");
-        nicknameLabel.setForeground(Color.WHITE);
-        nicknameLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+        nicknameLabel.setForeground(new Color(220, 220, 255));
+        nicknameLabel.setFont(new Font("Arial", Font.PLAIN, 18));
         loginPanel.add(nicknameLabel, gbc);
 
         gbc.gridx = 1;
         nicknameField = new JTextField(20);
-        nicknameField.setFont(new Font("Arial", Font.PLAIN, 16));
+        nicknameField.setFont(new Font("Arial", Font.PLAIN, 18));
         nicknameField.setText("Player" + (int)(Math.random() * 1000));
+        styleTextField(nicknameField);
         loginPanel.add(nicknameField, gbc);
 
         gbc.gridy = 3;
         gbc.gridx = 0;
         JLabel roomLabel = new JLabel("Room Code:");
-        roomLabel.setForeground(Color.WHITE);
-        roomLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+        roomLabel.setForeground(new Color(220, 220, 255));
+        roomLabel.setFont(new Font("Arial", Font.PLAIN, 18));
         loginPanel.add(roomLabel, gbc);
 
         gbc.gridx = 1;
         roomCodeField = new JTextField(20);
-        roomCodeField.setFont(new Font("Arial", Font.PLAIN, 16));
+        roomCodeField.setFont(new Font("Arial", Font.PLAIN, 18));
+        styleTextField(roomCodeField);
         loginPanel.add(roomCodeField, gbc);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
-        buttonPanel.setBackground(new Color(30, 30, 30));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 15));
+        buttonPanel.setOpaque(false);
 
-        createRoomButton = createStyledButton("Create Room", new Color(46, 139, 87));
-        joinRoomButton = createStyledButton("Join Room", new Color(70, 130, 180));
+        createRoomButton = createGradientButton("Create Room",
+                new Color(34, 186, 157), new Color(27, 156, 133));
+        joinRoomButton = createGradientButton("Join Room",
+                new Color(72, 133, 237), new Color(58, 112, 207));
 
         createRoomButton.addActionListener(e -> createRoom());
         joinRoomButton.addActionListener(e -> joinRoom());
@@ -113,32 +131,44 @@ public class LobbyPanel extends JPanel {
 
         gbc.gridy = 5;
         statusLabel = new JLabel("Enter a nickname to start");
-        statusLabel.setForeground(Color.LIGHT_GRAY);
-        statusLabel.setFont(new Font("Arial", Font.ITALIC, 14));
+        statusLabel.setForeground(new Color(180, 180, 200));
+        statusLabel.setFont(new Font("Arial", Font.ITALIC, 16));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         loginPanel.add(statusLabel, gbc);
     }
 
     private void createRoomPanel() {
-        roomPanel = new JPanel(new BorderLayout());
-        roomPanel.setBackground(new Color(40, 40, 40));
-        roomPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        roomPanel = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(25, 20, 45),
+                        getWidth(), getHeight(), new Color(40, 35, 70));
+                g2d.setPaint(gradient);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
+        roomPanel.setBorder(new EmptyBorder(30, 30, 30, 30));
 
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBackground(new Color(40, 40, 40));
+        topPanel.setOpaque(false);
 
         roomCodeLabel = new JLabel("Room: -----");
-        roomCodeLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        roomCodeLabel.setFont(new Font("Arial Black", Font.BOLD, 28));
         roomCodeLabel.setForeground(new Color(255, 215, 0));
         topPanel.add(roomCodeLabel, BorderLayout.WEST);
 
-        JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        topButtonPanel.setBackground(new Color(40, 40, 40));
+        JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        topButtonPanel.setOpaque(false);
 
-        readyButton = createStyledButton("Ready", new Color(46, 139, 87));
+        readyButton = createGradientButton("Ready",
+                new Color(46, 204, 113), new Color(39, 174, 96));
         readyButton.addActionListener(e -> toggleReady());
 
-        leaveButton = createStyledButton("Leave Room", new Color(178, 34, 34));
+        leaveButton = createGradientButton("Leave Room",
+                new Color(231, 76, 60), new Color(192, 57, 43));
         leaveButton.addActionListener(e -> leaveRoom());
 
         topButtonPanel.add(readyButton);
@@ -148,37 +178,77 @@ public class LobbyPanel extends JPanel {
         roomPanel.add(topPanel, BorderLayout.NORTH);
 
         playerListModel = new DefaultListModel<>();
-        playerList = new JList<>(playerListModel);
-        playerList.setBackground(new Color(50, 50, 50));
+        playerList = new JList<>(playerListModel) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setOpaque(false);
+            }
+        };
+        playerList.setBackground(new Color(60, 55, 100, 180));
         playerList.setForeground(Color.WHITE);
-        playerList.setFont(new Font("Arial", Font.PLAIN, 16));
-        playerList.setFixedCellHeight(40);
+        playerList.setFont(new Font("Arial", Font.PLAIN, 18));
+        playerList.setFixedCellHeight(48);
+        playerList.setSelectionBackground(new Color(100, 90, 160));
+        playerList.setSelectionForeground(Color.WHITE);
 
         JScrollPane scrollPane = new JScrollPane(playerList);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(100, 100, 100)));
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(120, 110, 180), 2, true));
         roomPanel.add(scrollPane, BorderLayout.CENTER);
     }
 
-    private JButton createStyledButton(String text, Color bgColor) {
-        JButton button = new JButton(text);
-        button.setBackground(bgColor);
-        button.setForeground(Color.WHITE);
-        button.setFont(new Font("Arial", Font.BOLD, 14));
+    private JButton createGradientButton(String text, Color start, Color end) {
+        JButton button = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                GradientPaint gradient = new GradientPaint(0, 0, start, 0, getHeight(), end);
+                g2d.setPaint(gradient);
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+
+                g2d.setColor(Color.WHITE);
+                g2d.setFont(getFont());
+                FontMetrics fm = g2d.getFontMetrics();
+                int x = (getWidth() - fm.stringWidth(getText())) / 2;
+                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
+                g2d.drawString(getText(), x, y);
+            }
+        };
+
+        button.setFont(new Font("Arial", Font.BOLD, 16));
         button.setFocusPainted(false);
         button.setBorderPainted(false);
-        button.setPreferredSize(new Dimension(150, 40));
+        button.setContentAreaFilled(false);
+        button.setPreferredSize(new Dimension(180, 50));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setBackground(bgColor.brighter());
+                button.setPreferredSize(new Dimension(190, 52));
+                button.revalidate();
             }
             public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setBackground(bgColor);
+                button.setPreferredSize(new Dimension(180, 50));
+                button.revalidate();
             }
         });
 
         return button;
+    }
+
+    private void styleTextField(JTextField field) {
+        field.setBackground(new Color(50, 45, 80));
+        field.setForeground(Color.WHITE);
+        field.setCaretColor(Color.WHITE);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(100, 90, 150), 2, true),
+                BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+        field.setOpaque(true);
     }
 
     private void createRoom() {
@@ -191,7 +261,7 @@ public class LobbyPanel extends JPanel {
         JsonObject payload = new JsonObject();
         payload.addProperty("nickname", nickname);
         client.sendMessage(MessageProtocol.MessageType.CREATE_ROOM, payload.toString());
-        setStatus("Creating room...", Color.YELLOW);
+        setStatus("Creating room...", new Color(255, 200, 0));
     }
 
     private void joinRoom() {
@@ -211,13 +281,20 @@ public class LobbyPanel extends JPanel {
         payload.addProperty("nickname", nickname);
         payload.addProperty("roomCode", roomCode);
         client.sendMessage(MessageProtocol.MessageType.JOIN_ROOM, payload.toString());
-        setStatus("Joining room...", Color.YELLOW);
+        setStatus("Joining room...", new Color(255, 200, 0));
     }
 
     private void toggleReady() {
         isReady = !isReady;
         readyButton.setText(isReady ? "Not Ready" : "Ready");
-        readyButton.setBackground(isReady ? new Color(178, 34, 34) : new Color(46, 139, 87));
+
+        if (isReady) {
+            readyButton = createGradientButton("Not Ready",
+                    new Color(231, 76, 60), new Color(192, 57, 43));
+        } else {
+            readyButton = createGradientButton("Ready",
+                    new Color(46, 204, 113), new Color(39, 174, 96));
+        }
 
         JsonObject payload = new JsonObject();
         payload.addProperty("ready", isReady);
@@ -228,17 +305,15 @@ public class LobbyPanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.LEAVE_ROOM, "{}");
         isInRoom = false;
         isReady = false;
-        readyButton.setText("Ready");
-        readyButton.setBackground(new Color(46, 139, 87));
+        readyButton = createGradientButton("Ready",
+                new Color(46, 204, 113), new Color(39, 174, 96));
         showLoginPanel();
     }
 
     public void updateRoom(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
-                System.out.println("Received room update: " + jsonPayload);
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
-
                 String roomCode = payload.get("roomCode").getAsString();
                 roomCodeLabel.setText("Room: " + roomCode);
 
@@ -252,9 +327,8 @@ public class LobbyPanel extends JPanel {
                     boolean isCreator = player.get("isCreator").getAsBoolean();
 
                     String displayText = nickname;
-                    if (isCreator) displayText += " (Host)";
-                    displayText += ready ? " [Ready]" : " [Not Ready]";
-
+                    if (isCreator) displayText += " 👑 HOST";
+                    displayText += ready ? " ✔ READY" : " ⏳ NOT READY";
                     playerListModel.addElement(displayText);
                 }
 
@@ -262,11 +336,8 @@ public class LobbyPanel extends JPanel {
                     isInRoom = true;
                     showRoomPanel();
                 }
-
-                setStatus("Room: " + roomCode + " | Players: " + players.size(), Color.GREEN);
+                setStatus("Room: " + roomCode + " | Players: " + players.size(), new Color(46, 204, 113));
             } catch (Exception e) {
-                System.err.println("Error updating room: " + e.getMessage());
-                e.printStackTrace();
                 setStatus("Error updating room", Color.RED);
             }
         });
@@ -284,7 +355,7 @@ public class LobbyPanel extends JPanel {
         add(loginPanel, BorderLayout.CENTER);
         revalidate();
         repaint();
-        setStatus("Enter a nickname to start", Color.LIGHT_GRAY);
+        setStatus("Enter a nickname to start", new Color(180, 180, 200));
     }
 
     private void setStatus(String message, Color color) {
