@@ -72,15 +72,9 @@ public class GameSession {
     private void startTurnTimer() {
         cancelTimer();
         turnTimer = scheduler.schedule(() -> {
-            JsonObject warning = new JsonObject();
-            warning.addProperty("secondsRemaining", GameConstants.TIMEOUT_WARNING_SECONDS);
-            warning.addProperty("playerId", activePlayer.getId());
-            room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT, warning.toString());
+            room.sendToPlayer(activePlayer.getId(), MessageProtocol.MessageType.TURN_TIMEOUT, "{\"secondsRemaining\":" + GameConstants.TIMEOUT_WARNING_SECONDS + "}");
             scheduler.schedule(() -> {
-                JsonObject timeoutMsg = new JsonObject();
-                timeoutMsg.addProperty("playerId", activePlayer.getId());
-                timeoutMsg.addProperty("reason", "Turn timeout");
-                room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT, timeoutMsg.toString());
+                room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT, "{\"playerId\":\"" + activePlayer.getId() + "\",\"reason\":\"Turn timeout\"}");
                 forceEndTurn();
             }, GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
         }, GameConstants.TURN_TIMEOUT_SECONDS - GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
@@ -107,61 +101,81 @@ public class GameSession {
             return;
         }
         try {
+            boolean played = false;
             switch (action) {
                 case "PLAY_MONEY":
-                    playMoneyCard(card);
+                    played = playMoneyCard(card);
                     break;
                 case "PLAY_PROPERTY":
-                    playPropertyCard(card, payload);
+                    played = playPropertyCard(card, payload);
                     break;
                 case "PLAY_RENT":
-                    playRentCard(card, payload);
+                    played = playRentCard(card, payload);
                     break;
                 case "PLAY_ACTION":
-                    playActionCard(card, payload);
+                    played = playActionCard(card, payload);
                     break;
                 default:
                     sendError(playerId, "Unknown action: " + action);
                     return;
             }
-            activePlayer.incrementPlaysUsed();
-            recordAction(playerId, activePlayer.getNickname(), action, "", 0, card.getName());
-            broadcastGameState();
-            if (activePlayer.getRemainingPlays() <= 0) {
-                scheduler.schedule(this::forceEndTurn, 500, TimeUnit.MILLISECONDS);
+            if (played) {
+                activePlayer.incrementPlaysUsed();
+                recordAction(playerId, activePlayer.getNickname(), action, "", 0, card.getName());
+                broadcastGameState();
+                if (activePlayer.getRemainingPlays() <= 0) {
+                    scheduler.schedule(this::forceEndTurn, 500, TimeUnit.MILLISECONDS);
+                }
             }
         } catch (Exception e) {
             sendError(playerId, e.getMessage());
         }
     }
 
-    private void playMoneyCard(Card card) {
+    private boolean playMoneyCard(Card card) {
+        if (!card.isMoneyCard()) return false;
         activePlayer.removeCardFromHand(card);
         activePlayer.getBank().deposit(card);
+        return true;
     }
 
-    private void playPropertyCard(Card card, JsonObject payload) {
+    private boolean playPropertyCard(Card card, JsonObject payload) {
+        if (!card.isPropertyCard()) return false;
         activePlayer.removeCardFromHand(card);
         if (card.isWildProperty() && payload.has("color")) {
-            String colorName = payload.get("color").getAsString();
-            card.setWildColor(CardColor.valueOf(colorName));
+            try {
+                String colorName = payload.get("color").getAsString();
+                card.setWildColor(CardColor.valueOf(colorName));
+            } catch (IllegalArgumentException ignored) {}
         }
         activePlayer.getPropertyZone().addProperty(card);
         if (activePlayer.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
             endGame(activePlayer);
         }
+        return true;
     }
 
-    private void playRentCard(Card card, JsonObject payload) {
+    private boolean playRentCard(Card card, JsonObject payload) {
+        if (!card.isRentCard()) return false;
         activePlayer.removeCardFromHand(card);
         deck.discard(card);
-        String rentColorName = payload.get("color").getAsString();
-        CardColor rentColor = CardColor.valueOf(rentColorName);
+
+        CardColor rentColor = CardColor.WILD;
+        if (payload.has("color")) {
+            try {
+                rentColor = CardColor.valueOf(payload.get("color").getAsString());
+            } catch (IllegalArgumentException e) {
+                rentColor = CardColor.WILD;
+            }
+        }
+
         int baseRentAmount = activePlayer.getPropertyZone().getRentAmount(rentColor);
+        if (baseRentAmount == 0) baseRentAmount = 2;
         int rentAmount = activePlayer.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
         activePlayer.setDoubleRentActive(false);
+
         if (card.getColor() == CardColor.WILD) {
-            String targetPlayerId = payload.get("targetPlayerId").getAsString();
+            String targetPlayerId = payload.has("targetPlayerId") ? payload.get("targetPlayerId").getAsString() : "";
             Player targetPlayer = findPlayer(targetPlayerId);
             if (targetPlayer != null) {
                 requirePayment(targetPlayer, activePlayer, rentAmount);
@@ -173,52 +187,64 @@ public class GameSession {
                 }
             }
         }
+        return true;
     }
 
-    private void playActionCard(Card card, JsonObject payload) {
+    private boolean playActionCard(Card card, JsonObject payload) {
+        if (!card.isActionCard()) return false;
         activePlayer.removeCardFromHand(card);
         deck.discard(card);
         String actionName = card.getName();
-        switch (actionName) {
-            case "Debt Collector":
-                String targetId = payload.get("targetPlayerId").getAsString();
-                Player target = findPlayer(targetId);
-                if (target != null) requirePayment(target, activePlayer, GameConstants.DEBT_COLLECTOR_AMOUNT);
-                break;
-            case "Birthday":
-                for (Player player : players) {
-                    if (!player.equals(activePlayer)) requirePayment(player, activePlayer, GameConstants.BIRTHDAY_AMOUNT);
-                }
-                break;
-            case "Deal Breaker":
-            case "Pass Go":
-                List<Card> drawnCards = deck.drawMultiple(2);
-                drawnCards.forEach(activePlayer::addCardToHand);
-                break;
-            case "Double The Rent":
-            case "Double Rent":
-                activePlayer.setDoubleRentActive(true);
-                break;
-            case "House":
-                CardColor houseColor = CardColor.valueOf(payload.get("color").getAsString());
-                activePlayer.getPropertyZone().addHouse(houseColor);
-                break;
-            case "Hotel":
-                CardColor hotelColor = CardColor.valueOf(payload.get("color").getAsString());
-                activePlayer.getPropertyZone().addHotel(hotelColor);
-                break;
-            case "Forced Deal":
+
+        if (actionName.contains("Debt Collector")) {
+            String targetId = payload.has("targetPlayerId") ? payload.get("targetPlayerId").getAsString() : "";
+            Player target = findPlayer(targetId);
+            if (target != null) requirePayment(target, activePlayer, GameConstants.DEBT_COLLECTOR_AMOUNT);
+        } else if (actionName.contains("Birthday")) {
+            for (Player player : players) {
+                if (!player.equals(activePlayer)) requirePayment(player, activePlayer, GameConstants.BIRTHDAY_AMOUNT);
+            }
+        } else if (actionName.contains("Deal Breaker") || actionName.contains("Pass Go")) {
+            List<Card> drawnCards = deck.drawMultiple(2);
+            drawnCards.forEach(activePlayer::addCardToHand);
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW_EXTRA", "", 0, "Drew 2 extra cards");
+        } else if (actionName.contains("Double")) {
+            activePlayer.setDoubleRentActive(true);
+        } else if (actionName.contains("House") && !actionName.contains("Hotel")) {
+            if (payload.has("color")) {
+                try {
+                    CardColor houseColor = CardColor.valueOf(payload.get("color").getAsString());
+                    if (activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
+                        activePlayer.getPropertyZone().addHouse(houseColor);
+                    }
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } else if (actionName.contains("Hotel")) {
+            if (payload.has("color")) {
+                try {
+                    CardColor hotelColor = CardColor.valueOf(payload.get("color").getAsString());
+                    if (activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
+                        activePlayer.getPropertyZone().addHotel(hotelColor);
+                    }
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } else if (actionName.contains("Forced Deal")) {
+            if (payload.has("myCardId") && payload.has("theirCardId") && payload.has("targetPlayerId")) {
                 String myCardId = payload.get("myCardId").getAsString();
                 String theirCardId = payload.get("theirCardId").getAsString();
                 Player otherPlayer = findPlayer(payload.get("targetPlayerId").getAsString());
                 if (otherPlayer != null) executeForcedDeal(activePlayer, otherPlayer, myCardId, theirCardId);
-                break;
-            case "Sly Deal":
+            }
+        } else if (actionName.contains("Sly Deal")) {
+            if (payload.has("targetCardId") && payload.has("targetPlayerId")) {
                 String stealCardId = payload.get("targetCardId").getAsString();
                 Player stealFrom = findPlayer(payload.get("targetPlayerId").getAsString());
                 if (stealFrom != null) executeSlyDeal(activePlayer, stealFrom, stealCardId);
-                break;
+            }
+        } else if (actionName.contains("Just Say No")) {
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "JUST_SAY_NO", "", 0, "Just Say No played");
         }
+        return true;
     }
 
     private void executeForcedDeal(Player player1, Player player2, String cardId1, String cardId2) {
@@ -231,6 +257,7 @@ public class GameSession {
         if (card2.isWildProperty()) card2.setWildColor(null);
         player1.getPropertyZone().addProperty(card2);
         player2.getPropertyZone().addProperty(card1);
+        recordAction(player1.getId(), player1.getNickname(), "FORCED_DEAL", player2.getNickname(), 0, card1.getName() + " <-> " + card2.getName());
     }
 
     private void executeSlyDeal(Player thief, Player victim, String cardId) {
@@ -239,6 +266,7 @@ public class GameSession {
         victim.getPropertyZone().removeProperty(stolenCard);
         if (stolenCard.isWildProperty()) stolenCard.setWildColor(null);
         thief.getPropertyZone().addProperty(stolenCard);
+        recordAction(thief.getId(), thief.getNickname(), "SLY_DEAL", victim.getNickname(), 0, "Stole " + stolenCard.getName());
     }
 
     private Card findPropertyInZone(Player player, String cardId) {
@@ -256,12 +284,14 @@ public class GameSession {
             for (Card moneyCard : payment) {
                 creditor.getBank().deposit(moneyCard);
             }
+            recordAction(debtor.getId(), debtor.getNickname(), "PAY", creditor.getNickname(), amount, "Paid " + amount + "M");
         } catch (Bank.InsufficientFundsException e) {
             int available = debtor.getBank().getTotal();
             if (available > 0) {
                 try {
                     List<Card> partial = debtor.getBank().removeCards(available);
                     partial.forEach(m -> creditor.getBank().deposit(m));
+                    recordAction(debtor.getId(), debtor.getNickname(), "PARTIAL_PAY", creditor.getNickname(), available, "Paid " + available + "M of " + amount + "M");
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
@@ -279,6 +309,7 @@ public class GameSession {
             while (activePlayer.needsToDiscard() && !activePlayer.getHand().isEmpty()) {
                 Card discarded = activePlayer.removeCardFromHand(0);
                 deck.discard(discarded);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(), "DISCARD", "", 0, "Discarded " + discarded.getName());
             }
             activePlayer.setActivePlayer(false);
             recordAction(activePlayer.getId(), activePlayer.getNickname(), "END_TURN", "", 0, "Turn ended");
@@ -301,6 +332,8 @@ public class GameSession {
         result.addProperty("winnerNickname", winner.getNickname());
         result.addProperty("gameDuration", getGameDuration());
         result.addProperty("completeSets", winner.getCompleteSetsCount());
+        recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "Won the game!");
+        broadcastGameState();
         room.broadcast(MessageProtocol.MessageType.GAME_OVER, result.toString());
     }
 
@@ -308,6 +341,8 @@ public class GameSession {
         Player disconnected = findPlayer(clientId);
         if (disconnected == null) return;
         disconnected.setConnected(false);
+        disconnected.setReady(false);
+        recordAction(clientId, disconnected.getNickname(), "DISCONNECT", "", 0, "Player disconnected");
         broadcastGameState();
         long connectedPlayers = players.stream().filter(Player::isConnected).count();
         if (connectedPlayers < GameConstants.MIN_PLAYERS) {
@@ -315,6 +350,7 @@ public class GameSession {
             cancelTimer();
             JsonObject drawResult = new JsonObject();
             drawResult.addProperty("reason", "Not enough players");
+            drawResult.addProperty("connectedPlayers", connectedPlayers);
             room.broadcast(MessageProtocol.MessageType.GAME_DRAW, drawResult.toString());
         } else if (activePlayer != null && clientId.equals(activePlayer.getId())) {
             forceEndTurn();
@@ -325,10 +361,8 @@ public class GameSession {
         return players.stream().filter(p -> p.getId().equals(playerId)).findFirst().orElse(null);
     }
 
-    private void recordAction(String playerId, String nickname, String action,
-                              String targetPlayer, int amount, String details) {
-        ActionRecord record = new ActionRecord(actionHistory.size() + 1, playerId, nickname,
-                action, targetPlayer, amount, details, System.currentTimeMillis());
+    private void recordAction(String playerId, String nickname, String action, String targetPlayer, int amount, String details) {
+        ActionRecord record = new ActionRecord(actionHistory.size() + 1, playerId, nickname, action, targetPlayer, amount, details, System.currentTimeMillis());
         actionHistory.add(0, record);
         if (actionHistory.size() > 100) {
             actionHistory.remove(actionHistory.size() - 1);
@@ -393,9 +427,7 @@ public class GameSession {
         int limit = Math.min(20, actionHistory.size());
         for (int i = 0; i < limit; i++) {
             ActionRecord ar = actionHistory.get(i);
-            GameState.ActionRecord stateRecord = new GameState.ActionRecord(
-                    ar.index, ar.playerId, ar.playerNickname, ar.action,
-                    ar.targetPlayer, ar.amount, ar.details);
+            GameState.ActionRecord stateRecord = new GameState.ActionRecord(ar.index, ar.playerId, ar.playerNickname, ar.action, ar.targetPlayer, ar.amount, ar.details);
             stateRecord.setTimestamp(ar.timestamp);
             recentActions.add(stateRecord);
         }
@@ -406,6 +438,7 @@ public class GameSession {
     private void sendError(String playerId, String message) {
         JsonObject error = new JsonObject();
         error.addProperty("message", message);
+        error.addProperty("timestamp", System.currentTimeMillis());
         room.sendToPlayer(playerId, MessageProtocol.MessageType.ERROR, error.toString());
     }
 
@@ -415,6 +448,12 @@ public class GameSession {
         long seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % 60;
         return String.format("%02d:%02d", minutes, seconds);
     }
+
+    public List<Player> getPlayers() { return Collections.unmodifiableList(players); }
+    public Player getActivePlayer() { return activePlayer; }
+    public GamePhase getPhase() { return phase; }
+    public boolean isGameRunning() { return gameRunning; }
+    public Deck getDeck() { return deck; }
 
     static class ActionRecord {
         int index;
@@ -426,9 +465,7 @@ public class GameSession {
         String details;
         long timestamp;
 
-        ActionRecord(int index, String playerId, String playerNickname,
-                     String action, String targetPlayer, int amount,
-                     String details, long timestamp) {
+        ActionRecord(int index, String playerId, String playerNickname, String action, String targetPlayer, int amount, String details, long timestamp) {
             this.index = index;
             this.playerId = playerId;
             this.playerNickname = playerNickname;

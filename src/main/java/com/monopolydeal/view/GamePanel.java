@@ -105,17 +105,18 @@ public class GamePanel extends JPanel {
         handPanel = new JPanel(new BorderLayout());
         handPanel.setBackground(new Color(30, 30, 30));
         handPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        handPanel.setPreferredSize(new Dimension(0, 180));
+        handPanel.setPreferredSize(new Dimension(0, 200));
         JLabel handLabel = new JLabel("Your Hand");
         handLabel.setForeground(Color.WHITE);
         handLabel.setFont(new Font("Arial", Font.BOLD, 14));
         handPanel.add(handLabel, BorderLayout.NORTH);
-        handCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
+        handCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         handCardsPanel.setBackground(new Color(30, 30, 30));
         JScrollPane handScrollPane = new JScrollPane(handCardsPanel);
         handScrollPane.setBorder(null);
         handScrollPane.getViewport().setBackground(new Color(30, 30, 30));
         handScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        handScrollPane.setPreferredSize(new Dimension(0, 180));
         handPanel.add(handScrollPane, BorderLayout.CENTER);
     }
 
@@ -225,6 +226,12 @@ public class GamePanel extends JPanel {
             endTurnButton.setEnabled(false);
             endTurnButton.setBackground(Color.GRAY);
         }
+
+        for (Component comp : handCardsPanel.getComponents()) {
+            if (comp instanceof CardRenderer) {
+                comp.setEnabled(isMyTurn);
+            }
+        }
     }
 
     private void startCountdown() {
@@ -272,50 +279,16 @@ public class GamePanel extends JPanel {
             JsonArray handCards = myData.getAsJsonArray("handCards");
             for (JsonElement elem : handCards) {
                 JsonObject cardData = elem.getAsJsonObject();
-                String cardName = cardData.has("cardName") ? cardData.get("cardName").getAsString() : "?";
-                String cardType = cardData.has("cardType") ? cardData.get("cardType").getAsString() : "?";
+                CardRenderer card = new CardRenderer(cardData);
+                card.setEnabled(isMyTurn);
+                String cardType = cardData.has("cardType") ? cardData.get("cardType").getAsString() : "MONEY";
                 String cardId = cardData.has("cardId") ? cardData.get("cardId").getAsString() : "";
-                int value = cardData.has("value") ? cardData.get("value").getAsInt() : 0;
-                JButton cardButton = createCardButton(cardName, cardType, value, cardId);
-                handCardsPanel.add(cardButton);
+                card.setPlayListener(id -> onCardClicked(id, cardType));
+                handCardsPanel.add(card);
             }
         }
         handCardsPanel.revalidate();
         handCardsPanel.repaint();
-    }
-
-    private JButton createCardButton(String name, String type, int value, String cardId) {
-        JButton button = new JButton();
-        button.setLayout(new BorderLayout());
-        Color bgColor = getCardColor(type);
-        button.setBackground(bgColor);
-        button.setPreferredSize(new Dimension(100, 140));
-        button.setMaximumSize(new Dimension(100, 140));
-        button.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        button.setFocusPainted(false);
-        String valueStr = value > 0 ? " (" + value + "M)" : "";
-        JLabel nameLabel = new JLabel("<html><center>" + name + valueStr + "</center></html>");
-        nameLabel.setForeground(Color.WHITE);
-        nameLabel.setFont(new Font("Arial", Font.BOLD, 10));
-        nameLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        JLabel typeLabel = new JLabel(type);
-        typeLabel.setForeground(Color.WHITE);
-        typeLabel.setFont(new Font("Arial", Font.PLAIN, 9));
-        typeLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        button.add(nameLabel, BorderLayout.CENTER);
-        button.add(typeLabel, BorderLayout.SOUTH);
-        button.addActionListener(e -> onCardClicked(cardId, type));
-        return button;
-    }
-
-    private Color getCardColor(String type) {
-        switch (type) {
-            case "MONEY": return new Color(34, 139, 34);
-            case "PROPERTY": return new Color(70, 130, 180);
-            case "RENT": return new Color(255, 140, 0);
-            case "ACTION": return new Color(218, 165, 32);
-            default: return Color.GRAY;
-        }
     }
 
     private void onCardClicked(String cardId, String cardType) {
