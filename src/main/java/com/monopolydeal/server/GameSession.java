@@ -160,29 +160,29 @@ public class GameSession {
         activePlayer.removeCardFromHand(card);
         deck.discard(card);
 
-        CardColor rentColor = CardColor.WILD;
+        CardColor rentColor = card.getColor();
         if (payload.has("color")) {
             try {
                 rentColor = CardColor.valueOf(payload.get("color").getAsString());
             } catch (IllegalArgumentException e) {
-                rentColor = CardColor.WILD;
+                rentColor = card.getColor();
             }
         }
 
-        int baseRentAmount = activePlayer.getPropertyZone().getRentAmount(rentColor);
+        int baseRentAmount = calculateRentForColor(rentColor);
         if (baseRentAmount == 0) baseRentAmount = 2;
         int rentAmount = activePlayer.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
         activePlayer.setDoubleRentActive(false);
 
-        if (card.getColor() == CardColor.WILD) {
+        if (card.getColor() == CardColor.WILD || payload.has("targetPlayerId")) {
             String targetPlayerId = payload.has("targetPlayerId") ? payload.get("targetPlayerId").getAsString() : "";
             Player targetPlayer = findPlayer(targetPlayerId);
-            if (targetPlayer != null) {
+            if (targetPlayer != null && hasPropertyColor(targetPlayer, rentColor)) {
                 requirePayment(targetPlayer, activePlayer, rentAmount);
             }
         } else {
             for (Player player : players) {
-                if (!player.equals(activePlayer)) {
+                if (!player.equals(activePlayer) && hasPropertyColor(player, rentColor)) {
                     requirePayment(player, activePlayer, rentAmount);
                 }
             }
@@ -276,6 +276,24 @@ public class GameSession {
             }
         }
         return null;
+    }
+
+    private int calculateRentForColor(CardColor color) {
+        if (color == CardColor.WILD) return 2;
+        
+        int maxRent = 0;
+        for (Player player : players) {
+            if (!player.equals(activePlayer)) {
+                int rent = player.getPropertyZone().getRentAmount(color);
+                if (rent > maxRent) maxRent = rent;
+            }
+        }
+        return maxRent > 0 ? maxRent : 2;
+    }
+
+    private boolean hasPropertyColor(Player player, CardColor color) {
+        if (color == CardColor.WILD) return true;
+        return player.getPropertyZone().getPropertyCount(color) > 0;
     }
 
     private void requirePayment(Player debtor, Player creditor, int amount) {
