@@ -3,6 +3,7 @@ package com.monopolydeal.server;
 import java.util.*;
 import java.util.concurrent.*;
 import com.monopolydeal.model.*;
+import com.monopolydeal.server.GameRoom;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonObject;
 import com.google.gson.Gson;
@@ -20,7 +21,6 @@ public class GameSession {
     private final List<ActionRecord> actionHistory;
     private long gameStartTime;
     private final Gson gson;
-    private PendingAction pendingAction;
 
     public GameSession(GameRoom room, List<Player> players) {
         this.room = room;
@@ -64,7 +64,7 @@ public class GameSession {
         int drawCount = Math.min(GameConstants.DRAW_COUNT, deck.getDrawPileSize());
         List<Card> drawnCards = deck.drawMultiple(drawCount);
         drawnCards.forEach(activePlayer::addCardToHand);
-        recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW", "", 0, drawnCards.size() + " cards drawn");
+        recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW", "", 0, "Drew " + drawnCards.size() + " cards");
         phase = GamePhase.PLAY;
         broadcastGameState();
         startTurnTimer();
@@ -161,32 +161,42 @@ public class GameSession {
         activePlayer.removeCardFromHand(card);
         deck.discard(card);
 
-        CardColor rentColor = card.getColor();
+        CardColor rentColor = CardColor.WILD;
         if (payload.has("color")) {
             try {
                 rentColor = CardColor.valueOf(payload.get("color").getAsString());
             } catch (IllegalArgumentException e) {
-                rentColor = card.getColor();
+                rentColor = CardColor.WILD;
             }
         }
 
-        int baseRentAmount = calculateRentForColor(rentColor);
-        if (baseRentAmount == 0) baseRentAmount = 2;
+        int baseRentAmount = 0;
+        if (rentColor == CardColor.WILD) {
+            baseRentAmount = 2;
+        } else {
+            baseRentAmount = activePlayer.getPropertyZone().getRentAmount(rentColor);
+            if (baseRentAmount == 0) baseRentAmount = 2;
+        }
+
         int rentAmount = activePlayer.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
         activePlayer.setDoubleRentActive(false);
 
-        if (rentColor == CardColor.WILD || payload.has("targetPlayerId")) {
+        boolean isWildRent = card.getColor() == CardColor.WILD || card.getName().contains("Wild");
+
+        if (isWildRent) {
             String targetPlayerId = payload.has("targetPlayerId") ? payload.get("targetPlayerId").getAsString() : "";
             Player targetPlayer = findPlayer(targetPlayerId);
-            if (targetPlayer != null && hasPropertyColor(targetPlayer, rentColor)) {
+            if (targetPlayer != null) {
                 requirePayment(targetPlayer, activePlayer, rentAmount);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(), "RENT", targetPlayer.getNickname(), rentAmount, "Charged rent " + rentAmount + "M");
             }
         } else {
             for (Player player : players) {
-                if (!player.equals(activePlayer) && hasPropertyColor(player, rentColor)) {
+                if (!player.equals(activePlayer)) {
                     requirePayment(player, activePlayer, rentAmount);
                 }
             }
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "RENT_ALL", "", rentAmount, "Charged all players " + rentAmount + "M");
         }
         return true;
     }
@@ -200,64 +210,167 @@ public class GameSession {
         if (actionName.contains("Debt Collector")) {
             String targetId = payload.has("targetPlayerId") ? payload.get("targetPlayerId").getAsString() : "";
             Player target = findPlayer(targetId);
-            if (target != null) requirePayment(target, activePlayer, GameConstants.DEBT_COLLECTOR_AMOUNT);
+            if (target == null && !players.isEmpty()) {
+                List<Player> targets = new ArrayList<>();
+                for (Player p : players) {
+                    if (!p.equals(activePlayer)) targets.add(p);
+                }
+                if (!targets.isEmpty()) target = targets.get(0);
+            }
+            if (target != null) {
+                requirePayment(target, activePlayer, GameConstants.DEBT_COLLECTOR_AMOUNT);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(), "DEBT_COLLECTOR", target.getNickname(), GameConstants.DEBT_COLLECTOR_AMOUNT, "Collected " + GameConstants.DEBT_COLLECTOR_AMOUNT + "M");
+            }
         } else if (actionName.contains("Birthday")) {
             for (Player player : players) {
-                if (!player.equals(activePlayer)) requirePayment(player, activePlayer, GameConstants.BIRTHDAY_AMOUNT);
+                if (!player.equals(activePlayer)) {
+                    requirePayment(player, activePlayer, GameConstants.BIRTHDAY_AMOUNT);
+                }
+            }
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "BIRTHDAY", "", GameConstants.BIRTHDAY_AMOUNT, "Everyone pays " + GameConstants.BIRTHDAY_AMOUNT + "M");
+        } else if (actionName.contains("Deal Breaker")) {
+            Player target = null;
+            if (payload.has("targetPlayerId")) {
+                target = findPlayer(payload.get("targetPlayerId").getAsString());
+            } else {
+                for (Player p : players) {
+                    if (!p.equals(activePlayer) && p.getCompleteSetsCount() > 0) {
+                        target = p;
+                        break;
+                    }
+                }
+            }
+            if (target != null && target.getCompleteSetsCount() > 0) {
+                List<CardColor> completeSets = target.getPropertyZone().getCompleteSets();
+                if (!completeSets.isEmpty()) {
+                    CardColor setToSteal = completeSets.get(0);
+                    List<Card> properties = new ArrayList<>(target.getPropertyZone().getPropertiesByColor(setToSteal));
+                    for (Card prop : properties) {
+                        target.getPropertyZone().removeProperty(prop);
+                        if (prop.isWildProperty()) prop.setWildColor(null);
+                        activePlayer.getPropertyZone().addProperty(prop);
+                    }
+                    recordAction(activePlayer.getId(), activePlayer.getNickname(), "DEAL_BREAKER", target.getNickname(), 0, "Stole complete set: " + setToSteal.getName());
+                    if (activePlayer.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
+                        endGame(activePlayer);
+                    }
+                }
             }
         } else if (actionName.contains("Pass Go")) {
             List<Card> drawnCards = deck.drawMultiple(2);
             drawnCards.forEach(activePlayer::addCardToHand);
-            recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW_EXTRA", "", 0, "Drew 2 extra cards");
-        } else if (actionName.contains("Deal Breaker")) {
-            if (payload.has("targetPlayerId") && payload.has("color")) {
-                String targetId = payload.get("targetPlayerId").getAsString();
-                String colorName = payload.get("color").getAsString();
-                Player target = findPlayer(targetId);
-                try {
-                    CardColor targetColor = CardColor.valueOf(colorName);
-                    if (target != null) executeDealBreaker(activePlayer, target, targetColor);
-                } catch (IllegalArgumentException ignored) {}
-            }
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "PASS_GO", "", 0, "Drew 2 extra cards");
         } else if (actionName.contains("Double")) {
             activePlayer.setDoubleRentActive(true);
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "DOUBLE_RENT", "", 0, "Next rent is doubled");
         } else if (actionName.contains("House") && !actionName.contains("Hotel")) {
+            CardColor houseColor = null;
             if (payload.has("color")) {
                 try {
-                    CardColor houseColor = CardColor.valueOf(payload.get("color").getAsString());
-                    if (activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
-                        activePlayer.getPropertyZone().addHouse(houseColor);
-                    }
+                    houseColor = CardColor.valueOf(payload.get("color").getAsString());
                 } catch (IllegalArgumentException ignored) {}
+            }
+            if (houseColor == null) {
+                for (CardColor c : activePlayer.getPropertyZone().getCompleteSets()) {
+                    if (activePlayer.getPropertyZone().canPlaceHouse(c)) {
+                        houseColor = c;
+                        break;
+                    }
+                }
+            }
+            if (houseColor != null && activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
+                activePlayer.getPropertyZone().addHouse(houseColor);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(), "HOUSE", "", 0, "Built house on " + houseColor.getName());
             }
         } else if (actionName.contains("Hotel")) {
+            CardColor hotelColor = null;
             if (payload.has("color")) {
                 try {
-                    CardColor hotelColor = CardColor.valueOf(payload.get("color").getAsString());
-                    if (activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
-                        activePlayer.getPropertyZone().addHotel(hotelColor);
-                    }
+                    hotelColor = CardColor.valueOf(payload.get("color").getAsString());
                 } catch (IllegalArgumentException ignored) {}
             }
+            if (hotelColor == null) {
+                for (CardColor c : activePlayer.getPropertyZone().getCompleteSets()) {
+                    if (activePlayer.getPropertyZone().canPlaceHotel(c)) {
+                        hotelColor = c;
+                        break;
+                    }
+                }
+            }
+            if (hotelColor != null && activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
+                activePlayer.getPropertyZone().addHotel(hotelColor);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(), "HOTEL", "", 0, "Built hotel on " + hotelColor.getName());
+            }
         } else if (actionName.contains("Forced Deal")) {
-            if (payload.has("myCardId") && payload.has("theirCardId") && payload.has("targetPlayerId")) {
-                String myCardId = payload.get("myCardId").getAsString();
-                String theirCardId = payload.get("theirCardId").getAsString();
+            if (payload.has("targetPlayerId") && payload.has("myPropertyId") && payload.has("theirPropertyId")) {
                 Player otherPlayer = findPlayer(payload.get("targetPlayerId").getAsString());
-                if (otherPlayer != null) executeForcedDeal(activePlayer, otherPlayer, myCardId, theirCardId);
+                if (otherPlayer != null) {
+                    String myPropId = payload.get("myPropertyId").getAsString();
+                    String theirPropId = payload.get("theirPropertyId").getAsString();
+                    executeForcedDeal(activePlayer, otherPlayer, myPropId, theirPropId);
+                }
+            } else {
+                Player target = null;
+                for (Player p : players) {
+                    if (!p.equals(activePlayer) && !p.getPropertyZone().getAllPropertyGroups().isEmpty()) {
+                        target = p;
+                        break;
+                    }
+                }
+                if (target != null) {
+                    Card myProp = null;
+                    for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { myProp = group.get(0); break; }
+                    }
+                    Card theirProp = null;
+                    for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { theirProp = group.get(0); break; }
+                    }
+                    if (myProp != null && theirProp != null) {
+                        executeForcedDeal(activePlayer, target, myProp.getId(), theirProp.getId());
+                    }
+                }
             }
         } else if (actionName.contains("Sly Deal")) {
-            if (payload.has("targetCardId") && payload.has("targetPlayerId")) {
-                String stealCardId = payload.get("targetCardId").getAsString();
+            if (payload.has("targetPlayerId") && payload.has("targetCardId")) {
                 Player stealFrom = findPlayer(payload.get("targetPlayerId").getAsString());
+                String stealCardId = payload.get("targetCardId").getAsString();
                 if (stealFrom != null) executeSlyDeal(activePlayer, stealFrom, stealCardId);
+            } else {
+                Player victim = null;
+                Card toSteal = null;
+                for (Player p : players) {
+                    if (!p.equals(activePlayer)) {
+                        for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
+                            if (!group.isEmpty() && !p.getPropertyZone().getCompleteSets().contains(group.get(0).getEffectiveColor())) {
+                                victim = p;
+                                toSteal = group.get(0);
+                                break;
+                            }
+                        }
+                        if (victim != null) break;
+                    }
+                }
+                if (victim == null) {
+                    for (Player p : players) {
+                        if (!p.equals(activePlayer)) {
+                            for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
+                                if (!group.isEmpty()) {
+                                    victim = p;
+                                    toSteal = group.get(0);
+                                    break;
+                                }
+                            }
+                            if (victim != null) break;
+                        }
+                    }
+                }
+                if (victim != null && toSteal != null) {
+                    executeSlyDeal(activePlayer, victim, toSteal.getId());
+                }
             }
         } else if (actionName.contains("Just Say No")) {
-            if (pendingAction != null) {
-                undoPendingAction();
-                recordAction(activePlayer.getId(), activePlayer.getNickname(), "JUST_SAY_NO", pendingAction.creditor.getNickname(), 0, "Cancelled " + pendingAction.type);
-                pendingAction = null;
-            }
+            recordAction(activePlayer.getId(), activePlayer.getNickname(), "JUST_SAY_NO", "", 0, "Just Say No played");
         }
         return true;
     }
@@ -266,12 +379,6 @@ public class GameSession {
         Card card1 = findPropertyInZone(player1, cardId1);
         Card card2 = findPropertyInZone(player2, cardId2);
         if (card1 == null || card2 == null) return;
-        
-        CardColor color1 = card1.getEffectiveColor();
-        List<Card> set1 = player1.getPropertyZone().getPropertiesByColor(color1);
-        int required1 = color1.getSetSize();
-        if (required1 > 0 && set1.size() >= required1) return;
-        
         player1.getPropertyZone().removeProperty(card1);
         player2.getPropertyZone().removeProperty(card2);
         if (card1.isWildProperty()) card1.setWildColor(null);
@@ -284,31 +391,10 @@ public class GameSession {
     private void executeSlyDeal(Player thief, Player victim, String cardId) {
         Card stolenCard = findPropertyInZone(victim, cardId);
         if (stolenCard == null) return;
-        
-        CardColor color = stolenCard.getEffectiveColor();
-        List<Card> propertiesInSet = victim.getPropertyZone().getPropertiesByColor(color);
-        int required = color.getSetSize();
-        if (propertiesInSet.size() >= required && required > 0) return;
-        
         victim.getPropertyZone().removeProperty(stolenCard);
         if (stolenCard.isWildProperty()) stolenCard.setWildColor(null);
         thief.getPropertyZone().addProperty(stolenCard);
         recordAction(thief.getId(), thief.getNickname(), "SLY_DEAL", victim.getNickname(), 0, "Stole " + stolenCard.getName());
-    }
-
-    private void executeDealBreaker(Player thief, Player victim, CardColor color) {
-        List<Card> properties = victim.getPropertyZone().getPropertiesByColor(color);
-        if (properties.isEmpty()) return;
-        
-        int required = color.getSetSize();
-        if (properties.size() < required) return;
-        
-        for (Card property : new ArrayList<>(properties)) {
-            victim.getPropertyZone().removeProperty(property);
-            if (property.isWildProperty()) property.setWildColor(null);
-            thief.getPropertyZone().addProperty(property);
-        }
-        recordAction(thief.getId(), thief.getNickname(), "DEAL_BREAKER", victim.getNickname(), 0, "Took complete " + color.getName() + " set");
     }
 
     private Card findPropertyInZone(Player player, String cardId) {
@@ -320,60 +406,18 @@ public class GameSession {
         return null;
     }
 
-    private int calculateRentForColor(CardColor color) {
-        if (color == CardColor.WILD) return 2;
-        
-        int maxRent = 0;
-        for (Player player : players) {
-            if (!player.equals(activePlayer)) {
-                int rent = player.getPropertyZone().getRentAmount(color);
-                if (rent > maxRent) maxRent = rent;
-            }
-        }
-        return maxRent > 0 ? maxRent : 2;
-    }
-
-    private boolean hasPropertyColor(Player player, CardColor color) {
-        if (color == CardColor.WILD) return true;
-        return player.getPropertyZone().getPropertyCount(color) > 0;
-    }
-
-    private void undoPendingAction() {
-        if (pendingAction == null) return;
-        
-        try {
-            List<Card> refund = pendingAction.creditor.getBank().removeCards(pendingAction.amount);
-            for (Card moneyCard : refund) {
-                pendingAction.debtor.getBank().deposit(moneyCard);
-            }
-        } catch (Bank.InsufficientFundsException e) {
-            int available = pendingAction.creditor.getBank().getTotal();
-            if (available > 0) {
-                try {
-                    List<Card> partial = pendingAction.creditor.getBank().removeCards(available);
-                    partial.forEach(m -> pendingAction.debtor.getBank().deposit(m));
-                } catch (Bank.InsufficientFundsException ignored) {}
-            }
-        }
-    }
-
     private void requirePayment(Player debtor, Player creditor, int amount) {
-        pendingAction = new PendingAction(debtor, creditor, amount, "RENT");
         try {
             List<Card> payment = debtor.getBank().removeCards(amount);
             for (Card moneyCard : payment) {
                 creditor.getBank().deposit(moneyCard);
             }
-            recordAction(debtor.getId(), debtor.getNickname(), "PAY", creditor.getNickname(), amount, "Paid " + amount + "M");
-            pendingAction = null;
         } catch (Bank.InsufficientFundsException e) {
             int available = debtor.getBank().getTotal();
             if (available > 0) {
                 try {
                     List<Card> partial = debtor.getBank().removeCards(available);
                     partial.forEach(m -> creditor.getBank().deposit(m));
-                    recordAction(debtor.getId(), debtor.getNickname(), "PARTIAL_PAY", creditor.getNickname(), available, "Paid " + available + "M of " + amount + "M");
-                    pendingAction = null;
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
@@ -440,6 +484,7 @@ public class GameSession {
     }
 
     private Player findPlayer(String playerId) {
+        if (playerId == null || playerId.isEmpty()) return null;
         return players.stream().filter(p -> p.getId().equals(playerId)).findFirst().orElse(null);
     }
 
@@ -556,20 +601,6 @@ public class GameSession {
             this.amount = amount;
             this.details = details;
             this.timestamp = timestamp;
-        }
-    }
-
-    static class PendingAction {
-        Player debtor;
-        Player creditor;
-        int amount;
-        String type;
-
-        PendingAction(Player debtor, Player creditor, int amount, String type) {
-            this.debtor = debtor;
-            this.creditor = creditor;
-            this.amount = amount;
-            this.type = type;
         }
     }
 }

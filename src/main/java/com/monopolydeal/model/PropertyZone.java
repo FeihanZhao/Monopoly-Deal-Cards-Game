@@ -5,8 +5,6 @@ import java.util.*;
 public class PropertyZone {
     private final Map<CardColor, List<Card>> propertyGroups;
     private final List<Card> allProperties;
-
-    // House/Hotel placements
     private final Map<CardColor, Integer> houseCount;
     private final Map<CardColor, Boolean> hasHotel;
 
@@ -15,10 +13,8 @@ public class PropertyZone {
         this.allProperties = new ArrayList<>();
         this.houseCount = new HashMap<>();
         this.hasHotel = new HashMap<>();
-
-        // Initialize all colors except NONE and WILD
         for (CardColor color : CardColor.values()) {
-            if (color != CardColor.NONE && color != CardColor.WILD) {
+            if (color.isPropertyColor()) {
                 propertyGroups.put(color, new ArrayList<>());
                 houseCount.put(color, 0);
                 hasHotel.put(color, false);
@@ -30,28 +26,33 @@ public class PropertyZone {
         if (!propertyCard.isPropertyCard()) {
             throw new IllegalArgumentException("Only property cards can be added to property zone");
         }
-
         CardColor effectiveColor = propertyCard.getEffectiveColor();
+        if (!propertyGroups.containsKey(effectiveColor)) {
+            propertyGroups.put(effectiveColor, new ArrayList<>());
+            houseCount.putIfAbsent(effectiveColor, 0);
+            hasHotel.putIfAbsent(effectiveColor, false);
+        }
         propertyGroups.get(effectiveColor).add(propertyCard);
         allProperties.add(propertyCard);
     }
 
     public boolean removeProperty(Card propertyCard) {
         CardColor effectiveColor = propertyCard.getEffectiveColor();
-        boolean removed = propertyGroups.get(effectiveColor).remove(propertyCard);
-        if (removed) {
+        List<Card> group = propertyGroups.get(effectiveColor);
+        if (group != null && group.remove(propertyCard)) {
             allProperties.remove(propertyCard);
+            return true;
         }
-        return removed;
+        return false;
     }
 
     public List<Card> getPropertiesByColor(CardColor color) {
-        return Collections.unmodifiableList(
-                propertyGroups.getOrDefault(color, Collections.emptyList()));
+        return Collections.unmodifiableList(propertyGroups.getOrDefault(color, Collections.emptyList()));
     }
 
     public int getPropertyCount(CardColor color) {
-        return propertyGroups.getOrDefault(color, Collections.emptyList()).size();
+        List<Card> group = propertyGroups.get(color);
+        return group != null ? group.size() : 0;
     }
 
     public Map<CardColor, List<Card>> getAllPropertyGroups() {
@@ -64,8 +65,6 @@ public class PropertyZone {
             CardColor color = entry.getKey();
             int count = entry.getValue().size();
             int required = color.getSetSize();
-
-            // Count wild properties assigned to this color
             if (required > 0 && count >= required) {
                 completeSets.add(color);
             }
@@ -80,7 +79,7 @@ public class PropertyZone {
     public boolean canPlaceHouse(CardColor color) {
         if (!getCompleteSets().contains(color)) return false;
         if (hasHotel.getOrDefault(color, false)) return false;
-        return houseCount.getOrDefault(color, 0) < 4; // Max 4 houses
+        return houseCount.getOrDefault(color, 0) < 4;
     }
 
     public void addHouse(CardColor color) {
@@ -105,7 +104,7 @@ public class PropertyZone {
 
     public int getRentAmount(CardColor color) {
         int baseRent = color.getRentAmount(getPropertyCount(color));
-        int houseBonus = houseCount.getOrDefault(color, 0) * 1; // +1 per house
+        int houseBonus = houseCount.getOrDefault(color, 0) * 1;
         int hotelBonus = hasHotel.getOrDefault(color, false) ? 3 : 0;
         return baseRent + houseBonus + hotelBonus;
     }
