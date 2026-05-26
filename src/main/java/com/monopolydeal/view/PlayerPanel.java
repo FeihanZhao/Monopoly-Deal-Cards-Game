@@ -54,7 +54,6 @@ public class PlayerPanel extends JPanel {
         COLOR_MAP.put("YELLOW", new Color(255, 215, 0));        // 黄色
         COLOR_MAP.put("GREEN", new Color(34, 139, 34));         // 绿色
         COLOR_MAP.put("BLUE", new Color(0, 0, 139));            // 蓝色
-        COLOR_MAP.put("PURPLE", new Color(106, 13, 173));       // 紫色
         COLOR_MAP.put("BLACK", new Color(43, 43, 43));          // 黑色
         COLOR_MAP.put("LIGHT_GREEN", new Color(144, 238, 144)); // 浅绿色
     }

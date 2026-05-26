@@ -7,11 +7,12 @@ import java.util.*;
  *
  * 负责卡牌的初始化、洗牌、抽牌、弃牌以及弃牌堆重洗复用。
  *
- * 牌堆初始组成（模拟实体《大富翁纸牌游戏》的标准牌组）：
- * - 金钱卡：1M×6, 2M×5, 3M×3, 4M×3, 5M×2, 10M×1 = 20张
- * - 地产卡：11种纯色×各2-4张 + 万能地产6张 = 约40张
- * - 租金卡：7种双色租金×2 + 万能租金×3 = 15张
- * - 行动卡：10种×各2-3张 = 约25张
+ * 牌堆初始组成为官方 106 张正版配置：
+ * - 货币卡 20 张：10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
+ * - 标准房产卡 28 张：棕×2, 浅蓝×3, 粉×3, 橙×3, 红×3, 黄×3, 绿×3, 深蓝×2, 车站×4, 公用事业×2
+ * - 万能房产卡 11 张：多种双色/十色组合
+ * - 租金卡 13 张：双色×10(1M each) + 全能×3(3M each)
+ * - 行动卡 34 张：全部带面值，可存入银行
  *
  * 当抽牌堆为空时，自动将弃牌堆洗牌后移入抽牌堆继续使用。
  */
@@ -33,20 +34,25 @@ public class Deck {
     }
 
     /**
-     * 初始化完整的牌组
-     * 按照《大富翁纸牌游戏》官方卡牌配置创建所有卡牌
+     * 初始化完整的 106 张正版牌组
+     *
+     * 卡牌组成（严格按官方配置）：
+     * - 货币卡 20 张：10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
+     * - 标准房产卡 28 张：棕×2, 浅蓝×3, 粉×3, 橙×3, 红×3, 黄×3, 绿×3, 深蓝×2, 车站×4, 公用事业×2
+     * - 万能房产卡 11 张：深蓝/绿×1, 浅蓝/棕×1, 粉/橙×2, 红/黄×2, 车站/公用事业×1, 绿/车站×1, 浅蓝/车站×1, 十色全能×2
+     * - 租金卡 13 张：双色租金×10 (1M each), 全能租金×3 (3M each)
+     * - 行动卡 34 张：Deal Breaker 5M×2, Just Say No 4M×3, Sly Deal 3M×3, Forced Deal 3M×3, Debt Collector 3M×3, Birthday 2M×3, Pass Go 1M×10, Double Rent 1M×2, House 3M×3, Hotel 4M×2
      */
     private void initializeDeck() {
-        // ===== 金钱卡 (20张) =====
-        addCards(CardType.MONEY, CardColor.NONE, 1, 6);  // 1M  ×6张
-        addCards(CardType.MONEY, CardColor.NONE, 2, 5);  // 2M  ×5张
-        addCards(CardType.MONEY, CardColor.NONE, 3, 3);  // 3M  ×3张
-        addCards(CardType.MONEY, CardColor.NONE, 4, 3);  // 4M  ×3张
-        addCards(CardType.MONEY, CardColor.NONE, 5, 2);  // 5M  ×2张
-        addCards(CardType.MONEY, CardColor.NONE, 10, 1); // 10M ×1张
+        // ===== 货币卡 (20张) =====
+        addCards(CardType.MONEY, CardColor.NONE, 10, 1);
+        addCards(CardType.MONEY, CardColor.NONE, 5, 2);
+        addCards(CardType.MONEY, CardColor.NONE, 4, 3);
+        addCards(CardType.MONEY, CardColor.NONE, 3, 3);
+        addCards(CardType.MONEY, CardColor.NONE, 2, 5);
+        addCards(CardType.MONEY, CardColor.NONE, 1, 6);
 
-        // ===== 纯色地产卡 =====
-        // 每种颜色需要2-4张组成一套完整地产（与CardColor.setSize一致）
+        // ===== 标准房产卡 (28张) =====
         addCards(CardType.PROPERTY, CardColor.BROWN, 0, 2);
         addCards(CardType.PROPERTY, CardColor.LIGHT_BLUE, 0, 3);
         addCards(CardType.PROPERTY, CardColor.PINK, 0, 3);
@@ -55,39 +61,45 @@ public class Deck {
         addCards(CardType.PROPERTY, CardColor.YELLOW, 0, 3);
         addCards(CardType.PROPERTY, CardColor.GREEN, 0, 3);
         addCards(CardType.PROPERTY, CardColor.BLUE, 0, 2);
-        addCards(CardType.PROPERTY, CardColor.PURPLE, 0, 3);
-        addCards(CardType.PROPERTY, CardColor.BLACK, 0, 4);
-        addCards(CardType.PROPERTY, CardColor.LIGHT_GREEN, 0, 3);
+        addCards(CardType.PROPERTY, CardColor.BLACK, 0, 4, "Railroad Property");
+        addCards(CardType.PROPERTY, CardColor.LIGHT_GREEN, 0, 2, "Utility Property");
 
-        // ===== 万能地产卡 =====
-        // 万能地产可以当作任意一种颜色的地产使用，由玩家在放置时选择
-        addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Multi-Color Wild");       // 多彩万能 ×2
-        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Dark Blue/Green Wild");   // 蓝/绿万能
-        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Red/Yellow Wild");        // 红/黄万能
-        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Brown/Light Blue Wild");  // 棕/浅蓝万能
-        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Orange/Pink Wild");       // 橙/粉万能
+        // ===== 万能房产卡 (11张) =====
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Dark Blue/Green Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Brown/Light Blue Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Orange/Pink Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Red/Yellow Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Railroad/Utility Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Green/Railroad Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Light Blue/Railroad Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Multi-Color Wild");
 
-        // ===== 租金卡 (15张) =====
-        // 双色租金卡可以针对两种颜色中任意一种收租（玩家需选择）
-        addCards(CardType.RENT, CardColor.BROWN_LIGHT_BLUE, 0, 2, "Brown/Light Blue Rent");
-        addCards(CardType.RENT, CardColor.PINK_ORANGE, 0, 2, "Pink/Orange Rent");
-        addCards(CardType.RENT, CardColor.RED_YELLOW, 0, 2, "Red/Yellow Rent");
-        addCards(CardType.RENT, CardColor.GREEN_BLUE, 0, 2, "Green/Blue Rent");
-        addCards(CardType.RENT, CardColor.PURPLE_ORANGE, 0, 2, "Purple/Orange Rent");
-        addCards(CardType.RENT, CardColor.BLACK_LIGHT_GREEN, 0, 2, "Black/Light Green Rent");
-        addCards(CardType.RENT, CardColor.WILD, 0, 3, "Wild Rent");  // 万能租金 ×3
+        // ===== 租金卡 (13张，全部带面值) =====
+        addCards(CardType.RENT, CardColor.BROWN_LIGHT_BLUE, 1, 2, "Brown/Light Blue Rent");
+        addCards(CardType.RENT, CardColor.PINK_ORANGE, 1, 2, "Pink/Orange Rent");
+        addCards(CardType.RENT, CardColor.RED_YELLOW, 1, 2, "Red/Yellow Rent");
+        addCards(CardType.RENT, CardColor.GREEN_BLUE, 1, 2, "Green/Blue Rent");
+        addCards(CardType.RENT, CardColor.BLACK_LIGHT_GREEN, 1, 2, "Railroad/Utility Rent");
+        addCards(CardType.RENT, CardColor.WILD, 3, 3, "Wild Rent");
 
-        // ===== 行动卡 (约25张) =====
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Deal Breaker");     // 强行交易 ×2
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Just Say No");      // 拒绝 ×3
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Pass Go");          // 通过起点 ×3
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Forced Deal");      // 强制交换 ×3
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Sly Deal");         // 偷袭 ×3
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Debt Collector");   // 债务收集者 ×2
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Birthday");         // 生日 ×2
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Double Rent");      // 双倍租金 ×2
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "House");            // 房屋 ×3
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Hotel");            // 酒店 ×2
+        // ===== 行动卡 (34张，全部带面值) =====
+        addCards(CardType.ACTION, CardColor.NONE, 5, 2, "Deal Breaker");
+        addCards(CardType.ACTION, CardColor.NONE, 4, 3, "Just Say No");
+        addCards(CardType.ACTION, CardColor.NONE, 3, 3, "Sly Deal");
+        addCards(CardType.ACTION, CardColor.NONE, 3, 3, "Forced Deal");
+        addCards(CardType.ACTION, CardColor.NONE, 3, 3, "Debt Collector");
+        addCards(CardType.ACTION, CardColor.NONE, 2, 3, "Birthday");
+        addCards(CardType.ACTION, CardColor.NONE, 1, 10, "Pass Go");
+        addCards(CardType.ACTION, CardColor.NONE, 1, 2, "Double Rent");
+        addCards(CardType.ACTION, CardColor.NONE, 3, 3, "House");
+        addCards(CardType.ACTION, CardColor.NONE, 4, 2, "Hotel");
+
+        // 验证牌组总数 = 106
+        int total = drawPile.size();
+        if (total != 106) {
+            throw new IllegalStateException(
+                "牌组初始化错误：期望106张，实际生成了" + total + "张");
+        }
     }
 
     /**

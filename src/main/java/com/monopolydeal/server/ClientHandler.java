@@ -102,11 +102,23 @@ public class ClientHandler implements Runnable {
                 case END_TURN:
                     handleEndTurn();               // 结束回合请求
                     break;
+                case FLIP_WILD_CARD:
+                    handleFlipWildCard(payload);   // 切换万能地产颜色
+                    break;
+                case SUBMIT_PAYMENT:
+                    handleSubmitPayment(payload);  // 提交支付卡牌选择
+                    break;
+                case PLAY_JUST_SAY_NO:
+                    handlePlayJustSayNo(payload);  // 打出 Just Say No 拒绝行动
+                    break;
+                case PASS_REACTION:
+                    handlePassReaction(payload);   // 放弃响应（不打 Just Say No）
+                    break;
                 case PING:
-                    sendMessage(MessageProtocol.MessageType.PONG, "{}");  // 心跳回应
+                    sendMessage(MessageProtocol.MessageType.PONG, "{}");
                     break;
                 case CHAT_MESSAGE:
-                    handleChatMessage(payload);    // 聊天消息
+                    handleChatMessage(payload);
                     break;
                 default:
                     System.out.println("未知消息类型：" + type);
@@ -120,7 +132,12 @@ public class ClientHandler implements Runnable {
 
     /** 处理创建房间请求 - 生成6位房间代码，创建GameRoom */
     private void handleCreateRoom(JsonObject payload) {
-        this.nickname = payload.get("nickname").getAsString();
+        String rawNickname = payload.get("nickname").getAsString();
+        if (!isValidNickname(rawNickname)) {
+            sendError("昵称无效：长度需为1-12个字符，不能包含特殊字符");
+            return;
+        }
+        this.nickname = rawNickname.trim();
         String roomCode = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         GameRoom room = server.createRoom(roomCode, this);
         this.currentRoom = roomCode;
@@ -130,7 +147,12 @@ public class ClientHandler implements Runnable {
 
     /** 处理加入房间请求 - 通过房间代码查找并加入现有房间 */
     private void handleJoinRoom(JsonObject payload) {
-        this.nickname = payload.get("nickname").getAsString();
+        String rawNickname = payload.get("nickname").getAsString();
+        if (!isValidNickname(rawNickname)) {
+            sendError("昵称无效：长度需为1-12个字符，不能包含特殊字符");
+            return;
+        }
+        this.nickname = rawNickname.trim();
         String roomCode = payload.get("roomCode").getAsString();
         GameRoom room = server.getRoom(roomCode);
 
@@ -191,6 +213,48 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /** 处理切换万能地产颜色请求 - 委托给GameSession，不消耗出牌次数 */
+    private void handleFlipWildCard(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                String cardId = payload.get("cardId").getAsString();
+                String newColor = payload.get("color").getAsString();
+                room.getGameSession().handleFlipWildCard(clientId, cardId, newColor);
+            }
+        }
+    }
+
+    /** 处理打出 Just Say No — 委托给 GameSession */
+    private void handlePlayJustSayNo(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                room.getGameSession().handlePlayJustSayNo(clientId, payload);
+            }
+        }
+    }
+
+    /** 处理放弃响应 — 委托给 GameSession */
+    private void handlePassReaction(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                room.getGameSession().handlePassReaction(clientId);
+            }
+        }
+    }
+
+    /** 处理提交支付请求 - 委托给GameSession执行支付校验和转账 */
+    private void handleSubmitPayment(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                room.getGameSession().handleSubmitPayment(clientId, payload);
+            }
+        }
+    }
+
     /** 处理聊天消息 - 向房间内所有玩家广播 */
     private void handleChatMessage(JsonObject payload) {
         if (currentRoom != null) {
@@ -239,5 +303,13 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             // 关闭Socket时的异常可以忽略
         }
+    }
+
+    /** 校验昵称合法性：非空、长度1-12、仅允许中英文数字下划线 */
+    private boolean isValidNickname(String nickname) {
+        if (nickname == null || nickname.trim().isEmpty()) return false;
+        String trimmed = nickname.trim();
+        if (trimmed.length() < 1 || trimmed.length() > 12) return false;
+        return trimmed.matches("[\\u4e00-\\u9fa5a-zA-Z0-9_]+");
     }
 }

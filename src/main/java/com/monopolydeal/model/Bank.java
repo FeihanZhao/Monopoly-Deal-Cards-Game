@@ -10,10 +10,11 @@ import java.util.*;
  *
  * 核心功能：
  * - 存款（deposit）：将金钱卡存入银行
- * - 取款（removeCards）：按指定金额取出金钱卡，使用最优支付策略
+ * - 取款（removeCardsByIds）：玩家手动选择卡牌支付，校验总面值>=欠款，不找零
+ * - 兜底取款（removeCardsFallback）：超时时自动选择卡牌支付（贪心从大到小）
  * - 余额查询（getTotal）：获取银行总余额
  *
- * 当需要支付租金时，系统会尝试用最少数量的金钱卡凑出支付金额（通过 OptimalPaymentCalculator）。
+ * 不找零规则：如果玩家用总面值超过欠款额的卡牌支付，超出部分被没收，不退还。
  */
 public class Bank {
     /** 按面值分组的金钱卡映射表 key=面值(1/2/3/4/5/10), value=该面值的金钱卡列表 */
@@ -34,17 +35,18 @@ public class Bank {
     }
 
     /**
-     * 将一张金钱卡存入银行
-     * @param moneyCard 必须是金钱卡类型，否则抛出异常
-     * @throws IllegalArgumentException 如果传入的不是金钱卡
+     * 将一张有面值的卡牌存入银行作为货币资产
+     * 行动卡、租金卡一旦存入即丧失原有效果，仅作为货币计算
+     * @param card 面值 > 0 的任意卡牌
+     * @throws IllegalArgumentException 如果卡牌面值为 0
      */
-    public void deposit(Card moneyCard) {
-        if (!moneyCard.isMoneyCard()) {
-            throw new IllegalArgumentException("只有金钱卡可以存入银行");
+    public void deposit(Card card) {
+        if (!card.canBeUsedAsMoney()) {
+            throw new IllegalArgumentException("该卡不能存入银行（面值为0）");
         }
-        int denomination = moneyCard.getValue();
-        moneyCards.get(denomination).add(moneyCard);
-        allMoneyCards.add(moneyCard);
+        int denomination = card.getValue();
+        moneyCards.computeIfAbsent(denomination, k -> new ArrayList<>()).add(card);
+        allMoneyCards.add(card);
     }
 
     /**
@@ -70,31 +72,86 @@ public class Bank {
     }
 
     /**
-     * 从银行中取出指定金额的金钱卡
+     * 玩家手动选择卡牌支付 —— 校验总面值并移除
      *
-     * 使用 OptimalPaymentCalculator 计算最优支付方案：
-     * 优先使用最少数量的卡牌凑出目标金额，尽量减少多余支付。
+     * 校验规则：
+     * 1. 所有 cardIds 必须全部存在于银行中
+     * 2. 选中卡牌的总面值必须 >= amount
+     * 3. 不找零：所有被选中的卡牌全部移除并转移，总面值超出部分被没收
      *
-     * @param amount 需要取出的金额（单位：M/百万）
-     * @return 被取出的金钱卡列表（从银行中移除）
+     * @param cardIds 玩家选择的卡牌ID列表
+     * @param amount  需要支付的金额
+     * @return 被移除的卡牌列表
+     * @throws IllegalArgumentException 如果卡牌不存在或总面值不足
+     */
+    public List<Card> removeCardsByIds(List<String> cardIds, int amount) {
+        if (cardIds == null || cardIds.isEmpty()) {
+            throw new IllegalArgumentException("未选择任何卡牌");
+        }
+
+        List<Card> selected = new ArrayList<>();
+        for (String cardId : cardIds) {
+            Card card = findCardById(cardId);
+            if (card == null) {
+                throw new IllegalArgumentException("卡牌不在银行中: " + cardId);
+            }
+            selected.add(card);
+        }
+
+        int totalValue = selected.stream().mapToInt(Card::getValue).sum();
+        if (totalValue < amount) {
+            throw new IllegalArgumentException(
+                "支付金额不足。需要至少 " + amount + "M，但只选择了 " + totalValue + "M");
+        }
+
+        for (Card card : selected) {
+            allMoneyCards.remove(card);
+            moneyCards.get(card.getValue()).remove(card);
+        }
+        return selected;
+    }
+
+    /**
+     * 超时兜底自动支付 —— 贪心算法从大到小选卡
+     *
+     * 用于债务人超时未响应时，服务器自动选取卡牌支付。
+     * 按面值降序依次取卡直到总和 >= amount。
+     * 调用方应先通过 canPay(amount) 检查余额。
+     *
+     * @param amount 需要支付的金额
+     * @return 被移除的卡牌列表
      * @throws InsufficientFundsException 如果余额不足
      */
-    public List<Card> removeCards(int amount) throws InsufficientFundsException {
+    public List<Card> removeCardsFallback(int amount) throws InsufficientFundsException {
         if (getTotal() < amount) {
             throw new InsufficientFundsException("余额不足。需要 " + amount +
                     "M，但只有 " + getTotal() + "M");
         }
 
-        // 使用最优支付计算器找到最佳支付组合
-        List<Card> payment = OptimalPaymentCalculator.calculate(this, amount);
+        List<Card> sorted = new ArrayList<>(allMoneyCards);
+        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
 
-        // 从银行中移除以选中的金钱卡
-        for (Card card : payment) {
+        List<Card> selected = new ArrayList<>();
+        int accumulated = 0;
+        for (Card card : sorted) {
+            selected.add(card);
+            accumulated += card.getValue();
+            if (accumulated >= amount) break;
+        }
+
+        for (Card card : selected) {
             allMoneyCards.remove(card);
             moneyCards.get(card.getValue()).remove(card);
         }
+        return selected;
+    }
 
-        return payment;
+    /** 根据卡牌ID在银行中查找卡牌 */
+    public Card findCardById(String cardId) {
+        return allMoneyCards.stream()
+                .filter(c -> c.getId().equals(cardId))
+                .findFirst()
+                .orElse(null);
     }
 
     /**

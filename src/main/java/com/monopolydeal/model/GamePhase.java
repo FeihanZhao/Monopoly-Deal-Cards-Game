@@ -15,6 +15,8 @@ public enum GamePhase {
     INIT("Initialization"),  // 初始化阶段 - 等待所有玩家准备
     DRAW("Draw Phase"),      // 抽牌阶段 - 每回合自动抽3张牌
     PLAY("Play Phase"),      // 出牌阶段 - 玩家主动出牌（最多3张）
+    WAITING_FOR_PAYMENT("Waiting for Payment"),   // 等待债务人选择支付卡牌
+    WAITING_FOR_REACTION("Waiting for Reaction"), // 等待对手响应（Just Say No等）
     END("End Phase"),        // 结束阶段 - 回合收尾，自动弃牌到7张上限
     DISCARD("Discard Phase"),// 弃牌阶段 - 因行动卡效果需强制弃牌
     GAME_OVER("Game Over");  // 游戏结束 - 有玩家获胜

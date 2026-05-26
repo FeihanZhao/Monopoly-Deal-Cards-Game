@@ -19,7 +19,9 @@ public final class GameConstants {
     /** 游戏开始时的初始手牌数量 */
     public static final int INITIAL_HAND_SIZE = 5;
     /** 每回合自动抽取的卡牌数量 */
-    public static final int DRAW_COUNT = 3;
+    public static final int DRAW_COUNT = 2;
+    /** 回合开始时手牌为空时的额外摸牌数 */
+    public static final int EMPTY_HAND_DRAW_COUNT = 5;
     /** 每回合最多可以打出的牌数 */
     public static final int MAX_PLAYS_PER_TURN = 3;
     /** 手牌上限（回合结束时超过此数量需要弃牌） */
@@ -31,6 +33,17 @@ public final class GameConstants {
     public static final int TURN_TIMEOUT_SECONDS = 30;
     /** 超时警告提前时间（秒），在回合结束前N秒向玩家发出警告 */
     public static final int TIMEOUT_WARNING_SECONDS = 10;
+    /** 弃牌阶段的倒计时（秒） */
+    public static final int DISCARD_TIMEOUT_SECONDS = 15;
+    /** 决定是否打出just say no的时间 */
+    public static final int JUST_SAY_NO_TIMEOUT_SECONDS = 5;
+
+    // ==================== 建筑限制 ====================
+
+    /** 每套完整地产上最多可建造的房屋数 */
+    public static final int MAX_HOUSES_PER_SET = 1;
+    /** 每套完整地产上最多可建造的酒店数 */
+    public static final int MAX_HOTELS_PER_SET = 1;
 
     // ==================== 胜利条件 ====================
 

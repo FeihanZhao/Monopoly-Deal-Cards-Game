@@ -90,7 +90,7 @@ public class GamePanel extends JPanel {
     static {
         WILD_COLOR_OPTIONS.put("Multi-Color Wild",
                 new String[]{"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
-                        "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"});
+                        "YELLOW", "GREEN", "BLUE", "BLACK", "LIGHT_GREEN"});
         WILD_COLOR_OPTIONS.put("Dark Blue/Green Wild",
                 new String[]{"BLUE", "GREEN"});
         WILD_COLOR_OPTIONS.put("Red/Yellow Wild",
@@ -660,7 +660,7 @@ public class GamePanel extends JPanel {
      */
     private String showColorPicker() {
         String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
-                "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"};
+                "YELLOW", "GREEN", "BLUE", "BLACK", "LIGHT_GREEN"};
         return (String) JOptionPane.showInputDialog(this,
                 "选择颜色：",
                 "颜色选择",

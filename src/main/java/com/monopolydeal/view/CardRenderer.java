@@ -85,8 +85,6 @@ public class CardRenderer extends JPanel {
                 new CardPalette(new Color(0x228B22), new Color(0x145214), new Color(0xFFFFFF)));
         PALETTES.put("BLUE",
                 new CardPalette(new Color(0x00008B), new Color(0x000055), new Color(0xFFFFFF)));
-        PALETTES.put("PURPLE",
-                new CardPalette(new Color(0x6A0DAD), new Color(0x3D0070), new Color(0xFFFFFF)));
         PALETTES.put("BLACK",
                 new CardPalette(new Color(0x2B2B2B), new Color(0x111111), new Color(0xFFFFFF)));
         PALETTES.put("LIGHT_GREEN",
@@ -101,8 +99,6 @@ public class CardRenderer extends JPanel {
                 new CardPalette(new Color(0xDC143C), new Color(0xFFD700), new Color(0x1A1A1A)));
         PALETTES.put("GREEN_BLUE",
                 new CardPalette(new Color(0x228B22), new Color(0x00008B), new Color(0xFFFFFF)));
-        PALETTES.put("PURPLE_ORANGE",
-                new CardPalette(new Color(0x6A0DAD), new Color(0xFF8C00), new Color(0xFFFFFF)));
         PALETTES.put("BLACK_LIGHT_GREEN",
                 new CardPalette(new Color(0x2B2B2B), new Color(0x90EE90), new Color(0xFFFFFF)));
 

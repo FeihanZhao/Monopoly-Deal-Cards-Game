@@ -53,7 +53,6 @@ public class PropertySetPanel extends JPanel {
         BG_COLORS.put("YELLOW",      new Color(0xFFD700));
         BG_COLORS.put("GREEN",       new Color(0x228B22));
         BG_COLORS.put("BLUE",        new Color(0x00008B));
-        BG_COLORS.put("PURPLE",      new Color(0x6A0DAD));
         BG_COLORS.put("BLACK",       new Color(0x2B2B2B));
         BG_COLORS.put("LIGHT_GREEN", new Color(0x90EE90));
 
@@ -75,7 +74,6 @@ public class PropertySetPanel extends JPanel {
         SET_SIZES.put("YELLOW",      3);
         SET_SIZES.put("GREEN",       3);
         SET_SIZES.put("BLUE",        2);
-        SET_SIZES.put("PURPLE",      3);
         SET_SIZES.put("BLACK",       4);
         SET_SIZES.put("LIGHT_GREEN", 3);
     }

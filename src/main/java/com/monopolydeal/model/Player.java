@@ -158,7 +158,7 @@ public class Player {
 
     /** 已使用出牌数+1 */
     public void incrementPlaysUsed() {
-        setPlaysUsed(playsUsed++);
+        this.playsUsed++;
     }
 
     /**

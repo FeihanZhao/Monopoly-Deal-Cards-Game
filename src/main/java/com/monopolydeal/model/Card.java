@@ -1,6 +1,11 @@
 package com.monopolydeal.model;
 
 import java.util.Objects;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * 卡牌类 - 代表游戏中的一张卡牌
@@ -99,8 +104,10 @@ public class Card implements Cloneable {
 
     // ==================== 类型判断 ====================
 
-    /** 是否是金钱卡 */
+    /** 是否是金钱卡（仅指MONEY类型） */
     public boolean isMoneyCard() { return type == CardType.MONEY; }
+    /** 是否可存入银行作为货币使用（面值>0即可，含行动卡/租金卡） */
+    public boolean canBeUsedAsMoney() { return value > 0; }
     /** 是否是地产卡 */
     public boolean isPropertyCard() { return type == CardType.PROPERTY; }
     /** 是否是行动卡 */
@@ -110,6 +117,57 @@ public class Card implements Cloneable {
     /** 是否是万能地产卡（地产卡且颜色为WILD） */
     public boolean isWildProperty() {
         return type == CardType.PROPERTY && color == CardColor.WILD;
+    }
+
+    // ==================== 万能卡颜色规则 ====================
+
+    /** 万能地产卡名称 → 允许切换的颜色列表 */
+    private static final Map<String, List<CardColor>> WILD_COLOR_RULES = new HashMap<>();
+    static {
+        WILD_COLOR_RULES.put("Multi-Color Wild", Arrays.asList(
+                CardColor.BROWN, CardColor.LIGHT_BLUE, CardColor.PINK, CardColor.ORANGE,
+                CardColor.RED, CardColor.YELLOW, CardColor.GREEN, CardColor.BLUE,
+                CardColor.BLACK, CardColor.LIGHT_GREEN));
+        WILD_COLOR_RULES.put("Dark Blue/Green Wild",
+                Arrays.asList(CardColor.BLUE, CardColor.GREEN));
+        WILD_COLOR_RULES.put("Brown/Light Blue Wild",
+                Arrays.asList(CardColor.BROWN, CardColor.LIGHT_BLUE));
+        WILD_COLOR_RULES.put("Orange/Pink Wild",
+                Arrays.asList(CardColor.ORANGE, CardColor.PINK));
+        WILD_COLOR_RULES.put("Red/Yellow Wild",
+                Arrays.asList(CardColor.RED, CardColor.YELLOW));
+        WILD_COLOR_RULES.put("Railroad/Utility Wild",
+                Arrays.asList(CardColor.BLACK, CardColor.LIGHT_GREEN));
+        WILD_COLOR_RULES.put("Green/Railroad Wild",
+                Arrays.asList(CardColor.GREEN, CardColor.BLACK));
+        WILD_COLOR_RULES.put("Light Blue/Railroad Wild",
+                Arrays.asList(CardColor.LIGHT_BLUE, CardColor.BLACK));
+    }
+
+    /**
+     * 校验该万能地产卡是否可以切换到目标颜色
+     * 双色卡只能在其两个颜色间切换，十色卡可切换任意地产颜色
+     * @param targetColor 目标颜色
+     * @return true=允许切换，false=不在允许范围内
+     */
+    public boolean isColorAllowed(CardColor targetColor) {
+        if (!isWildProperty()) return false;
+        List<CardColor> allowed = WILD_COLOR_RULES.get(name);
+        if (allowed == null) {
+            // 未知万能卡类型：保守拒绝，防止利用未知名称绕过校验
+            return false;
+        }
+        return allowed.contains(targetColor);
+    }
+
+    /**
+     * 获取该万能地产卡可切换的颜色列表（只读）
+     * @return 允许的颜色列表，非万能卡返回空列表
+     */
+    public List<CardColor> getAllowedColors() {
+        if (!isWildProperty()) return Collections.emptyList();
+        List<CardColor> allowed = WILD_COLOR_RULES.get(name);
+        return allowed != null ? Collections.unmodifiableList(allowed) : Collections.emptyList();
     }
 
     // ==================== equals / hashCode / toString ====================

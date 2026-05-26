@@ -92,7 +92,7 @@ public class GameServer {
      * @return 新创建的GameRoom
      */
     public GameRoom createRoom(String roomCode, ClientHandler creator) {
-        GameRoom room = new GameRoom(roomCode, creator);
+        GameRoom room = new GameRoom(roomCode, creator, this);
         rooms.put(roomCode, room);
         return room;
     }

@@ -10,8 +10,8 @@ import java.util.*;
  *
  * 核心概念：
  * - 完整地产组合（Complete Set）：当某颜色组中的卡牌数量 >= 该颜色所需的setSize时
- * - 房屋（House）：可在完整组合上建造，每栋+1租金加成，最多4栋
- * - 酒店（Hotel）：在4栋房屋的基础上方可建造，+3租金加成
+ * - 房屋（House）：可在完整组合上建造，每栋+3M租金加成，最多1栋（不可建在Black/LightGreen上）
+ * - 酒店（Hotel）：在有房屋的完整组合上方可建造，+4M租金加成（不可建在Black/LightGreen上）
  *
  * 胜利条件：拥有3个完整地产组合（集齐3套不同颜色的完整地产）。
  */
@@ -75,6 +75,11 @@ public class PropertyZone {
         List<Card> group = propertyGroups.get(effectiveColor);
         if (group != null && group.remove(propertyCard)) {
             allProperties.remove(propertyCard);
+            // 如果移除后该组合不再完整，自动拆除建筑
+            if (getPropertyCount(effectiveColor) < effectiveColor.getSetSize()) {
+                houseCount.put(effectiveColor, 0);
+                hasHotel.put(effectiveColor, false);
+            }
             return true;
         }
         return false;
@@ -133,15 +138,16 @@ public class PropertyZone {
      * 条件：
      * 1. 该颜色必须是完整组合
      * 2. 该颜色尚未建造酒店
-     * 3. 房屋数量未达到4栋上限
+     * 3. 房屋数量未达到上限（MAX_HOUSES_PER_SET）
      *
      * @param color 目标颜色
      * @return true=可以建造，false=不可建造
      */
     public boolean canPlaceHouse(CardColor color) {
-        if (!getCompleteSets().contains(color)) return false;  // 必须是完整组合
-        if (hasHotel.getOrDefault(color, false)) return false; // 已有酒店不能再建房屋
-        return houseCount.getOrDefault(color, 0) < 4;           // 最多4栋房屋
+        if (!getCompleteSets().contains(color)) return false;
+        if (color == CardColor.BLACK || color == CardColor.LIGHT_GREEN) return false;
+        if (hasHotel.getOrDefault(color, false)) return false;
+        return houseCount.getOrDefault(color, 0) < GameConstants.MAX_HOUSES_PER_SET;
     }
 
     /**
@@ -153,7 +159,7 @@ public class PropertyZone {
         if (!canPlaceHouse(color)) {
             throw new IllegalStateException("无法在 " + color.getName() + " 上建造房屋");
         }
-        houseCount.merge(color, 1, Integer::sum);  // 房屋数+1
+        houseCount.merge(color, 1, Integer::sum);
     }
 
     /**
@@ -161,15 +167,16 @@ public class PropertyZone {
      * 条件：
      * 1. 该颜色必须是完整组合
      * 2. 该颜色尚未建造酒店
-     * 3. 房屋数量已达4栋（酒店需要先有4栋房屋）
+     * 3. 房屋数量已达上限（必须先有房子才能建旅馆）
      *
      * @param color 目标颜色
      * @return true=可以建造，false=不可建造
      */
     public boolean canPlaceHotel(CardColor color) {
-        if (!getCompleteSets().contains(color)) return false;  // 必须是完整组合
-        if (hasHotel.getOrDefault(color, false)) return false; // 不能重复建酒店
-        return houseCount.getOrDefault(color, 0) >= 4;          // 需要4栋房屋作为前置
+        if (!getCompleteSets().contains(color)) return false;
+        if (color == CardColor.BLACK || color == CardColor.LIGHT_GREEN) return false;
+        if (hasHotel.getOrDefault(color, false)) return false;
+        return houseCount.getOrDefault(color, 0) >= GameConstants.MAX_HOUSES_PER_SET;
     }
 
     /**
@@ -186,16 +193,75 @@ public class PropertyZone {
 
     /**
      * 计算指定颜色的租金收入
-     * 租金 = 基础租金 + 房屋加成（每栋+1M） + 酒店加成（+3M）
+     * 租金 = 基础租金 + 房屋加成（每栋+3M） + 酒店加成（+4M）
      *
      * @param color 地产颜色
      * @return 应收租金金额（单位：M/百万）
      */
     public int getRentAmount(CardColor color) {
         int baseRent = color.getRentAmount(getPropertyCount(color));  // 基础租金（根据持有数计算）
-        int houseBonus = houseCount.getOrDefault(color, 0) * 1;       // 每栋房屋+1M
-        int hotelBonus = hasHotel.getOrDefault(color, false) ? 3 : 0; // 酒店+3M
+        int houseBonus = houseCount.getOrDefault(color, 0) * 3;       // 每栋房屋+3M
+        int hotelBonus = hasHotel.getOrDefault(color, false) ? 4 : 0; // 酒店+4M
         return baseRent + houseBonus + hotelBonus;
+    }
+
+    /**
+     * 切换万能地产卡的生效颜色（安全硬化版）
+     *
+     * 三步安全校验：
+     * 1. 目标颜色必须是有效的纯地产颜色
+     * 2. 该万能卡必须允许切换到目标颜色（双色卡不能冒充十色卡）
+     * 3. 原颜色分组如有房屋/酒店，移除该卡后必须仍保持完整（防止违建悬空）
+     *
+     * 防御性编程：不在迭代中直接 remove，先定位再操作，杜绝 CME 风险。
+     *
+     * @param cardId 万能地产卡的唯一ID
+     * @param newColor 新的地产颜色
+     * @return true=切换成功，false=校验不通过
+     */
+    public boolean changeWildCardColor(String cardId, CardColor newColor) {
+        if (!newColor.isPropertyColor()) return false;
+
+        // 阶段1：安全查找目标卡牌（只读遍历，不做修改）
+        Card targetCard = null;
+        CardColor oldColor = null;
+
+        for (Map.Entry<CardColor, List<Card>> entry : propertyGroups.entrySet()) {
+            for (Card card : entry.getValue()) {
+                if (card.getId().equals(cardId) && card.isWildProperty()) {
+                    targetCard = card;
+                    oldColor = entry.getKey();
+                    break;
+                }
+            }
+            if (targetCard != null) break;
+        }
+
+        if (targetCard == null) return false;
+
+        // 阶段2：校验双色合法性
+        if (!targetCard.isColorAllowed(newColor)) return false;
+
+        // 阶段3：校验违建风险 —— 如果旧组有建筑，移除本卡后必须仍满足完整套条件
+        if (hasBuildings(oldColor)) {
+            int remaining = getPropertyCount(oldColor) - 1;
+            if (remaining < oldColor.getSetSize()) {
+                return false; // 拒绝：会导致房屋/酒店悬空在非完整套牌上
+            }
+        }
+
+        // 阶段4：安全执行阵营转移
+        propertyGroups.get(oldColor).remove(targetCard);
+        allProperties.remove(targetCard);
+        targetCard.setWildColor(newColor);
+        addProperty(targetCard);
+        return true;
+    }
+
+    /** 检查指定颜色分组是否建有房屋或酒店 */
+    private boolean hasBuildings(CardColor color) {
+        return houseCount.getOrDefault(color, 0) > 0
+                || hasHotel.getOrDefault(color, false);
     }
 
     /** 清空物业区（移除所有地产卡、房屋和酒店） */

@@ -51,6 +51,7 @@ public class MessageProtocol {
         TURN_TIMEOUT,      // 服务器通知回合超时
         PLACE_PROPERTY,    // 客户端请求放置地产卡
         PLACE_MONEY,       // 客户端请求放置金钱卡
+        FLIP_WILD_CARD,    // 客户端请求切换万能地产颜色（不消耗出牌次数）
 
         // ===== 具体行动类型 =====
         PLAY_RENT,              // 客户端使用租金卡
@@ -64,9 +65,14 @@ public class MessageProtocol {
         PLAY_HOTEL,             // 使用酒店卡
         PLAY_JUST_SAY_NO,       // 使用拒绝卡
 
+        // ===== 决议链 =====
+        REACTION_REQUIRED,  // 服务器通知玩家可以打 Just Say No 响应
+        PASS_REACTION,      // 客户端表示放弃响应（不打 Just Say No）
+
         // ===== 行动结果 =====
         ACTION_RESULT,     // 服务器返回行动执行结果
         PAYMENT_REQUIRED,  // 服务器要求玩家支付
+        SUBMIT_PAYMENT,    // 客户端提交支付（选择要支付的金钱卡）
         PAYMENT_MADE,      // 服务器通知支付完成
         CARD_DRAWN,        // 服务器通知卡牌被抽取
         CARD_PLAYED,       // 服务器通知卡牌被打出

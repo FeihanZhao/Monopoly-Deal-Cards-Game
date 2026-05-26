@@ -22,7 +22,6 @@ public enum CardColor {
     YELLOW("Yellow", 3),             // 黄色 - 需要3张组成一套
     GREEN("Green", 3),               // 绿色 - 需要3张组成一套
     BLUE("Blue", 2),                 // 蓝色 - 需要2张组成一套
-    PURPLE("Purple", 3),             // 紫色 - 需要3张组成一套
     BLACK("Black", 4),               // 黑色 - 需要4张组成一套
     LIGHT_GREEN("Light Green", 3),   // 浅绿色 - 需要3张组成一套
 
@@ -32,7 +31,6 @@ public enum CardColor {
     PINK_ORANGE("Pink/Orange", 0),
     RED_YELLOW("Red/Yellow", 0),
     GREEN_BLUE("Green/Blue", 0),
-    PURPLE_ORANGE("Purple/Orange", 0),
     BLACK_LIGHT_GREEN("Black/Light Green", 0),
 
     // ==================== 特殊颜色 ====================
@@ -68,7 +66,6 @@ public enum CardColor {
      * - 红色/黄色：1张=2M, 2张=4M, 3张+=6M
      * - 绿色：    1张=2M, 2张=4M, 3张+=7M
      * - 蓝色：    1张=3M, 2张+=8M
-     * - 紫色：    1张=1M, 2张=2M, 3张+=4M
      * - 黑色：    1张=1M, 2张=2M, 3张=3M, 4张+=5M
      * - 浅绿色：  1张=1M, 2张=2M, 3张+=4M
      *
@@ -95,11 +92,6 @@ public enum CardColor {
         if (this == BLUE) {
             return propertiesInSet >= 2 ? 8 : 3;
         }
-        if (this == PURPLE) {
-            if (propertiesInSet >= 3) return 4;
-            if (propertiesInSet >= 2) return 2;
-            return 1;
-        }
         if (this == BLACK) {
             if (propertiesInSet >= 4) return 5;
             if (propertiesInSet >= 3) return 3;
@@ -123,7 +115,7 @@ public enum CardColor {
         return setSize > 0 && this != WILD && this != NONE
                 && this != BROWN_LIGHT_BLUE && this != PINK_ORANGE
                 && this != RED_YELLOW && this != GREEN_BLUE
-                && this != PURPLE_ORANGE && this != BLACK_LIGHT_GREEN;
+                && this != BLACK_LIGHT_GREEN;
     }
 
     /**
@@ -134,7 +126,23 @@ public enum CardColor {
     public boolean isRentColor() {
         return this == BROWN_LIGHT_BLUE || this == PINK_ORANGE
                 || this == RED_YELLOW || this == GREEN_BLUE
-                || this == PURPLE_ORANGE || this == BLACK_LIGHT_GREEN
+                || this == BLACK_LIGHT_GREEN
                 || this == WILD;
+    }
+
+    /**
+     * 获取双色租金卡对应的两个纯地产颜色
+     * 仅对双色租金颜色有效，返回长度为 2 的数组
+     * @return 两个成分颜色，非双色租金颜色返回空数组
+     */
+    public CardColor[] getComponentColors() {
+        switch (this) {
+            case BROWN_LIGHT_BLUE:   return new CardColor[]{BROWN, LIGHT_BLUE};
+            case PINK_ORANGE:        return new CardColor[]{PINK, ORANGE};
+            case RED_YELLOW:         return new CardColor[]{RED, YELLOW};
+            case GREEN_BLUE:         return new CardColor[]{GREEN, BLUE};
+            case BLACK_LIGHT_GREEN:  return new CardColor[]{BLACK, LIGHT_GREEN};
+            default:                 return new CardColor[0];
+        }
     }
 }

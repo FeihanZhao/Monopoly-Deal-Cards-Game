@@ -38,19 +38,22 @@ public class GameRoom {
     private boolean gameStarted;
     /** Gson序列化器 */
     private final Gson gson;
+    /** 所属服务器（用于销毁空房间） */
+    private final GameServer server;
 
     /**
      * 构造函数 - 创建新房间，房主自动加入
      * @param roomCode 房间代码
      * @param creator 房主
      */
-    public GameRoom(String roomCode, ClientHandler creator) {
+    public GameRoom(String roomCode, ClientHandler creator, GameServer server) {
         this.roomCode = roomCode;
         this.creator = creator;
         this.players = new ConcurrentHashMap<>();
         this.readyStates = new ConcurrentHashMap<>();
         this.gameStarted = false;
         this.gson = new Gson();
+        this.server = server;
         addPlayer(creator);  // 房主自动加入
     }
 
@@ -88,6 +91,7 @@ public class GameRoom {
         if (players.isEmpty()) {
             gameStarted = false;
             gameSession = null;
+            server.removeRoom(roomCode);
         }
 
         broadcastRoomUpdate();  // 通知剩余玩家房间状态变化
