@@ -123,10 +123,10 @@ public class CardRenderer extends JPanel {
     private static final Map<String, String> TYPE_ICONS = new HashMap<>();
 
     static {
-        TYPE_ICONS.put("MONEY",    "");   // 💵 美元图标
-        TYPE_ICONS.put("PROPERTY", "");  // 🏠 房屋图标
-        TYPE_ICONS.put("ACTION",   "");   // ⚡ 闪电图标
-        TYPE_ICONS.put("RENT",     "");   // 💸 飞钱图标
+        TYPE_ICONS.put("MONEY",    "\uD83D\uDCB5");   // 💵 美元图标
+        TYPE_ICONS.put("PROPERTY", "\uD83C\uDFE0");  // 🏠 房屋图标
+        TYPE_ICONS.put("ACTION",   "⚡");   // ⚡ 闪电图标
+        TYPE_ICONS.put("RENT",     "\uD83D\uDCB8");   // 💸 飞钱图标
     }
 
     /** 卡牌唯一标识符 */

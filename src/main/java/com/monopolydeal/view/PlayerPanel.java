@@ -87,8 +87,8 @@ public class PlayerPanel extends JPanel {
 
     private void createPropertyArea() {
         propertyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        propertyPanel.setOpaque(false);
-        add(propertyPanel, BorderLayout.CENTER);
+        propertyPanel.setOpaque(false); // 设为透明，以便透出底部的绿色毡布背景
+        add(propertyPanel, BorderLayout.CENTER); // 将卡牌堆放区添加到布局中央
     }
 
     public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
