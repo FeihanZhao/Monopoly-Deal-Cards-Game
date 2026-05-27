@@ -3,8 +3,7 @@ package com.monopolydeal.view;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import java.awt.geom.*;
 import java.util.*;
 import java.util.List;
@@ -37,8 +36,12 @@ public class GamePanel extends JPanel {
     private int secondsRemaining;
     private JsonObject cardDataForClicked;
 
+    private float glowPhase = 0f;
+    private javax.swing.Timer ambientTimer;
+    private final List<Particle> particles = new ArrayList<>();
+    private final Random rng = new Random();
+
     private static final Color BG_DEEP = new Color(8, 10, 18);
-    private static final Color BG_CARD = new Color(14, 16, 26);
     private static final Color GOLD_PRIMARY = new Color(255, 215, 0);
     private static final Color GOLD_GLOW = new Color(255, 235, 100);
     private static final Color RED_ACCENT = new Color(244, 67, 54);
@@ -47,11 +50,7 @@ public class GamePanel extends JPanel {
     private static final Color GREEN_SHADOW = new Color(10, 32, 18);
     private static final Color TEXT_WHITE = new Color(240, 240, 248);
     private static final Color TEXT_GRAY = new Color(150, 150, 170);
-    private static final Color PURPLE_ROYAL = new Color(100, 30, 140);
-    private static final Color PURPLE_DARK = new Color(60, 15, 90);
-    private static final Color BLUE_STEEL = new Color(30, 40, 60);
     private static final Color PANEL_BG = new Color(16, 18, 30);
-    private static final Color BORDER_SUBTLE = new Color(50, 45, 75);
 
     private static final Map<String, String[]> WILD_COLOR_OPTIONS = new LinkedHashMap<>();
     static {
@@ -78,6 +77,21 @@ public class GamePanel extends JPanel {
         add(mainGamePanel, BorderLayout.CENTER);
         add(handPanel, BorderLayout.SOUTH);
         add(sidePanel, BorderLayout.EAST);
+        initAmbientEffects();
+    }
+
+    private void initAmbientEffects() {
+        for (int i = 0; i < 30; i++) {
+            particles.add(new Particle(rng.nextInt(1200), rng.nextInt(800)));
+        }
+        ambientTimer = new javax.swing.Timer(40, e -> {
+            glowPhase += 0.02f;
+            for (Particle p : particles) p.update();
+            mainGamePanel.repaint();
+            handCardsPanel.repaint();
+            timerLabel.repaint();
+        });
+        ambientTimer.start();
     }
 
     private void createTopBar() {
@@ -90,14 +104,16 @@ public class GamePanel extends JPanel {
                 GradientPaint gp = new GradientPaint(0, 0, new Color(18, 16, 34), 0, getHeight(), new Color(10, 8, 20));
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setStroke(new BasicStroke(1.5f));
-                g2.setColor(new Color(255, 215, 0, 50));
+                g2.setStroke(new BasicStroke(2f));
+                float alpha = 30 + (float)(Math.sin(glowPhase) * 15);
+                g2.setColor(new Color(255, 215, 0, (int)alpha));
                 g2.drawLine(20, getHeight() - 1, getWidth() - 20, getHeight() - 1);
-                g2.setColor(new Color(100, 30, 140, 60));
+                g2.setColor(new Color(100, 30, 140, (int)(alpha * 2)));
                 g2.drawLine(20, getHeight() - 2, getWidth() - 20, getHeight() - 2);
                 int dotSpacing = 40;
-                g2.setColor(new Color(255, 215, 0, 15));
                 for (int x = dotSpacing; x < getWidth(); x += dotSpacing) {
+                    float dotAlpha = 10 + (float)(Math.sin(glowPhase + x * 0.01) * 8);
+                    g2.setColor(new Color(255, 215, 0, (int)dotAlpha));
                     g2.fillOval(x, getHeight() - 4, 4, 4);
                 }
                 g2.dispose();
@@ -159,11 +175,12 @@ public class GamePanel extends JPanel {
                 GradientPaint bgGp = new GradientPaint(cx - r, cy - r, new Color(35, 30, 55), cx + r, cy + r, new Color(20, 18, 40));
                 g2.setPaint(bgGp);
                 g2.fillOval(cx - r, cy - r, r * 2, r * 2);
-                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                float pulse = 1f + (float)(Math.sin(glowPhase * 3) * 0.06);
+                g2.setStroke(new BasicStroke(2.5f * pulse, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2.setColor(new Color(255, 255, 255, 15));
                 g2.drawOval(cx - r, cy - r, r * 2, r * 2);
                 int angle = (int)(360 * secondsRemaining / 30.0);
-                g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.setStroke(new BasicStroke(3f * pulse, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2.setColor(timerLabel.getForeground());
                 g2.drawArc(cx - r + 2, cy - r + 2, r * 2 - 4, r * 2 - 4, 90, -angle);
                 g2.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
@@ -171,7 +188,7 @@ public class GamePanel extends JPanel {
                 FontMetrics fm = g2.getFontMetrics();
                 String text = getText();
                 g2.drawString(text, cx - fm.stringWidth(text) / 2, cy + fm.getAscent() / 2 - 1);
-                g2.setColor(new Color(255, 255, 255, 20));
+                g2.setColor(new Color(255, 255, 255, (int)(20 + Math.sin(glowPhase * 2) * 10)));
                 g2.fillOval(cx - 6, cy - r + 6, 5, 5);
                 g2.dispose();
             }
@@ -241,11 +258,18 @@ public class GamePanel extends JPanel {
                         g2.drawRoundRect(x + 5, y + 5, 90, 90, 12, 12);
                     }
                 }
-                g2.setColor(new Color(255, 215, 0, 8));
+                float ringAlpha = 5 + (float)(Math.sin(glowPhase * 0.5) * 4);
+                g2.setColor(new Color(255, 215, 0, (int)ringAlpha));
                 g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{10, 25}, 0));
                 int cx = getWidth() / 2, cy = getHeight() / 2;
                 g2.drawOval(cx - 160, cy - 160, 320, 320);
                 g2.drawOval(cx - 200, cy - 200, 400, 400);
+                for (Particle p : particles) {
+                    if (p.y > cy - 200 && p.y < cy + 200 && p.x > cx - 200 && p.x < cx + 200) {
+                        g2.setColor(new Color(255, 215, 0, (int)(p.alpha * 0.4)));
+                        g2.fillOval((int)p.x, (int)p.y, (int) p.size, (int) p.size);
+                    }
+                }
                 g2.dispose();
             }
         };
@@ -335,9 +359,7 @@ public class GamePanel extends JPanel {
                 JsonObject gameState = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 if (gameState.has("viewerId")) {
                     String myId = gameState.get("viewerId").getAsString();
-                    if (!myId.equals(localPlayerId)) {
-                        localPlayerId = myId;
-                    }
+                    if (!myId.equals(localPlayerId)) localPlayerId = myId;
                 }
                 String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "未知";
                 phaseLabel.setText("阶段: " + phase);
@@ -351,12 +373,8 @@ public class GamePanel extends JPanel {
                     updateLocalHand(playerStates);
                 }
                 JsonArray actions = gameState.has("actionHistory") ? gameState.getAsJsonArray("actionHistory") : null;
-                if (actions != null) {
-                    actionHistoryPanel.updateActions(actions);
-                }
-            } catch (Exception e) {
-                System.err.println("更新游戏状态出错: " + e.getMessage());
-            }
+                if (actions != null) actionHistoryPanel.updateActions(actions);
+            } catch (Exception e) {}
         });
     }
 
@@ -426,9 +444,7 @@ public class GamePanel extends JPanel {
             handPanel.setBorder(new EmptyBorder(14, 20, 16, 20));
         }
         for (Component comp : handCardsPanel.getComponents()) {
-            if (comp instanceof CardRenderer) {
-                comp.setEnabled(isMyTurn);
-            }
+            if (comp instanceof CardRenderer) comp.setEnabled(isMyTurn);
         }
     }
 
@@ -440,9 +456,7 @@ public class GamePanel extends JPanel {
         countdownTimer = new javax.swing.Timer(1000, e -> {
             secondsRemaining--;
             timerLabel.setText(String.valueOf(secondsRemaining));
-            if (secondsRemaining <= 10) {
-                timerLabel.setForeground(RED_ACCENT);
-            }
+            if (secondsRemaining <= 10) timerLabel.setForeground(RED_ACCENT);
             if (secondsRemaining <= 0) {
                 stopCountdown();
                 endTurnButton.setEnabled(false);
@@ -454,9 +468,7 @@ public class GamePanel extends JPanel {
     }
 
     private void stopCountdown() {
-        if (countdownTimer != null && countdownTimer.isRunning()) {
-            countdownTimer.stop();
-        }
+        if (countdownTimer != null && countdownTimer.isRunning()) countdownTimer.stop();
         countdownTimer = null;
         timerLabel.setText("--");
         timerLabel.setForeground(TEXT_GRAY);
@@ -594,5 +606,28 @@ public class GamePanel extends JPanel {
         stopCountdown();
         client.sendMessage(MessageProtocol.MessageType.END_TURN, "{}");
         endTurnButton.setEnabled(false);
+    }
+
+    private static class Particle {
+        float x, y, vx, vy, alpha, size;
+        Particle(int x, int y) {
+            this.x = x;
+            this.y = y;
+            this.vx = (float)(Math.random() - 0.5) * 0.3f;
+            this.vy = (float)(Math.random() - 0.5) * 0.3f - 0.1f;
+            this.alpha = 10 + (float)Math.random() * 20;
+            this.size = 2 + (float)Math.random() * 3;
+        }
+        void update() {
+            x += vx;
+            y += vy;
+            alpha += (float)(Math.random() - 0.5) * 0.3f;
+            if (alpha < 0) alpha = 0;
+            if (alpha > 30) alpha = 30;
+            if (x < 0) x = 1200;
+            if (x > 1200) x = 0;
+            if (y < 0) y = 800;
+            if (y > 800) y = 0;
+        }
     }
 }

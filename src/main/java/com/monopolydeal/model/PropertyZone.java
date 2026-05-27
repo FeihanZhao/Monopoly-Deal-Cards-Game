@@ -99,7 +99,7 @@ public class PropertyZone {
         if (!canPlaceHotel(color)) {
             throw new IllegalStateException("Cannot place hotel on " + color.getName());
         }
-        houseCount.put(color, 0);  // Official rule: Hotel replaces House, Houses are discarded
+        houseCount.put(color, 0);  // 官方规则：Hotel 替代 House，House 被弃掉
         hasHotel.put(color, true);
     }
 
