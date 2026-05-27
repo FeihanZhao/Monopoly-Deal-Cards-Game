@@ -3,25 +3,25 @@ package com.monopolydeal.model;
 import com.google.gson.JsonObject;
 
 /**
- * 决议栈元素 — 代表一个待处理的行动或 Just Say No
+ * Resolution stack item - represents a pending action or Just Say No to be processed
  *
- * 每个元素记录：谁发起的、谁需要响应、原始数据是什么。
- * 当响应人放弃或超时时，栈顶元素被弹出并处理。
+ * Each item records: who initiated it, who needs to respond, and the original payload.
+ * When the responder gives up or times out, the top item is popped and processed.
  */
 public class ResolutionItem {
-    /** 决议唯一标识符 */
+    /** Resolution unique identifier */
     private final String resolutionId;
-    /** 行动类型：DEBT_COLLECTOR / DEAL_BREAKER / SLY_DEAL / FORCED_DEAL / RENT / BIRTHDAY / JUST_SAY_NO */
+    /** Action type: DEBT_COLLECTOR / DEAL_BREAKER / SLY_DEAL / FORCED_DEAL / RENT / BIRTHDAY / JUST_SAY_NO */
     private final String actionType;
-    /** 发起此决议的玩家ID（打牌的人） */
+    /** Player ID who initiated this resolution (the one who played the card) */
     private final String initiatorId;
-    /** 需要响应此决议的玩家ID（可以打 Just Say No 的人） */
+    /** Player ID who needs to respond to this resolution (the one who can play Just Say No) */
     private final String responderId;
-    /** 原始卡牌（用于日志和引用） */
+    /** Original source card (for logging and reference) */
     private final Card sourceCard;
-    /** 原始请求负载数据（包含 targetPlayerId、color 等，用于延迟执行） */
+    /** Original request payload data (contains targetPlayerId, color etc., for deferred execution) */
     private final JsonObject actionPayload;
-    /** 决议创建时间戳（毫秒） */
+    /** Resolution creation timestamp (milliseconds) */
     private final long createdAt;
 
     public ResolutionItem(String resolutionId, String actionType,
@@ -45,7 +45,7 @@ public class ResolutionItem {
     public JsonObject getActionPayload() { return actionPayload; }
     public long getCreatedAt() { return createdAt; }
 
-    /** 是否是 Just Say No 类型的决议 */
+    /** Whether this is a Just Say No type resolution */
     public boolean isJustSayNo() {
         return "JUST_SAY_NO".equals(actionType);
     }

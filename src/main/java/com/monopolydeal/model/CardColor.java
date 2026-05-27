@@ -1,76 +1,76 @@
 package com.monopolydeal.model;
 
 /**
- * 卡牌颜色枚举类
+ * Card color enum class
  *
- * 定义了《大富翁纸牌游戏》中所有卡牌的颜色类型，分为三大类：
- * 1. 纯地产颜色（BROWN ~ LIGHT_GREEN）：可用于组成完整地产组合的颜色
- * 2. 双色租金颜色（BROWN_LIGHT_BLUE ~ BLACK_LIGHT_GREEN）：租金卡使用的双色组合
- * 3. 特殊颜色（WILD、NONE）：万能卡和无颜色卡
+ * Defines all card color types in the Monopoly Deal card game, divided into three categories:
+ * 1. Pure property colors (BROWN ~ LIGHT_GREEN): used to form complete property sets
+ * 2. Dual-color rent colors (BROWN_LIGHT_BLUE ~ BLACK_LIGHT_GREEN): used by rent cards
+ * 3. Special colors (WILD, NONE): wild cards and no-color cards
  *
- * 每种纯地产颜色都有对应的 setSize（组成一套完整地产所需的卡牌数量），
- * 以及对应的租金计算规则。
+ * Each pure property color has a corresponding setSize (number of cards needed for a complete set),
+ * and a corresponding rent calculation rule.
  */
 public enum CardColor {
-    // ==================== 纯地产颜色 ====================
-    // 格式：颜色(显示名称, 建成一套所需卡片数)
-    BROWN("Brown", 2),               // 棕色 - 需要2张组成一套
-    LIGHT_BLUE("Light Blue", 3),     // 浅蓝色 - 需要3张组成一套
-    PINK("Pink", 3),                 // 粉色 - 需要3张组成一套
-    ORANGE("Orange", 3),             // 橙色 - 需要3张组成一套
-    RED("Red", 3),                   // 红色 - 需要3张组成一套
-    YELLOW("Yellow", 3),             // 黄色 - 需要3张组成一套
-    GREEN("Green", 3),               // 绿色 - 需要3张组成一套
-    BLUE("Blue", 2),                 // 蓝色 - 需要2张组成一套
-    BLACK("Black", 4),               // 黑色 - 需要4张组成一套
-    LIGHT_GREEN("Light Green", 2),   // 浅绿色 - 需要2张组成一套（公共事业）
+    // ==================== Pure Property Colors ====================
+    // Format: color(display name, cards needed for a complete set)
+    BROWN("Brown", 2),               // Brown - 2 cards for a complete set
+    LIGHT_BLUE("Light Blue", 3),     // Light Blue - 3 cards for a complete set
+    PINK("Pink", 3),                 // Pink - 3 cards for a complete set
+    ORANGE("Orange", 3),             // Orange - 3 cards for a complete set
+    RED("Red", 3),                   // Red - 3 cards for a complete set
+    YELLOW("Yellow", 3),             // Yellow - 3 cards for a complete set
+    GREEN("Green", 3),               // Green - 3 cards for a complete set
+    BLUE("Blue", 2),                 // Blue - 2 cards for a complete set
+    BLACK("Black", 4),               // Black - 4 cards for a complete set
+    LIGHT_GREEN("Light Green", 2),   // Light Green - 2 cards for a complete set (Utilities)
 
-    // ==================== 双色租金颜色 ====================
-    // 用于租金卡，表示该租金卡可以针对这两种颜色的地产收租
+    // ==================== Dual-Color Rent Colors ====================
+    // Used by rent cards, indicates rent can be collected for properties of these two colors
     BROWN_LIGHT_BLUE("Brown/Light Blue", 0),
     PINK_ORANGE("Pink/Orange", 0),
     RED_YELLOW("Red/Yellow", 0),
     GREEN_BLUE("Green/Blue", 0),
     BLACK_LIGHT_GREEN("Black/Light Green", 0),
 
-    // ==================== 特殊颜色 ====================
-    WILD("Wild", 0),    // 万能色 - 万能地产卡和万能租金卡使用
-    NONE("None", 0);    // 无色 - 金钱卡和行动卡使用
+    // ==================== Special Colors ====================
+    WILD("Wild", 0),    // Wild color - used by wild property and wild rent cards
+    NONE("None", 0);    // No color - used by money and action cards
 
-    /** 颜色的显示名称 */
+    /** Display name of the color */
     private final String name;
-    /** 建成一套完整地产所需的卡牌数量（纯地产颜色>0，双色/特殊颜色=0） */
+    /** Number of cards needed for a complete property set (pure property colors > 0, dual/special = 0) */
     private final int setSize;
 
     /**
-     * 构造函数
-     * @param name 显示名称
-     * @param setSize 建成一套所需卡片数（0表示非纯地产颜色）
+     * Constructor
+     * @param name display name
+     * @param setSize number of cards needed for a complete set (0 for non-pure-property colors)
      */
     CardColor(String name, int setSize) {
         this.name = name;
         this.setSize = setSize;
     }
 
-    /** 获取颜色的显示名称 */
+    /** Get the display name of this color */
     public String getName() { return name; }
-    /** 获取建成一套完整地产所需的卡牌数量 */
+    /** Get the number of cards needed for a complete property set */
     public int getSetSize() { return setSize; }
 
     /**
-     * 根据该颜色地产的持有数量计算租金金额
+     * Calculate rent amount based on the number of properties of this color held
      *
-     * 每种颜色的租金规则不同，规则来源于《大富翁纸牌游戏》官方规则：
-     * - 棕色/浅蓝：1张=1M, 2张+=2M
-     * - 粉色/橙色：1张=1M, 2张+=3M
-     * - 红色/黄色：1张=2M, 2张=4M, 3张+=6M
-     * - 绿色：    1张=2M, 2张=4M, 3张+=7M
-     * - 蓝色：    1张=3M, 2张+=8M
-     * - 黑色：    1张=1M, 2张=2M, 3张=3M, 4张+=5M
-     * - 浅绿色：  1张=1M, 2张=2M, 3张+=4M
+     * Rent rules per color (from official Monopoly Deal rules):
+     * - Brown/Light Blue: 1 card=1M, 2+ cards=2M
+     * - Pink/Orange: 1 card=1M, 2+ cards=3M
+     * - Red/Yellow: 1 card=2M, 2 cards=4M, 3+ cards=6M
+     * - Green: 1 card=2M, 2 cards=4M, 3+ cards=7M
+     * - Blue: 1 card=3M, 2+ cards=8M
+     * - Black: 1 card=1M, 2 cards=2M, 3 cards=3M, 4+ cards=5M
+     * - Light Green: 1 card=1M, 2 cards=2M, 3+ cards=4M
      *
-     * @param propertiesInSet 该颜色已经持有的地产数量
-     * @return 应收的租金金额（单位：M/百万）
+     * @param propertiesInSet number of properties of this color currently held
+     * @return rent amount to collect (in M/millions)
      */
     public int getRentAmount(int propertiesInSet) {
         if (propertiesInSet <= 0) return 0;
@@ -108,9 +108,9 @@ public enum CardColor {
     }
 
     /**
-     * 判断该颜色是否为纯地产颜色（可以放置地产卡的颜色）
-     * 排除双色租金颜色、WILD万能色和NONE无色
-     * @return true=可放置地产，false=不可
+     * Check whether this color is a pure property color (can hold property cards)
+     * Excludes dual-color rent, WILD, and NONE
+     * @return true=can hold property cards, false=cannot
      */
     public boolean isPropertyColor() {
         return setSize > 0 && this != WILD && this != NONE
@@ -120,9 +120,9 @@ public enum CardColor {
     }
 
     /**
-     * 判断该颜色是否为租金卡颜色（双色组合或万能色）
-     * 租金卡使用双色组合来表示可以对这两种颜色的地产进行收租
-     * @return true=是租金卡颜色，false=不是
+     * Check whether this color is a rent card color (dual-color combination or wild)
+     * Rent cards use dual-color combinations to indicate rent can be collected for those property colors
+     * @return true=is a rent card color, false=is not
      */
     public boolean isRentColor() {
         return this == BROWN_LIGHT_BLUE || this == PINK_ORANGE
@@ -132,9 +132,9 @@ public enum CardColor {
     }
 
     /**
-     * 获取双色租金卡对应的两个纯地产颜色
-     * 仅对双色租金颜色有效，返回长度为 2 的数组
-     * @return 两个成分颜色，非双色租金颜色返回空数组
+     * Get the two pure property colors corresponding to a dual-color rent card
+     * Only valid for dual-color rent colors, returns an array of length 2
+     * @return the two component colors, empty array for non-dual-color rent colors
      */
     public CardColor[] getComponentColors() {
         switch (this) {
