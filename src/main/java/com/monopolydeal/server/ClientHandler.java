@@ -98,6 +98,9 @@ public class ClientHandler implements Runnable {
                 case PLAYER_READY:
                     handlePlayerReady(payload);    // 玩家准备状态切换
                     break;
+                case REQUEST_START_GAME:
+                    handleRequestStartGame(payload); // 房主请求开始游戏
+                    break;
                 case PLAY_CARD:
                     handlePlayCard(payload);       // 出牌请求
                     break;
@@ -194,6 +197,19 @@ public class ClientHandler implements Runnable {
             GameRoom room = server.getRoom(currentRoom);
             if (room != null) {
                 room.setPlayerReady(clientId, ready);
+            }
+        }
+    }
+
+    /** 处理房主请求开始游戏 */
+    private void handleRequestStartGame(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null) {
+                String error = room.requestStartGame(clientId);
+                if (error != null) {
+                    sendError(error);
+                }
             }
         }
     }

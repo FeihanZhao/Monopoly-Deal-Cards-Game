@@ -115,7 +115,7 @@ public class ActionHistoryPanel extends JPanel {
                 "行动记录",
                 TitledBorder.LEFT,
                 TitledBorder.TOP,
-                new Font("Segoe UI", Font.BOLD, 12),
+                new Font("SansSerif", Font.BOLD, 12),
                 new Color(200, 200, 200)
         ));
 

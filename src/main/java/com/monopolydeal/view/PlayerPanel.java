@@ -74,26 +74,26 @@ public class PlayerPanel extends JPanel {
         // 昵称（白色加粗）
         nicknameLabel = new JLabel("玩家");
         nicknameLabel.setForeground(Color.WHITE);
-        nicknameLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
 
         // 状态指示器（在线/活跃/断线）
         statusLabel = new JLabel("");
-        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
 
         // 银行余额（金色）
         bankTotalLabel = new JLabel("银行: 0M");
         bankTotalLabel.setForeground(new Color(255, 215, 0));
-        bankTotalLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
         // 完整组合数（绿色）
         setsLabel = new JLabel("组合: 0");
         setsLabel.setForeground(new Color(100, 255, 100));
-        setsLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        setsLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
 
         // 手牌数量（灰色）
         handCountLabel = new JLabel("手牌: 0 张");
         handCountLabel.setForeground(new Color(180, 180, 180));
-        handCountLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        handCountLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
 
         // 垂直排列各标签（带间距）
         leftPanel.add(nicknameLabel);
@@ -224,7 +224,7 @@ public class PlayerPanel extends JPanel {
                     // 在最上层绘制数量文本
                     if (count > 0) {
                         g2.setColor(Color.WHITE);
-                        g2.setFont(new Font("Segoe UI", Font.BOLD, 9));
+                        g2.setFont(new Font("SansSerif", Font.BOLD, 9));
                         FontMetrics fm = g2.getFontMetrics();
                         String text = count + "";
                         int maxOffset = (count - 1) * 3;

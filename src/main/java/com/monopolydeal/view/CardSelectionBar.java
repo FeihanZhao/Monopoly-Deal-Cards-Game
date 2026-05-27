@@ -35,7 +35,7 @@ public class CardSelectionBar extends JPanel {
     // ==================== UI常量 ====================
 
     /** 操作栏高度 */
-    private static final int BAR_HEIGHT        = 64;
+    private static final int BAR_HEIGHT        = 100;
     /** 操作栏圆角半径 */
     private static final int CORNER_RADIUS     = 14;
     /** 操作按钮高度 */
@@ -62,10 +62,11 @@ public class CardSelectionBar extends JPanel {
     /** 辅助文字颜色 */
     private static final Color TEXT_MUTED      = new Color(180, 180, 180);
 
-    /** 需要选择目标的卡牌名称集合 */
-    private static final java.util.Set<String> TARGET_ALL_NAMES =
+    /** 需要指定单一目标玩家的卡牌名称 */
+    private static final java.util.Set<String> NEEDS_TARGET_NAMES =
             new java.util.HashSet<>(java.util.Arrays.asList(
-                    "Birthday", "Debt Collector"
+                    "Sly Deal", "Forced Deal", "Deal Breaker",
+                    "Debt Collector", "Wild Rent"
             ));
 
     // ==================== 状态字段 ====================
@@ -251,6 +252,11 @@ public class CardSelectionBar extends JPanel {
         targetRow.setOpaque(false);
         targetRow.setVisible(false);
 
+        JLabel targetLabel = new JLabel("目标: ");
+        targetLabel.setForeground(TEXT_MUTED);
+        targetLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        targetRow.add(targetLabel);
+
         centrePanel.add(actionRow, BorderLayout.NORTH);
         centrePanel.add(targetRow, BorderLayout.SOUTH);
 
@@ -336,26 +342,11 @@ public class CardSelectionBar extends JPanel {
 
     /**
      * 配置目标玩家选择行的可见性
-     * 只有特定卡牌需要选择目标（租金卡、偷袭、强制交换等）
+     * 仅特定卡牌需要选择单一目标（Sly Deal、Forced Deal、Deal Breaker、Debt Collector、Wild Rent）
      */
     private void configureTargetRow(String cardType, String cardName) {
-        boolean needsTargetPicker =
-                ("ACTION".equals(cardType) && !isTargetAllCard(cardName))
-                        || "RENT".equals(cardType);
-
+        boolean needsTargetPicker = NEEDS_TARGET_NAMES.contains(cardName);
         targetRow.setVisible(needsTargetPicker && !opponentMap.isEmpty());
-
-        if (needsTargetPicker) {
-            JLabel prompt = new JLabel("目标: ");
-            prompt.setForeground(TEXT_MUTED);
-            prompt.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            targetRow.add(prompt);
-        }
-    }
-
-    /** 检查是否为影响所有对手的卡牌（不需要单独选择目标） */
-    private boolean isTargetAllCard(String cardName) {
-        return TARGET_ALL_NAMES.contains(cardName);
     }
 
     // ==================== 目标选择 ====================
@@ -408,17 +399,7 @@ public class CardSelectionBar extends JPanel {
 
     /** 检查卡牌是否需要严格指定目标（必须先选择才能确认） */
     private boolean isStrictTargetRequired(String cardName) {
-        if (cardName == null) return false;
-        switch (cardName) {
-            case "Wild Rent":
-            case "Sly Deal":
-            case "Deal Breaker":
-            case "Forced Deal":
-            case "Debt Collector":
-                return true;
-            default:
-                return false;
-        }
+        return cardName != null && NEEDS_TARGET_NAMES.contains(cardName);
     }
 
     // ==================== 操作处理 ====================

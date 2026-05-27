@@ -41,6 +41,7 @@ public class MessageProtocol {
 
         // ===== 游戏流程 =====
         START_GAME,        // 服务器通知游戏开始
+        REQUEST_START_GAME,// 房主请求开始游戏
         GAME_STATE_UPDATE, // 服务器广播游戏状态更新（核心消息，包含完整GameState）
         GAME_STARTED,      // 服务器通知游戏已开始
         TURN_STARTED,      // 服务器通知新回合开始

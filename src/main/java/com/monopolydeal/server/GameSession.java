@@ -495,7 +495,7 @@ public class GameSession {
         String actionType = mapActionNameToType(actionName);
         String targetId = extractTargetId(payload);
 
-        // 确定目标玩家
+        // 确定目标玩家（客户端未指定时自动选择）
         if (targetId.isEmpty()) {
             if (actionName.contains("Deal Breaker")) {
                 for (Player p : players) {
@@ -505,53 +505,29 @@ public class GameSession {
                     }
                 }
             } else if (actionName.contains("Forced Deal")) {
-                // 自动选择：第一个有地产的其他玩家，并自动选择交换卡牌
-                Player target = null;
+                // 自动选择：第一个有地产的其他玩家作为目标
                 for (Player p : players) {
                     if (!p.equals(activePlayer) && !p.getPropertyZone().getAllPropertyGroups().isEmpty()) {
-                        target = p;
+                        targetId = p.getId();
                         break;
                     }
                 }
-                if (target != null) {
-                    targetId = target.getId();
-                    Card myProp = null;
-                    for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
-                        if (!group.isEmpty()) { myProp = group.get(0); break; }
-                    }
-                    Card theirProp = null;
-                    for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
-                        if (!group.isEmpty()) { theirProp = group.get(0); break; }
-                    }
-                    // 己方无地产可交换时，放弃该操作（卡牌保留在手牌中）
-                    if (myProp == null || theirProp == null) {
-                        targetId = "";
-                    } else {
-                        payload.addProperty("myPropertyId", myProp.getId());
-                        payload.addProperty("theirPropertyId", theirProp.getId());
-                    }
-                }
             } else if (actionName.contains("Sly Deal")) {
-                // 仅偷取非完整组合中的地产卡（符合官方规则）
-                Player victim = null;
-                Card toSteal = null;
+                // 自动选择：第一个有可偷取地产的玩家作为目标
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
+                        boolean found = false;
                         for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
                             if (!group.isEmpty() && !p.getPropertyZone().getCompleteSets()
                                     .contains(group.get(0).getEffectiveColor())) {
-                                victim = p;
-                                toSteal = group.get(0);
+                                targetId = p.getId();
+                                found = true;
                                 break;
                             }
                         }
-                        if (victim != null) break;
+                        if (found) break;
                     }
                 }
-                // 无合法目标（所有其他玩家的地产都在完整组合中）
-                if (victim == null || toSteal == null) return false;
-                targetId = victim.getId();
-                payload.addProperty("targetCardId", toSteal.getId());
             } else if (actionName.contains("Birthday")) {
                 // Birthday：收集所有其他玩家，第一个作为响应人，剩余存入 _remainingTargets
                 java.util.List<String> allTargets = new java.util.ArrayList<>();
@@ -582,6 +558,40 @@ public class GameSession {
         }
 
         if (targetId.isEmpty()) return false;
+
+        // 偷取类卡牌：补充目标地产选择（无论 targetId 来自客户端还是服务端自动选择，都必须执行）
+        if (actionName.contains("Sly Deal") && !payload.has("targetCardId")) {
+            Player victim = findPlayer(targetId);
+            if (victim != null) {
+                Card toSteal = null;
+                for (List<Card> group : victim.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty() && !victim.getPropertyZone().getCompleteSets()
+                            .contains(group.get(0).getEffectiveColor())) {
+                        toSteal = group.get(0);
+                        break;
+                    }
+                }
+                if (toSteal == null) return false;
+                payload.addProperty("targetCardId", toSteal.getId());
+            }
+        }
+
+        if (actionName.contains("Forced Deal") && (!payload.has("myPropertyId") || !payload.has("theirPropertyId"))) {
+            Player target = findPlayer(targetId);
+            if (target != null) {
+                Card myProp = null;
+                for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty()) { myProp = group.get(0); break; }
+                }
+                Card theirProp = null;
+                for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty()) { theirProp = group.get(0); break; }
+                }
+                if (myProp == null || theirProp == null) return false;
+                payload.addProperty("myPropertyId", myProp.getId());
+                payload.addProperty("theirPropertyId", theirProp.getId());
+            }
+        }
 
         // 确保 payload 中包含 targetPlayerId
         if (!payload.has("targetPlayerId")) {
@@ -1482,7 +1492,7 @@ public class GameSession {
             }
         }
         for (Card card : toRemove) {
-            activePlayer.getHand().remove(card);
+            activePlayer.removeCardFromHand(card);
             deck.discard(card);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
                     "DISCARD", "", 0, "弃掉了 " + card.getName());

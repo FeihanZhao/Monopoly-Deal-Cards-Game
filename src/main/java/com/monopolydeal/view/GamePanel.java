@@ -151,12 +151,12 @@ public class GamePanel extends JPanel {
         // 游戏阶段标签（金色）
         phaseLabel = new JLabel("阶段: 等待中");
         phaseLabel.setForeground(GOLD);
-        phaseLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        phaseLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
         // 当前回合标签（白色）
         turnLabel = new JLabel("当前回合: -");
         turnLabel.setForeground(Color.WHITE);
-        turnLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        turnLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
 
         leftPanel.add(phaseLabel);
         leftPanel.add(turnLabel);
@@ -168,7 +168,7 @@ public class GamePanel extends JPanel {
         // 抽牌堆数量标签
         drawPileLabel = new JLabel("牌堆: 0");
         drawPileLabel.setForeground(TEXT_LIGHT);
-        drawPileLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        drawPileLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
         timerBarPanel = new TimerBarPanel(30);
 
@@ -189,7 +189,7 @@ public class GamePanel extends JPanel {
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
                 // 绘制白色文字
                 g2.setColor(new Color(255, 255, 255, 200));
-                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
                 g2.drawString("结束回合", (getWidth() - fm.stringWidth("结束回合")) / 2,
                         (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
@@ -278,7 +278,7 @@ public class GamePanel extends JPanel {
         // "你的手牌"标签
         JLabel handLabel = new JLabel("你的手牌");
         handLabel.setForeground(GOLD);
-        handLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        handLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         handPanel.add(handLabel, BorderLayout.NORTH);
 
         // 卡牌面板（自动换行布局，宽度不足时折行显示）

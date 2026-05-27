@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import com.monopolydeal.client.GameClient;
+import com.monopolydeal.model.GameConstants;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -42,6 +43,10 @@ public class LobbyPanel extends JPanel {
     private JButton readyButton;
     /** 离开房间按钮 */
     private JButton leaveButton;
+    /** 开始游戏按钮（仅房主可见） */
+    private JButton startGameButton;
+    /** 当前玩家是否为房主 */
+    private boolean amICreator = false;
     /** 玩家列表组件 */
     private JList<String> playerList;
     /** 玩家列表数据模型 */
@@ -104,7 +109,7 @@ public class LobbyPanel extends JPanel {
 
         // ===== 标题 =====
         JLabel titleLabel = new JLabel("Monopoly Deal");
-        titleLabel.setFont(new Font("Arial Black", Font.BOLD, 52));
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 52));
         titleLabel.setForeground(new Color(255, 215, 0));  // 金色
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -115,7 +120,7 @@ public class LobbyPanel extends JPanel {
 
         // ===== 副标题 =====
         JLabel subtitleLabel = new JLabel("Premium Card Game");
-        subtitleLabel.setFont(new Font("Arial", Font.ITALIC, 24));
+        subtitleLabel.setFont(new Font("SansSerif", Font.ITALIC, 24));
         subtitleLabel.setForeground(new Color(180, 180, 220));
         subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridy = 1;
@@ -127,12 +132,12 @@ public class LobbyPanel extends JPanel {
         gbc.gridx = 0;
         JLabel nicknameLabel = new JLabel("昵称:");
         nicknameLabel.setForeground(new Color(220, 220, 255));
-        nicknameLabel.setFont(new Font("Arial", Font.PLAIN, 18));
+        nicknameLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
         loginPanel.add(nicknameLabel, gbc);
 
         gbc.gridx = 1;
         nicknameField = new JTextField(20);
-        nicknameField.setFont(new Font("Arial", Font.PLAIN, 18));
+        nicknameField.setFont(new Font("SansSerif", Font.PLAIN, 18));
         // 随机生成默认昵称
         nicknameField.setText("Player" + (int)(Math.random() * 1000));
         styleTextField(nicknameField);
@@ -143,12 +148,12 @@ public class LobbyPanel extends JPanel {
         gbc.gridx = 0;
         JLabel roomLabel = new JLabel("房间代码:");
         roomLabel.setForeground(new Color(220, 220, 255));
-        roomLabel.setFont(new Font("Arial", Font.PLAIN, 18));
+        roomLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
         loginPanel.add(roomLabel, gbc);
 
         gbc.gridx = 1;
         roomCodeField = new JTextField(20);
-        roomCodeField.setFont(new Font("Arial", Font.PLAIN, 18));
+        roomCodeField.setFont(new Font("SansSerif", Font.PLAIN, 18));
         styleTextField(roomCodeField);
         loginPanel.add(roomCodeField, gbc);
 
@@ -178,7 +183,7 @@ public class LobbyPanel extends JPanel {
         gbc.gridy = 5;
         statusLabel = new JLabel("输入昵称开始游戏");
         statusLabel.setForeground(new Color(180, 180, 200));
-        statusLabel.setFont(new Font("Arial", Font.ITALIC, 16));
+        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 16));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         loginPanel.add(statusLabel, gbc);
     }
@@ -208,7 +213,7 @@ public class LobbyPanel extends JPanel {
 
         // 房间代码标签（金色大字）
         roomCodeLabel = new JLabel("房间: -----");
-        roomCodeLabel.setFont(new Font("Arial Black", Font.BOLD, 28));
+        roomCodeLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
         roomCodeLabel.setForeground(new Color(255, 215, 0));
         topPanel.add(roomCodeLabel, BorderLayout.WEST);
 
@@ -221,11 +226,18 @@ public class LobbyPanel extends JPanel {
                 new Color(46, 204, 113), new Color(39, 174, 96));
         readyButton.addActionListener(e -> toggleReady());
 
+        // 开始游戏按钮（仅房主可见，金色渐变，默认隐藏）
+        startGameButton = createGradientButton("开始游戏",
+                new Color(255, 193, 7), new Color(255, 152, 0));
+        startGameButton.addActionListener(e -> requestStartGame());
+        startGameButton.setVisible(false);
+
         // 离开按钮（红色渐变）
         leaveButton = createGradientButton("离开房间",
                 new Color(231, 76, 60), new Color(192, 57, 43));
         leaveButton.addActionListener(e -> leaveRoom());
 
+        topButtonPanel.add(startGameButton);
         topButtonPanel.add(readyButton);
         topButtonPanel.add(leaveButton);
         topPanel.add(topButtonPanel, BorderLayout.EAST);
@@ -243,7 +255,7 @@ public class LobbyPanel extends JPanel {
         };
         playerList.setBackground(new Color(60, 55, 100, 180));  // 半透明背景
         playerList.setForeground(Color.WHITE);
-        playerList.setFont(new Font("Arial", Font.PLAIN, 18));
+        playerList.setFont(new Font("SansSerif", Font.PLAIN, 18));
         playerList.setFixedCellHeight(48);
         playerList.setSelectionBackground(new Color(100, 90, 160));
         playerList.setSelectionForeground(Color.WHITE);
@@ -288,7 +300,7 @@ public class LobbyPanel extends JPanel {
             }
         };
 
-        button.setFont(new Font("Arial", Font.BOLD, 16));
+        button.setFont(new Font("SansSerif", Font.BOLD, 16));
         button.setFocusPainted(false);       // 不绘制焦点框
         button.setBorderPainted(false);      // 不绘制边框
         button.setContentAreaFilled(false);  // 不填充默认背景
@@ -345,6 +357,7 @@ public class LobbyPanel extends JPanel {
 
         JsonObject payload = new JsonObject();
         payload.addProperty("nickname", nickname);
+        amICreator = true;
         client.sendMessage(MessageProtocol.MessageType.CREATE_ROOM, payload.toString());
         setStatus("正在创建房间...", new Color(255, 200, 0));
     }
@@ -366,8 +379,15 @@ public class LobbyPanel extends JPanel {
         JsonObject payload = new JsonObject();
         payload.addProperty("nickname", nickname);
         payload.addProperty("roomCode", roomCode);
+        amICreator = false;
         client.sendMessage(MessageProtocol.MessageType.JOIN_ROOM, payload.toString());
         setStatus("正在加入房间...", new Color(255, 200, 0));
+    }
+
+    /** 房主请求开始游戏 */
+    private void requestStartGame() {
+        client.sendMessage(MessageProtocol.MessageType.REQUEST_START_GAME, "{}");
+        setStatus("正在开始游戏...", new Color(255, 200, 0));
     }
 
     /** 切换准备状态 - 在"准备"和"取消准备"之间切换 */
@@ -431,6 +451,16 @@ public class LobbyPanel extends JPanel {
                     isInRoom = true;
                     showRoomPanel();
                 }
+
+                // 控制开始游戏按钮可见性：房主 + 全员准备 + 至少2人
+                int totalPlayers = players.size();
+                long readyCount = 0;
+                for (JsonElement elem : players) {
+                    if (elem.getAsJsonObject().get("ready").getAsBoolean()) readyCount++;
+                }
+                boolean allReady = readyCount == totalPlayers && totalPlayers >= GameConstants.MIN_PLAYERS;
+                startGameButton.setVisible(amICreator && allReady);
+
                 setStatus("房间: " + roomCode + " | 玩家: " + players.size(),
                         new Color(46, 204, 113));
             } catch (Exception e) {
