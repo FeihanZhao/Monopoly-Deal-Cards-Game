@@ -13,7 +13,7 @@ public class MainFrame extends JFrame {
     private JPanel mainPanel;
     private LobbyPanel lobbyPanel;
     private GamePanel gamePanel;
-    private String localPlayerId;
+    private String localPlayerId;private GameResultPanel gameResultPanel;
 
     public MainFrame(GameClient client) {
         this.client = client;
@@ -32,6 +32,10 @@ public class MainFrame extends JFrame {
         mainPanel = new JPanel(cardLayout);
         lobbyPanel = new LobbyPanel(client);
         gamePanel = new GamePanel(client);
+        gameResultPanel = new GameResultPanel(() -> {
+            cardLayout.show(mainPanel, "LOBBY"); // 点按钮回大厅
+        });
+        mainPanel.add(gameResultPanel, "RESULT"); // 赋予唯一 Key
         mainPanel.add(lobbyPanel, "LOBBY");
         mainPanel.add(gamePanel, "GAME");
         add(mainPanel);
@@ -53,7 +57,12 @@ public class MainFrame extends JFrame {
                             gamePanel.updateGameState(payload);
                             break;
                         case GAME_OVER:
-                            handleGameOver(payload);
+                            gameResultPanel.showWinner(payload);
+                            cardLayout.show(mainPanel, "RESULT");
+                            break;
+                        case GAME_DRAW:
+                            gameResultPanel.showDraw(payload);
+                            cardLayout.show(mainPanel, "RESULT");
                             break;
                         case REACTION_REQUIRED:
                             // Just Say No 响应请求
@@ -83,16 +92,6 @@ public class MainFrame extends JFrame {
         });
     }
 
-    private void handleGameOver(String payload) {
-        try {
-            JsonObject result = JsonParser.parseString(payload).getAsJsonObject();
-            String winnerNickname = result.get("winnerNickname").getAsString();
-            JOptionPane.showMessageDialog(this, "Game Over!\nWinner: " + winnerNickname);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Game Over!");
-        }
-        cardLayout.show(mainPanel, "LOBBY");
-    }
 
     private void handleError(String payload) {
         try {

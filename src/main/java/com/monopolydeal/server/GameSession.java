@@ -1374,6 +1374,16 @@ public class GameSession {
         result.addProperty("gameDuration", getGameDuration());
         result.addProperty("completeSets", winner.getCompleteSetsCount());
 
+        com.google.gson.JsonArray playersArr = new com.google.gson.JsonArray();
+        for (Player p : players) {
+            JsonObject pJson = new JsonObject();
+            pJson.addProperty("nickname", p.getNickname());
+            pJson.addProperty("completeSets", p.getCompleteSetsCount());
+            pJson.addProperty("bankTotal", p.getBank().getTotal());
+            playersArr.add(pJson);
+        }
+        result.add("players", playersArr);
+
         recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "赢得了游戏！");
         broadcastGameState();
         room.broadcast(MessageProtocol.MessageType.GAME_OVER, result.toString());
