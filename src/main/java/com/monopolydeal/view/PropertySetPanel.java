@@ -6,6 +6,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.util.HashMap;
 import java.util.Map;
 import com.google.gson.JsonObject;
+import com.monopolydeal.model.CardColor;
 
 /**
  * 地产组合面板 - 以紧凑的彩色标签形式展示玩家的地产分组情况
@@ -38,45 +39,12 @@ public class PropertySetPanel extends JPanel {
     /** 标签之间的水平间距 */
     private static final int H_GAP     = 4;
 
-    /** 颜色背景映射表（与CardColor定义对应） */
-    private static final Map<String, Color> BG_COLORS   = new HashMap<>();
-    /** 颜色文字映射表（浅色背景用深色文字，深色背景用白色文字） */
-    private static final Map<String, Color> TEXT_COLORS = new HashMap<>();
-
-    static {
-        // 颜色背景
-        BG_COLORS.put("BROWN",       new Color(0x8B5E3C));
-        BG_COLORS.put("LIGHT_BLUE",  new Color(0x87CEEB));
-        BG_COLORS.put("PINK",        new Color(0xFF69B4));
-        BG_COLORS.put("ORANGE",      new Color(0xFF8C00));
-        BG_COLORS.put("RED",         new Color(0xDC143C));
-        BG_COLORS.put("YELLOW",      new Color(0xFFD700));
-        BG_COLORS.put("GREEN",       new Color(0x228B22));
-        BG_COLORS.put("BLUE",        new Color(0x00008B));
-        BG_COLORS.put("BLACK",       new Color(0x2B2B2B));
-        BG_COLORS.put("LIGHT_GREEN", new Color(0x90EE90));
-
-        // 浅色背景对应深色文字，深色背景对应白色文字
-        TEXT_COLORS.put("LIGHT_BLUE",  new Color(0x1A1A1A));
-        TEXT_COLORS.put("YELLOW",      new Color(0x1A1A1A));
-        TEXT_COLORS.put("LIGHT_GREEN", new Color(0x1A1A1A));
-    }
-
-    /** 每种颜色所需的卡牌数（与CardColor.getSetSize()一致） */
-    private static final Map<String, Integer> SET_SIZES = new HashMap<>();
-
-    static {
-        SET_SIZES.put("BROWN",       2);
-        SET_SIZES.put("LIGHT_BLUE",  3);
-        SET_SIZES.put("PINK",        3);
-        SET_SIZES.put("ORANGE",      3);
-        SET_SIZES.put("RED",         3);
-        SET_SIZES.put("YELLOW",      3);
-        SET_SIZES.put("GREEN",       3);
-        SET_SIZES.put("BLUE",        2);
-        SET_SIZES.put("BLACK",       4);
-        SET_SIZES.put("LIGHT_GREEN", 3);
-    }
+    /** 浅色背景对应的深色文字颜色映射（浅色背景上白色文字不可读，需用深色文字） */
+    private static final Map<String, Color> TEXT_COLORS = Map.of(
+            "LIGHT_BLUE",  new Color(0x1A1A1A),
+            "YELLOW",      new Color(0x1A1A1A),
+            "LIGHT_GREEN", new Color(0x1A1A1A)
+    );
 
     /** 各地产颜色的当前卡牌数量 */
     private final Map<String, Integer> colorCounts = new HashMap<>();
@@ -136,6 +104,19 @@ public class PropertySetPanel extends JPanel {
     }
 
     /**
+     * 从 CardColor 枚举获取指定颜色的完整组合所需卡牌数
+     * @param colorKey 颜色名称（如 "BROWN"、"RED"）
+     * @return 所需卡牌数，解析失败时回退到 3
+     */
+    private int getSetSize(String colorKey) {
+        try {
+            return CardColor.valueOf(colorKey).getSetSize();
+        } catch (IllegalArgumentException e) {
+            return 3;
+        }
+    }
+
+    /**
      * 自定义绘制 - 水平排列颜色标签
      * 每个标签包含：颜色圆点 + 数量文本（当前/所需）+ 房屋/酒店图标
      */
@@ -156,7 +137,7 @@ public class PropertySetPanel extends JPanel {
         for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
             String colorKey = entry.getKey();
             int    count    = entry.getValue();
-            int    required = SET_SIZES.getOrDefault(colorKey, 3);
+            int    required = getSetSize(colorKey);
             boolean complete = count >= required;
             boolean house    = hasHouse.getOrDefault(colorKey, false);
             boolean hotel    = hasHotel.getOrDefault(colorKey, false);
@@ -171,7 +152,7 @@ public class PropertySetPanel extends JPanel {
             int textW  = fm.stringWidth(fullText);
             int badgeW = DOT_SIZE + 4 + textW + 10;  // 圆点 + 间距 + 文本 + 内边距
 
-            Color bg = BG_COLORS.getOrDefault(colorKey, Color.GRAY);
+            Color bg = AppTheme.PROPERTY_COLORS.getOrDefault(colorKey, Color.GRAY);
 
             // 完整组合绘制金色发光外边框
             if (complete) {

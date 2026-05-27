@@ -28,7 +28,7 @@ import java.util.function.BiConsumer;
  * 生命周期（由GamePanel管理）：
  * 1. updatePlayers() - 同步玩家列表
  * 2. show() - 展示操作栏
- * 3. hide() - 隐藏操作栏
+ * 3. dismiss() - 隐藏操作栏
  */
 public class CardSelectionBar extends JPanel {
 
@@ -110,9 +110,9 @@ public class CardSelectionBar extends JPanel {
     public CardSelectionBar() {
         setLayout(new BorderLayout(0, 0));
         setOpaque(false);
-        setVisible(false);  // 初始隐藏
         setPreferredSize(new Dimension(0, BAR_HEIGHT));
         buildUI();
+        setVisible(false);  // 初始隐藏，必须在 buildUI() 之后
     }
 
     // ==================== 回调接口 ====================
@@ -175,12 +175,12 @@ public class CardSelectionBar extends JPanel {
     }
 
     /** 隐藏并重置操作栏 */
-    public void hide() {
+    public void dismiss() {
+        if (!isVisible()) return;  // 防止递归重入
         selectedCardId   = null;
         selectedCardName = null;
         selectedCardType = null;
         selectedTargetId = null;
-        resetTargetSelection();
         setVisible(false);
     }
 
@@ -240,7 +240,7 @@ public class CardSelectionBar extends JPanel {
 
         confirmButton.addActionListener(e -> onConfirm());
         bankButton   .addActionListener(e -> onBank());
-        cancelButton .addActionListener(e -> hide());
+        cancelButton .addActionListener(e -> dismiss());
 
         actionRow.add(confirmButton);
         actionRow.add(bankButton);
@@ -398,7 +398,7 @@ public class CardSelectionBar extends JPanel {
 
     /** 更新确认按钮的启用状态（需要目标的卡牌在没有选择目标时禁用） */
     private void updateConfirmState() {
-        if (!confirmButton.isVisible()) return;
+        if (confirmButton == null || !confirmButton.isVisible()) return;
 
         boolean needsTarget = targetRow.isVisible()
                 && isStrictTargetRequired(selectedCardName);
@@ -444,7 +444,7 @@ public class CardSelectionBar extends JPanel {
         if (triCallback != null) {
             triCallback.accept(selectedCardId, action, selectedTargetId);
         }
-        hide();
+        dismiss();
     }
 
     /** 存入银行按钮点击处理 - 以PLAY_MONEY操作发送 */
@@ -453,7 +453,7 @@ public class CardSelectionBar extends JPanel {
         if (triCallback != null) {
             triCallback.accept(selectedCardId, "PLAY_MONEY", null);
         }
-        hide();
+        dismiss();
     }
 
     /**

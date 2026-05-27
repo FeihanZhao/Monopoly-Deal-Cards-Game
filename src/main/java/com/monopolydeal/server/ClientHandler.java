@@ -80,8 +80,10 @@ public class ClientHandler implements Runnable {
      */
     private void handleMessage(String jsonMessage) {
         try {
-            MessageProtocol.MessageType type = MessageProtocol.getType(jsonMessage);
-            JsonObject payload = JsonParser.parseString(MessageProtocol.getPayload(jsonMessage)).getAsJsonObject();
+            JsonObject root = JsonParser.parseString(jsonMessage).getAsJsonObject();
+            MessageProtocol.MessageType type =
+                    MessageProtocol.MessageType.valueOf(root.get("type").getAsString());
+            JsonObject payload = root.getAsJsonObject("payload");
 
             switch (type) {
                 case CREATE_ROOM:
@@ -107,6 +109,9 @@ public class ClientHandler implements Runnable {
                     break;
                 case SUBMIT_PAYMENT:
                     handleSubmitPayment(payload);  // 提交支付卡牌选择
+                    break;
+                case SUBMIT_DISCARD:
+                    handleSubmitDiscard(payload);  // 提交弃牌选择
                     break;
                 case PLAY_JUST_SAY_NO:
                     handlePlayJustSayNo(payload);  // 打出 Just Say No 拒绝行动
@@ -251,6 +256,16 @@ public class ClientHandler implements Runnable {
             GameRoom room = server.getRoom(currentRoom);
             if (room != null && room.getGameSession() != null) {
                 room.getGameSession().handleSubmitPayment(clientId, payload);
+            }
+        }
+    }
+
+    /** 处理客户端提交的弃牌选择 */
+    private void handleSubmitDiscard(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                room.getGameSession().handleSubmitDiscard(clientId, payload);
             }
         }
     }

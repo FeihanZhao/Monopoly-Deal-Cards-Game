@@ -188,6 +188,7 @@ public class PropertyZone {
         if (!canPlaceHotel(color)) {
             throw new IllegalStateException("无法在 " + color.getName() + " 上建造酒店");
         }
+        houseCount.put(color, 0);  // 官方规则：Hotel 替代 House，House 被弃掉
         hasHotel.put(color, true);
     }
 

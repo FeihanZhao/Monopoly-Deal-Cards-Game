@@ -21,6 +21,8 @@ public class Deck {
     private final Stack<Card> drawPile;
     /** 弃牌堆（列表结构，弃牌后重新洗入抽牌堆） */
     private final List<Card> discardPile;
+    /** 共享随机数生成器 */
+    private final Random random;
 
     /**
      * 构造函数 - 初始化牌组并洗牌
@@ -29,6 +31,7 @@ public class Deck {
     public Deck() {
         this.drawPile = new Stack<>();
         this.discardPile = new ArrayList<>();
+        this.random = new Random();
         initializeDeck();  // 按规则创建所有卡牌
         shuffle();         // 初始洗牌
     }
@@ -134,7 +137,7 @@ public class Deck {
 
     /** 洗牌 - 使用随机打乱算法重新排列抽牌堆 */
     public void shuffle() {
-        Collections.shuffle(drawPile, new Random());
+        Collections.shuffle(drawPile, random);
     }
 
     /**
@@ -182,7 +185,7 @@ public class Deck {
      */
     private void reshuffleDiscardPile() {
         if (!discardPile.isEmpty()) {
-            Collections.shuffle(discardPile);
+            Collections.shuffle(discardPile, random);
             drawPile.addAll(discardPile);
             discardPile.clear();
         }

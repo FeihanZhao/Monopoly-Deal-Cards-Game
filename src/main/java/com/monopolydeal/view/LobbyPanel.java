@@ -270,8 +270,12 @@ public class LobbyPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g;
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 绘制渐变背景
-                GradientPaint gradient = new GradientPaint(0, 0, start, 0, getHeight(), end);
+                // 绘制渐变背景（通过 client property 支持运行时换色）
+                Color s = (Color) getClientProperty("gradientStart");
+                Color e = (Color) getClientProperty("gradientEnd");
+                if (s == null) s = start;
+                if (e == null) e = end;
+                GradientPaint gradient = new GradientPaint(0, 0, s, 0, getHeight(), e);
                 g2d.setPaint(gradient);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
                 // 绘制白色文字
@@ -303,7 +307,20 @@ public class LobbyPanel extends JPanel {
             }
         });
 
+        button.putClientProperty("gradientStart", start);
+        button.putClientProperty("gradientEnd", end);
         return button;
+    }
+
+    /**
+     * 更新渐变按钮的颜色和文本（不创建新按钮实例）
+     * 用于 toggleReady() 和 leaveRoom() 中动态切换按钮配色的场景
+     */
+    private void updateGradientButton(JButton button, Color start, Color end, String text) {
+        button.setText(text);
+        button.putClientProperty("gradientStart", start);
+        button.putClientProperty("gradientEnd", end);
+        button.repaint();
     }
 
     /** 设置文本框的统一样式（深色背景、白色文字、圆角边框） */
@@ -356,14 +373,12 @@ public class LobbyPanel extends JPanel {
     /** 切换准备状态 - 在"准备"和"取消准备"之间切换 */
     private void toggleReady() {
         isReady = !isReady;
-        readyButton.setText(isReady ? "取消准备" : "准备");
-
         if (isReady) {
-            readyButton = createGradientButton("取消准备",
-                    new Color(231, 76, 60), new Color(192, 57, 43));
+            updateGradientButton(readyButton,
+                    new Color(231, 76, 60), new Color(192, 57, 43), "取消准备");
         } else {
-            readyButton = createGradientButton("准备",
-                    new Color(46, 204, 113), new Color(39, 174, 96));
+            updateGradientButton(readyButton,
+                    new Color(46, 204, 113), new Color(39, 174, 96), "准备");
         }
 
         JsonObject payload = new JsonObject();
@@ -376,8 +391,8 @@ public class LobbyPanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.LEAVE_ROOM, "{}");
         isInRoom = false;
         isReady = false;
-        readyButton = createGradientButton("准备",
-                new Color(46, 204, 113), new Color(39, 174, 96));
+        updateGradientButton(readyButton,
+                new Color(46, 204, 113), new Color(39, 174, 96), "准备");
         showLoginPanel();
     }
 

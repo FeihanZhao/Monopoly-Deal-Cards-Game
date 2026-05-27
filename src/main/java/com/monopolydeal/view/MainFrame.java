@@ -105,6 +105,21 @@ public class MainFrame extends JFrame {
                             // 游戏结束，显示获胜者并返回大厅
                             handleGameOver(payload);
                             break;
+                        case REACTION_REQUIRED:
+                            // Just Say No 响应请求
+                            cardLayout.show(mainPanel, "GAME");
+                            gamePanel.handleReactionRequired(payload);
+                            break;
+                        case PAYMENT_REQUIRED:
+                            // 支付请求
+                            cardLayout.show(mainPanel, "GAME");
+                            gamePanel.handlePaymentRequired(payload);
+                            break;
+                        case DISCARD_REQUIRED:
+                            // 弃牌请求（回合结束时手牌超上限）
+                            cardLayout.show(mainPanel, "GAME");
+                            gamePanel.handleDiscardRequired(payload);
+                            break;
                         case ERROR:
                             // 显示错误消息
                             handleError(payload);

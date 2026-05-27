@@ -73,6 +73,8 @@ public class MessageProtocol {
         ACTION_RESULT,     // 服务器返回行动执行结果
         PAYMENT_REQUIRED,  // 服务器要求玩家支付
         SUBMIT_PAYMENT,    // 客户端提交支付（选择要支付的金钱卡）
+        DISCARD_REQUIRED,  // 服务器要求玩家弃牌（回合结束时手牌超上限）
+        SUBMIT_DISCARD,    // 客户端提交弃牌选择
         PAYMENT_MADE,      // 服务器通知支付完成
         CARD_DRAWN,        // 服务器通知卡牌被抽取
         CARD_PLAYED,       // 服务器通知卡牌被打出

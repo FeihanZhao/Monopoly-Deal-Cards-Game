@@ -43,21 +43,6 @@ public class PlayerPanel extends JPanel {
     /** 当前各地产颜色的卡牌数量缓存 */
     private Map<String, Integer> currentPropertyCounts;
 
-    /** 地产颜色RGB映射表（与CardColor枚举对应） */
-    private static final Map<String, Color> COLOR_MAP = new LinkedHashMap<>();
-    static {
-        COLOR_MAP.put("BROWN", new Color(139, 90, 43));         // 棕色
-        COLOR_MAP.put("LIGHT_BLUE", new Color(135, 206, 235));  // 浅蓝色
-        COLOR_MAP.put("PINK", new Color(255, 105, 180));        // 粉色
-        COLOR_MAP.put("ORANGE", new Color(255, 140, 0));        // 橙色
-        COLOR_MAP.put("RED", new Color(220, 20, 60));           // 红色
-        COLOR_MAP.put("YELLOW", new Color(255, 215, 0));        // 黄色
-        COLOR_MAP.put("GREEN", new Color(34, 139, 34));         // 绿色
-        COLOR_MAP.put("BLUE", new Color(0, 0, 139));            // 蓝色
-        COLOR_MAP.put("BLACK", new Color(43, 43, 43));          // 黑色
-        COLOR_MAP.put("LIGHT_GREEN", new Color(144, 238, 144)); // 浅绿色
-    }
-
     /**
      * 构造函数 - 创建玩家面板的UI布局
      * @param playerId 玩家唯一标识符
@@ -203,7 +188,7 @@ public class PlayerPanel extends JPanel {
         for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
             String colorName = entry.getKey();
             int count = entry.getValue();
-            Color color = COLOR_MAP.getOrDefault(colorName, Color.GRAY);
+            Color color = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
 
             // 创建自定义绘制的叠放卡片面板
             JPanel pilePanel = new JPanel() {

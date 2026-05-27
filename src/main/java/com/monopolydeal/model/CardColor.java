@@ -23,7 +23,7 @@ public enum CardColor {
     GREEN("Green", 3),               // 绿色 - 需要3张组成一套
     BLUE("Blue", 2),                 // 蓝色 - 需要2张组成一套
     BLACK("Black", 4),               // 黑色 - 需要4张组成一套
-    LIGHT_GREEN("Light Green", 3),   // 浅绿色 - 需要3张组成一套
+    LIGHT_GREEN("Light Green", 2),   // 浅绿色 - 需要2张组成一套（公共事业）
 
     // ==================== 双色租金颜色 ====================
     // 用于租金卡，表示该租金卡可以针对这两种颜色的地产收租
@@ -73,6 +73,7 @@ public enum CardColor {
      * @return 应收的租金金额（单位：M/百万）
      */
     public int getRentAmount(int propertiesInSet) {
+        if (propertiesInSet <= 0) return 0;
         if (this == BROWN || this == LIGHT_BLUE) {
             return propertiesInSet >= 2 ? 2 : 1;
         }
