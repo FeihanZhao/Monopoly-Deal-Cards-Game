@@ -80,10 +80,8 @@ public class ClientHandler implements Runnable {
      */
     private void handleMessage(String jsonMessage) {
         try {
-            JsonObject root = JsonParser.parseString(jsonMessage).getAsJsonObject();
-            MessageProtocol.MessageType type =
-                    MessageProtocol.MessageType.valueOf(root.get("type").getAsString());
-            JsonObject payload = root.getAsJsonObject("payload");
+            MessageProtocol.MessageType type = MessageProtocol.getType(jsonMessage);
+            JsonObject payload = JsonParser.parseString(MessageProtocol.getPayload(jsonMessage)).getAsJsonObject();
 
             switch (type) {
                 case CREATE_ROOM:
@@ -98,9 +96,6 @@ public class ClientHandler implements Runnable {
                 case PLAYER_READY:
                     handlePlayerReady(payload);    // 玩家准备状态切换
                     break;
-                case REQUEST_START_GAME:
-                    handleRequestStartGame(payload); // 房主请求开始游戏
-                    break;
                 case PLAY_CARD:
                     handlePlayCard(payload);       // 出牌请求
                     break;
@@ -112,9 +107,6 @@ public class ClientHandler implements Runnable {
                     break;
                 case SUBMIT_PAYMENT:
                     handleSubmitPayment(payload);  // 提交支付卡牌选择
-                    break;
-                case SUBMIT_DISCARD:
-                    handleSubmitDiscard(payload);  // 提交弃牌选择
                     break;
                 case PLAY_JUST_SAY_NO:
                     handlePlayJustSayNo(payload);  // 打出 Just Say No 拒绝行动
@@ -201,19 +193,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理房主请求开始游戏 */
-    private void handleRequestStartGame(JsonObject payload) {
-        if (currentRoom != null) {
-            GameRoom room = server.getRoom(currentRoom);
-            if (room != null) {
-                String error = room.requestStartGame(clientId);
-                if (error != null) {
-                    sendError(error);
-                }
-            }
-        }
-    }
-
     /** 处理出牌请求 - 委托给GameSession执行游戏逻辑 */
     private void handlePlayCard(JsonObject payload) {
         if (currentRoom != null) {
@@ -272,16 +251,6 @@ public class ClientHandler implements Runnable {
             GameRoom room = server.getRoom(currentRoom);
             if (room != null && room.getGameSession() != null) {
                 room.getGameSession().handleSubmitPayment(clientId, payload);
-            }
-        }
-    }
-
-    /** 处理客户端提交的弃牌选择 */
-    private void handleSubmitDiscard(JsonObject payload) {
-        if (currentRoom != null) {
-            GameRoom room = server.getRoom(currentRoom);
-            if (room != null && room.getGameSession() != null) {
-                room.getGameSession().handleSubmitDiscard(clientId, payload);
             }
         }
     }

@@ -3,28 +3,28 @@ package com.monopolydeal.model;
 import java.util.*;
 
 /**
- * Bank class - manages a player's money card storage
+ * 银行类 - 管理玩家的金钱卡存储
  *
- * Each player owns a bank for storing played money cards.
- * The bank groups money cards by denomination (1M/2M/3M/4M/5M/10M).
+ * 每个玩家拥有一个银行，用于存放已打出的金钱卡。
+ * 银行按面值（1M/2M/3M/4M/5M/10M）分组存储金钱卡。
  *
- * Core features:
- * - deposit: store a money card into the bank
- * - removeCardsByIds: player manually selects cards for payment, validates total >= debt, no change given
- * - removeCardsFallback: auto-selects cards for payment on timeout (greedy, largest first)
- * - getTotal: query the total balance
+ * 核心功能：
+ * - 存款（deposit）：将金钱卡存入银行
+ * - 取款（removeCardsByIds）：玩家手动选择卡牌支付，校验总面值>=欠款，不找零
+ * - 兜底取款（removeCardsFallback）：超时时自动选择卡牌支付（贪心从大到小）
+ * - 余额查询（getTotal）：获取银行总余额
  *
- * No-change rule: if the total face value exceeds the debt, the surplus is forfeited.
+ * 不找零规则：如果玩家用总面值超过欠款额的卡牌支付，超出部分被没收，不退还。
  */
 public class Bank {
-    /** Money cards grouped by denomination: key=denomination(1/2/3/4/5/10), value=list of cards */
+    /** 按面值分组的金钱卡映射表 key=面值(1/2/3/4/5/10), value=该面值的金钱卡列表 */
     private final Map<Integer, List<Card>> moneyCards;
-    /** Flat list of all money cards (convenient for quick total calculation) */
+    /** 所有金钱卡的扁平列表（方便快速计算总金额） */
     private final List<Card> allMoneyCards;
 
     /**
-     * Constructor - initializes an empty bank
-     * Creates an empty list for each money denomination (1M/2M/3M/4M/5M/10M)
+     * 构造函数 - 初始化空银行
+     * 为每种金钱面值（1M/2M/3M/4M/5M/10M）创建空列表
      */
     public Bank() {
         this.moneyCards = new HashMap<>();
@@ -35,14 +35,14 @@ public class Bank {
     }
 
     /**
-     * Deposit a card with face value into the bank as currency
-     * Action cards and rent cards lose their original effect once deposited, serving only as currency
-     * @param card any card with value > 0
-     * @throws IllegalArgumentException if the card's value is 0
+     * 将一张有面值的卡牌存入银行作为货币资产
+     * 行动卡、租金卡一旦存入即丧失原有效果，仅作为货币计算
+     * @param card 面值 > 0 的任意卡牌
+     * @throws IllegalArgumentException 如果卡牌面值为 0
      */
     public void deposit(Card card) {
         if (!card.canBeUsedAsMoney()) {
-            throw new IllegalArgumentException("This card cannot be deposited into the bank (value is 0)");
+            throw new IllegalArgumentException("该卡不能存入银行（面值为0）");
         }
         int denomination = card.getValue();
         moneyCards.computeIfAbsent(denomination, k -> new ArrayList<>()).add(card);
@@ -50,54 +50,50 @@ public class Bank {
     }
 
     /**
-     * Query the number of money cards of a given denomination in the bank
-     * @param denomination face value (1/2/3/4/5/10)
-     * @return number of cards with that denomination
+     * 查询银行中某面值的金钱卡数量
+     * @param denomination 面值（1/2/3/4/5/10）
+     * @return 该面值的卡片数量
      */
     public int getCount(int denomination) {
         return moneyCards.getOrDefault(denomination, Collections.emptyList()).size();
     }
 
     /**
-     * Get the total balance of the bank (sum of all money card values)
-     * @return total amount (in M/millions)
+     * 获取银行总余额（所有金钱卡面值之和）
+     * @return 总金额（单位：M/百万）
      */
     public int getTotal() {
         return allMoneyCards.stream().mapToInt(Card::getValue).sum();
     }
 
-    /** Get a read-only list of all money cards in the bank */
+    /** 获取银行中所有金钱卡的只读列表 */
     public List<Card> getAllMoneyCards() {
         return Collections.unmodifiableList(allMoneyCards);
     }
 
     /**
-     * Player manually selects cards for payment - validates total and removes them
+     * 玩家手动选择卡牌支付 —— 校验总面值并移除
      *
-     * Validation rules:
-     * 1. All cardIds must exist in the bank
-     * 2. Selected cards' total value must be >= amount
-     * 3. No change: all selected cards are removed, surplus is forfeited
+     * 校验规则：
+     * 1. 所有 cardIds 必须全部存在于银行中
+     * 2. 选中卡牌的总面值必须 >= amount
+     * 3. 不找零：所有被选中的卡牌全部移除并转移，总面值超出部分被没收
      *
-     * @param cardIds list of card IDs selected by the player
-     * @param amount  the amount to pay
-     * @return list of removed cards
-     * @throws IllegalArgumentException if a card does not exist or total is insufficient
+     * @param cardIds 玩家选择的卡牌ID列表
+     * @param amount  需要支付的金额
+     * @return 被移除的卡牌列表
+     * @throws IllegalArgumentException 如果卡牌不存在或总面值不足
      */
     public List<Card> removeCardsByIds(List<String> cardIds, int amount) {
         if (cardIds == null || cardIds.isEmpty()) {
-            throw new IllegalArgumentException("No cards selected");
-        }
-        // Prevent duplicate card ID attack: same card cannot be paid twice
-        if (new HashSet<>(cardIds).size() != cardIds.size()) {
-            throw new IllegalArgumentException("Duplicate card IDs detected");
+            throw new IllegalArgumentException("未选择任何卡牌");
         }
 
         List<Card> selected = new ArrayList<>();
         for (String cardId : cardIds) {
             Card card = findCardById(cardId);
             if (card == null) {
-                throw new IllegalArgumentException("Card not in bank: " + cardId);
+                throw new IllegalArgumentException("卡牌不在银行中: " + cardId);
             }
             selected.add(card);
         }
@@ -105,7 +101,7 @@ public class Bank {
         int totalValue = selected.stream().mapToInt(Card::getValue).sum();
         if (totalValue < amount) {
             throw new IllegalArgumentException(
-                "Insufficient payment. Need at least " + amount + "M, but only selected " + totalValue + "M");
+                "支付金额不足。需要至少 " + amount + "M，但只选择了 " + totalValue + "M");
         }
 
         for (Card card : selected) {
@@ -116,20 +112,20 @@ public class Bank {
     }
 
     /**
-     * Timeout fallback auto-payment - greedy algorithm selecting cards from largest to smallest
+     * 超时兜底自动支付 —— 贪心算法从大到小选卡
      *
-     * Used by the server to auto-select cards when the debtor does not respond in time.
-     * Picks cards in descending denomination order until total >= amount.
-     * Caller should check canPay(amount) first.
+     * 用于债务人超时未响应时，服务器自动选取卡牌支付。
+     * 按面值降序依次取卡直到总和 >= amount。
+     * 调用方应先通过 canPay(amount) 检查余额。
      *
-     * @param amount the amount to pay
-     * @return list of removed cards
-     * @throws InsufficientFundsException if balance is insufficient
+     * @param amount 需要支付的金额
+     * @return 被移除的卡牌列表
+     * @throws InsufficientFundsException 如果余额不足
      */
     public List<Card> removeCardsFallback(int amount) throws InsufficientFundsException {
         if (getTotal() < amount) {
-            throw new InsufficientFundsException("Insufficient balance. Need " + amount +
-                    "M, but only have " + getTotal() + "M");
+            throw new InsufficientFundsException("余额不足。需要 " + amount +
+                    "M，但只有 " + getTotal() + "M");
         }
 
         List<Card> sorted = new ArrayList<>(allMoneyCards);
@@ -150,7 +146,7 @@ public class Bank {
         return selected;
     }
 
-    /** Find a card by its ID in the bank */
+    /** 根据卡牌ID在银行中查找卡牌 */
     public Card findCardById(String cardId) {
         return allMoneyCards.stream()
                 .filter(c -> c.getId().equals(cardId))
@@ -159,23 +155,23 @@ public class Bank {
     }
 
     /**
-     * Check whether the bank has sufficient balance to pay the specified amount
-     * @param amount the amount to pay
-     * @return true=balance sufficient, false=insufficient
+     * 检查是否有足够余额支付指定金额
+     * @param amount 需要支付的金额
+     * @return true=余额足够，false=余额不足
      */
     public boolean canPay(int amount) {
         return getTotal() >= amount;
     }
 
-    /** Clear the bank (remove all money cards) */
+    /** 清空银行（移除所有金钱卡） */
     public void clear() {
         moneyCards.values().forEach(List::clear);
         allMoneyCards.clear();
     }
 
     /**
-     * Get the count of cards per denomination
-     * @return map of key=denomination, value=number of cards with that denomination
+     * 获取每种面值的计数映射
+     * @return key=面值, value=该面值的卡牌数量
      */
     public Map<Integer, Integer> getDenominationCounts() {
         Map<Integer, Integer> counts = new HashMap<>();
@@ -186,12 +182,13 @@ public class Bank {
     }
 
     /**
-     * Insufficient funds exception
-     * Thrown when a player's bank balance is not enough to cover the required payment
+     * 余额不足异常
+     * 当玩家银行余额不足以支付所需金额时抛出
      */
     public static class InsufficientFundsException extends Exception {
         public InsufficientFundsException(String message) {
             super(message);
         }
     }
+
 }

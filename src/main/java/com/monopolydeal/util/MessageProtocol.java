@@ -41,7 +41,6 @@ public class MessageProtocol {
 
         // ===== 游戏流程 =====
         START_GAME,        // 服务器通知游戏开始
-        REQUEST_START_GAME,// 房主请求开始游戏
         GAME_STATE_UPDATE, // 服务器广播游戏状态更新（核心消息，包含完整GameState）
         GAME_STARTED,      // 服务器通知游戏已开始
         TURN_STARTED,      // 服务器通知新回合开始
@@ -74,8 +73,6 @@ public class MessageProtocol {
         ACTION_RESULT,     // 服务器返回行动执行结果
         PAYMENT_REQUIRED,  // 服务器要求玩家支付
         SUBMIT_PAYMENT,    // 客户端提交支付（选择要支付的金钱卡）
-        DISCARD_REQUIRED,  // 服务器要求玩家弃牌（回合结束时手牌超上限）
-        SUBMIT_DISCARD,    // 客户端提交弃牌选择
         PAYMENT_MADE,      // 服务器通知支付完成
         CARD_DRAWN,        // 服务器通知卡牌被抽取
         CARD_PLAYED,       // 服务器通知卡牌被打出
@@ -92,7 +89,9 @@ public class MessageProtocol {
         CHAT_MESSAGE,      // 聊天消息（客户端到服务器广播）
         PING,              // 心跳请求
         PONG,              // 心跳回应
-        DISCONNECT         // 服务器通知玩家断线
+        DISCONNECT,         // 服务器通知玩家断线
+
+        DISCARD_REQUIRED  // 服务器要求玩家弃牌
     }
 
     /**
