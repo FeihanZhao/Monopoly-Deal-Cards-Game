@@ -8,44 +8,44 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * 卡牌类 - 代表游戏中的一张卡牌
+ * Card class - represents a single card in the game
  *
- * 每张卡牌拥有不可变的身份标识（id、type、name、value、color、description）
- * 和一个可变的 wildColor（仅万能地产卡在使用时由玩家设定颜色）。
+ * Each card has immutable identity attributes (id, type, name, value, color, description)
+ * and a mutable wildColor (only set by the player when playing a wild property card).
  *
- * 卡牌类型决定其使用方式：
- * - MONEY（金钱卡）：存入银行，面值1M-10M
- * - PROPERTY（地产卡）：放置在物业区，按颜色组队
- * - RENT（租金卡）：向其他玩家收取租金
- * - ACTION（行动卡）：执行特殊效果
+ * Card type determines how it is used:
+ * - MONEY: deposited into the bank, denominations 1M-10M
+ * - PROPERTY: placed in the property zone, grouped by color
+ * - RENT: charges rent to other players
+ * - ACTION: executes special effects
  *
- * 设计要点：Card 是可克隆的（Cloneable），支持复制构造函数用于测试和深拷贝。
+ * Design note: Card is Cloneable, supporting copy constructor for testing and deep copy.
  */
 public class Card implements Cloneable {
-    /** 卡牌唯一标识符（UUID前8位） */
+    /** Unique card identifier (first 8 chars of UUID) */
     private final String id;
-    /** 卡牌类型（金钱/地产/租金/行动） */
+    /** Card type (money/property/rent/action) */
     private final CardType type;
-    /** 卡牌名称（如 "Deal Breaker"、"5M"、"Red Property"） */
+    /** Card name (e.g. "Deal Breaker", "5M", "Red Property") */
     private final String name;
-    /** 金钱面值（仅金钱卡有效，其他卡为0） - 单位：M（百万） */
+    /** Money denomination (valid only for money cards, 0 for others) - unit: M (millions) */
     private final int value;
-    /** 卡牌颜色（地产颜色/双色租金颜色/WILD/NONE） */
+    /** Card color (property color / dual-color rent / WILD / NONE) */
     private final CardColor color;
-    /** 卡牌描述文本 */
+    /** Card description text */
     private final String description;
-    /** 万能地产卡的实际选定颜色（仅万能地产卡非null，由玩家在出牌时设定） */
+    /** Chosen color of the wild property card (non-null only for wild property cards, set by player when played) */
     private CardColor wildColor;
 
     /**
-     * 主构造函数 - 创建一张新卡牌
+     * Primary constructor - creates a new card
      *
-     * @param id 唯一标识符
-     * @param type 卡牌类型
-     * @param name 卡牌名称
-     * @param value 金钱面值（非金钱卡传0）
-     * @param color 卡牌颜色
-     * @param description 描述文本
+     * @param id unique identifier
+     * @param type card type
+     * @param name card name
+     * @param value money denomination (pass 0 for non-money cards)
+     * @param color card color
+     * @param description description text
      */
     public Card(String id, CardType type, String name, int value,
                 CardColor color, String description) {
@@ -55,13 +55,13 @@ public class Card implements Cloneable {
         this.value = value;
         this.color = color;
         this.description = description;
-        this.wildColor = null;  // 默认没有选定万能颜色，由玩家在放置地产时指定
+        this.wildColor = null;  // No wild color selected by default; specified by player when placing the property
     }
 
     /**
-     * 复制构造函数 - 创建一张卡牌的深拷贝
-     * 用于测试和GameState序列化时的卡牌克隆
-     * @param other 要复制的卡牌
+     * Copy constructor - creates a deep copy of a card
+     * Used for testing and GameState serialization card cloning
+     * @param other the card to copy
      */
     public Card(Card other) {
         this.id = other.id;
@@ -73,7 +73,7 @@ public class Card implements Cloneable {
         this.wildColor = other.wildColor;
     }
 
-    /** 克隆当前卡牌（深拷贝） */
+    /** Clones the current card (deep copy) */
     @Override
     public Card clone() {
         return new Card(this);
@@ -88,40 +88,40 @@ public class Card implements Cloneable {
     public CardColor getColor() { return color; }
     public String getDescription() { return description; }
 
-    /** 获取万能地产卡选定的颜色（非万能卡返回null） */
+    /** Gets the chosen color of the wild property card (null for non-wild cards) */
     public CardColor getWildColor() { return wildColor; }
-    /** 设置万能地产卡的实际颜色 */
+    /** Sets the actual color of the wild property card */
     public void setWildColor(CardColor wildColor) { this.wildColor = wildColor; }
 
     /**
-     * 获取卡牌的有效颜色
-     * 如果玩家为万能地产卡选定了颜色，返回选定颜色；否则返回卡牌本身的颜色
-     * @return 有效颜色
+     * Gets the effective color of the card
+     * Returns the chosen color if set for a wild property card; otherwise returns the card's own color
+     * @return effective color
      */
     public CardColor getEffectiveColor() {
         return wildColor != null ? wildColor : color;
     }
 
-    // ==================== 类型判断 ====================
+    // ==================== Type Checks ====================
 
-    /** 是否是金钱卡（仅指MONEY类型） */
+    /** Whether this is a money card (MONEY type only) */
     public boolean isMoneyCard() { return type == CardType.MONEY; }
-    /** 是否可存入银行作为货币使用（面值>0即可，含行动卡/租金卡） */
+    /** Whether this can be deposited into the bank as currency (value > 0, includes action/rent cards) */
     public boolean canBeUsedAsMoney() { return value > 0; }
-    /** 是否是地产卡 */
+    /** Whether this is a property card */
     public boolean isPropertyCard() { return type == CardType.PROPERTY; }
-    /** 是否是行动卡 */
+    /** Whether this is an action card */
     public boolean isActionCard() { return type == CardType.ACTION; }
-    /** 是否是租金卡 */
+    /** Whether this is a rent card */
     public boolean isRentCard() { return type == CardType.RENT; }
-    /** 是否是万能地产卡（地产卡且颜色为WILD） */
+    /** Whether this is a wild property card (property card with WILD color) */
     public boolean isWildProperty() {
         return type == CardType.PROPERTY && color == CardColor.WILD;
     }
 
-    // ==================== 万能卡颜色规则 ====================
+    // ==================== Wild Card Color Rules ====================
 
-    /** 万能地产卡名称 → 允许切换的颜色列表 */
+    /** Wild property card name -> list of allowed switchable colors */
     private static final Map<String, List<CardColor>> WILD_COLOR_RULES = new HashMap<>();
     static {
         WILD_COLOR_RULES.put("Multi-Color Wild", Arrays.asList(
@@ -145,24 +145,24 @@ public class Card implements Cloneable {
     }
 
     /**
-     * 校验该万能地产卡是否可以切换到目标颜色
-     * 双色卡只能在其两个颜色间切换，十色卡可切换任意地产颜色
-     * @param targetColor 目标颜色
-     * @return true=允许切换，false=不在允许范围内
+     * Validates whether this wild property card can switch to the target color
+     * Dual-color cards can only switch between their two colors; the 10-color card can switch to any property color
+     * @param targetColor target color
+     * @return true=switch allowed, false=not within allowed range
      */
     public boolean isColorAllowed(CardColor targetColor) {
         if (!isWildProperty()) return false;
         List<CardColor> allowed = WILD_COLOR_RULES.get(name);
         if (allowed == null) {
-            // 未知万能卡类型：保守拒绝，防止利用未知名称绕过校验
+            // Unknown wild card type: conservatively reject to prevent bypass via unknown names
             return false;
         }
         return allowed.contains(targetColor);
     }
 
     /**
-     * 获取该万能地产卡可切换的颜色列表（只读）
-     * @return 允许的颜色列表，非万能卡返回空列表
+     * Gets the list of colors this wild property card can switch to (read-only)
+     * @return list of allowed colors; empty list for non-wild cards
      */
     public List<CardColor> getAllowedColors() {
         if (!isWildProperty()) return Collections.emptyList();
@@ -172,7 +172,7 @@ public class Card implements Cloneable {
 
     // ==================== equals / hashCode / toString ====================
 
-    /** 基于卡牌ID判断相等性 */
+    /** Equality based on card ID */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -181,13 +181,13 @@ public class Card implements Cloneable {
         return Objects.equals(id, card.id);
     }
 
-    /** 基于卡牌ID计算哈希值 */
+    /** Hash code based on card ID */
     @Override
     public int hashCode() {
         return Objects.hash(id);
     }
 
-    /** 生成可读的卡牌描述字符串 */
+    /** Generates a human-readable card description string */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

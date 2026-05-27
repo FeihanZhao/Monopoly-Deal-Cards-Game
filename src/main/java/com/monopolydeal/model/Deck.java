@@ -5,7 +5,7 @@ import java.util.*;
 public class Deck {
     private final Stack<Card> drawPile;
     private final List<Card> discardPile;
-    /** 共享随机数生成器 */
+    /** Shared random number generator */
     private final Random random;
 
     public Deck() {
