@@ -417,9 +417,7 @@ public class GamePanel extends JPanel {
         if (isMyTurn && !wasMyTurn) {
             startCountdown();
             endTurnButton.setEnabled(true);
-            handPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(3, 0, 0, 0, (Icon) new GradientPaint(0, 0, GOLD_PRIMARY, getWidth(), 0, PURPLE_ROYAL)),
-                    new EmptyBorder(11, 20, 16, 20)));
+            handPanel.setBorder(BorderFactory.createMatteBorder(3, 0, 0, 0, GOLD_PRIMARY));
         } else if (isMyTurn && wasMyTurn) {
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
