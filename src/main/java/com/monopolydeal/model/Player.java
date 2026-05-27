@@ -105,9 +105,10 @@ public class Player {
         hand.add(card);
     }
 
-    /** 根据卡牌对象从手牌中移除，移除失败返回null */
+    /** 根据卡牌对象从手牌中移除 */
     public Card removeCardFromHand(Card card) {
-        return hand.remove(card) ? card : null;
+        hand.remove(card);
+        return card;
     }
 
     /** 根据索引从手牌中移除卡牌 */

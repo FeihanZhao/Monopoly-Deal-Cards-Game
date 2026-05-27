@@ -6,7 +6,6 @@ import com.monopolydeal.model.*;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonParser;
 import com.google.gson.Gson;
 
 /**
@@ -39,14 +38,15 @@ public class GameRoom {
     /** Gson序列化器 */
     private final Gson gson;
     /** 所属服务器（用于销毁空房间） */
-    private final GameServer server;
+    private GameServer server = null;
 
     /**
      * 构造函数 - 创建新房间，房主自动加入
+     *
      * @param roomCode 房间代码
-     * @param creator 房主
+     * @param creator  房主
      */
-    public GameRoom(String roomCode, ClientHandler creator, GameServer server) {
+    public GameRoom(String roomCode, ClientHandler creator) {
         this.roomCode = roomCode;
         this.creator = creator;
         this.players = new ConcurrentHashMap<>();
@@ -107,6 +107,11 @@ public class GameRoom {
     public void setPlayerReady(String clientId, boolean ready) {
         readyStates.put(clientId, ready);
         broadcastRoomUpdate();
+
+        // 检查是否可以开始游戏：人数满足最低要求 且 所有人都已准备
+        if (allPlayersReady() && players.size() >= GameConstants.MIN_PLAYERS && !gameStarted) {
+            startGame();
+        }
     }
 
     /** 检查是否所有玩家都已准备 */
@@ -156,29 +161,6 @@ public class GameRoom {
 
         System.out.println("广播房间更新：" + roomCode + "，玩家数：" + players.size());
         broadcast(MessageProtocol.MessageType.ROOM_UPDATE, roomState.toString());
-    }
-
-    /**
-     * 房主请求开始游戏
-     * 仅房主可调用，要求所有玩家已准备且人数满足最低要求
-     * @param clientId 请求者ID
-     * @return null=成功，否则返回错误消息
-     */
-    public String requestStartGame(String clientId) {
-        if (!clientId.equals(creator.getClientId())) {
-            return "只有房主可以开始游戏";
-        }
-        if (players.size() < GameConstants.MIN_PLAYERS) {
-            return "至少需要 " + GameConstants.MIN_PLAYERS + " 名玩家";
-        }
-        if (!allPlayersReady()) {
-            return "还有玩家未准备";
-        }
-        if (gameStarted) {
-            return "游戏已经开始";
-        }
-        startGame();
-        return null;
     }
 
     /** 向房间内所有玩家广播消息 */

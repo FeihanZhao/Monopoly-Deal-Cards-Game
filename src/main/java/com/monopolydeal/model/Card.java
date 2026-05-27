@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.UUID;
 
 /**
  * 卡牌类 - 代表游戏中的一张卡牌
@@ -60,7 +59,7 @@ public class Card implements Cloneable {
     }
 
     /**
-     * 复制构造函数 - 创建一张卡牌的深拷贝（保留原ID）
+     * 复制构造函数 - 创建一张卡牌的深拷贝
      * 用于测试和GameState序列化时的卡牌克隆
      * @param other 要复制的卡牌
      */
@@ -74,29 +73,10 @@ public class Card implements Cloneable {
         this.wildColor = other.wildColor;
     }
 
-    /**
-     * 转账复制构造函数 - 创建内容相同但ID不同的卡牌副本
-     * 用于卡牌在不同玩家间转移时避免ID冲突
-     */
-    private Card(Card template, String newId) {
-        this.id = newId;
-        this.type = template.type;
-        this.name = template.name;
-        this.value = template.value;
-        this.color = template.color;
-        this.description = template.description;
-        this.wildColor = template.wildColor;
-    }
-
-    /** 克隆当前卡牌（深拷贝，保留原ID） */
+    /** 克隆当前卡牌（深拷贝） */
     @Override
     public Card clone() {
         return new Card(this);
-    }
-
-    /** 创建带有新ID的转账副本（用于支付/交换等跨玩家转移） */
-    public Card transferCopy() {
-        return new Card(this, UUID.randomUUID().toString().substring(0, 8));
     }
 
     // ==================== Getters ====================

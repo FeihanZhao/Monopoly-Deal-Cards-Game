@@ -42,8 +42,6 @@ public class GameSession {
     private ScheduledExecutorService scheduler;
     /** 当前回合的定时器任务句柄（用于取消定时器） */
     private ScheduledFuture<?> turnTimer;
-    /** 两段式定时器第二阶段句柄（警告→超时），须独立取消防止回合结束后误触发 */
-    private ScheduledFuture<?> turnTimerWarning;
     /** 游戏是否正在运行 */
     private boolean gameRunning;
     /** 行动历史记录列表（最新的在前） */
@@ -62,8 +60,6 @@ public class GameSession {
     private final Deque<ResolutionItem> resolutionStack = new ArrayDeque<>();
     /** 反应超时定时器句柄（用于取消） */
     private ScheduledFuture<?> reactionTimeoutTask;
-    /** 弃牌超时定时器句柄（用于取消） */
-    private ScheduledFuture<?> discardTimeoutTask;
     /** 挂起的多目标决议（当前目标付款完成后继续处理下一个目标） */
     private ResolutionItem pendingMultiTargetResolution;
     /** 游戏开始时间戳（毫秒） */
@@ -95,7 +91,7 @@ public class GameSession {
      * 2. 广播初始游戏状态
      * 3. 开始第一个回合
      */
-    public synchronized void start() {
+    public void start() {
         gameRunning = true;
         gameStartTime = System.currentTimeMillis();
         // 发放初始手牌
@@ -111,11 +107,11 @@ public class GameSession {
      * 开始下一个回合
      * 1. 检查胜利条件
      * 2. 找到下一个在线玩家
-     * 3. 自动抽取2张牌（手牌为空时抽5张）
+     * 3. 自动抽取3张牌
      * 4. 进入PLAY阶段
      * 5. 启动30秒超时定时器
      */
-    private synchronized void startNextTurn() {
+    private void startNextTurn() {
         if (!gameRunning) return;
 
         // 检查是否有玩家获胜（集齐3套完整地产）
@@ -164,7 +160,7 @@ public class GameSession {
         turnTimer = scheduler.schedule(() -> {
             room.sendToPlayer(activePlayer.getId(), MessageProtocol.MessageType.TURN_TIMEOUT,
                     "{\"secondsRemaining\":" + GameConstants.TIMEOUT_WARNING_SECONDS + "}");
-            turnTimerWarning = scheduler.schedule(() -> {
+            scheduler.schedule(() -> {
                 room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT,
                         "{\"playerId\":\"" + activePlayer.getId() + "\",\"reason\":\"回合超时\"}");
                 forceEndTurn();
@@ -172,13 +168,10 @@ public class GameSession {
         }, GameConstants.TURN_TIMEOUT_SECONDS - GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** 取消当前的回合定时器（含两段式定时器） */
+    /** 取消当前的回合定时器 */
     private void cancelTimer() {
         if (turnTimer != null && !turnTimer.isCancelled()) {
             turnTimer.cancel(false);
-        }
-        if (turnTimerWarning != null && !turnTimerWarning.isCancelled()) {
-            turnTimerWarning.cancel(false);
         }
     }
 
@@ -194,7 +187,7 @@ public class GameSession {
      * @param playerId 发出请求的玩家ID
      * @param payload 包含cardId、action以及额外参数（如颜色选择、目标玩家等）的JSON对象
      */
-    public synchronized void handlePlayCard(String playerId, JsonObject payload) {
+    public void handlePlayCard(String playerId, JsonObject payload) {
         // 权限验证：游戏必须运行中、必须是活跃玩家、必须在 PLAY 阶段
         if (!gameRunning || activePlayer == null) return;
         if (!playerId.equals(activePlayer.getId())) return;
@@ -312,7 +305,11 @@ public class GameSession {
     private boolean playRentCard(Card card, JsonObject payload) {
         if (!card.isRentCard()) return false;
 
-        // 步骤1：确定租金颜色（先验证，不移除卡牌）
+        // 步骤1：从手牌移除并弃牌
+        activePlayer.removeCardFromHand(card);
+        deck.discard(card);
+
+        // 步骤2：确定租金颜色
         CardColor rentColor = CardColor.WILD;
         if (payload.has("color")) {
             try {
@@ -324,14 +321,9 @@ public class GameSession {
 
         boolean isWildRent = card.getColor() == CardColor.WILD ||
                 card.getName().contains("Wild");
-
-        // 万能租金卡客户端颜色校验：必须是有效地产颜色
-        if (isWildRent && rentColor != CardColor.WILD && !rentColor.isPropertyColor()) {
-            rentColor = CardColor.WILD;
-        }
         payload.addProperty("isWildRent", isWildRent);
 
-        // 步骤2：预计算租金金额
+        // 步骤3：预计算租金金额
         int baseRentAmount;
         if (isWildRent && rentColor == CardColor.WILD) {
             // 万能租金未选颜色：默认 2M
@@ -348,20 +340,14 @@ public class GameSession {
             } else {
                 baseRentAmount = activePlayer.getPropertyZone().getRentAmount(rentColor);
             }
-            // 没有对应颜色的地产时拒绝出牌
-            if (baseRentAmount == 0) {
-                sendError(activePlayer.getId(),
-                    "你没有对应颜色的地产，无法收取租金");
-                return false;
-            }
+            if (baseRentAmount == 0) baseRentAmount = 2;
         }
         payload.addProperty("color", rentColor.name());
 
         int rentAmount = activePlayer.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
-        activePlayer.setDoubleRentActive(false);  // 立即消耗，防止JSN取消后flag泄漏
         payload.addProperty("_preCalculatedRent", rentAmount);
 
-        // 步骤3：收集所有目标玩家列表
+        // 步骤4：收集所有目标玩家列表
         java.util.List<String> allTargets = new java.util.ArrayList<>();
         if (isWildRent) {
             String targetId = extractTargetId(payload);
@@ -383,10 +369,6 @@ public class GameSession {
             }
         }
         if (allTargets.isEmpty()) return false;
-
-        // 步骤4：验证通过，从手牌移除并弃牌
-        activePlayer.removeCardFromHand(card);
-        deck.discard(card);
 
         // 步骤5：第一个目标作为当前响应人，剩余的存入 _remainingTargets
         String firstTarget = allTargets.remove(0);
@@ -427,18 +409,18 @@ public class GameSession {
 
         String actionName = card.getName();
 
-        // === 步骤1：无目标行动 — 立即执行（校验通过后才弃牌） ===
+        // === 步骤1：从手牌移除并弃牌（无论是否被取消，卡牌已打出） ===
+        activePlayer.removeCardFromHand(card);
+        deck.discard(card);
+
+        // === 步骤2：无目标行动 — 立即执行 ===
         if (actionName.contains("Pass Go")) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
             List<Card> extraCards = deck.drawMultiple(2);
             extraCards.forEach(activePlayer::addCardToHand);
             return true;
         }
 
         if (actionName.contains("Double")) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
             activePlayer.setDoubleRentActive(true);
             return true;
         }
@@ -459,8 +441,6 @@ public class GameSession {
                 }
             }
             if (houseColor != null && activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
-                activePlayer.removeCardFromHand(card);
-                deck.discard(card);
                 activePlayer.getPropertyZone().addHouse(houseColor);
                 return true;
             }
@@ -483,8 +463,6 @@ public class GameSession {
                 }
             }
             if (hotelColor != null && activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
-                activePlayer.removeCardFromHand(card);
-                deck.discard(card);
                 activePlayer.getPropertyZone().addHotel(hotelColor);
                 return true;
             }
@@ -495,7 +473,7 @@ public class GameSession {
         String actionType = mapActionNameToType(actionName);
         String targetId = extractTargetId(payload);
 
-        // 确定目标玩家（客户端未指定时自动选择）
+        // 确定目标玩家
         if (targetId.isEmpty()) {
             if (actionName.contains("Deal Breaker")) {
                 for (Player p : players) {
@@ -505,29 +483,48 @@ public class GameSession {
                     }
                 }
             } else if (actionName.contains("Forced Deal")) {
-                // 自动选择：第一个有地产的其他玩家作为目标
+                // 自动选择：第一个有地产的其他玩家，并自动选择交换卡牌
+                Player target = null;
                 for (Player p : players) {
                     if (!p.equals(activePlayer) && !p.getPropertyZone().getAllPropertyGroups().isEmpty()) {
-                        targetId = p.getId();
+                        target = p;
                         break;
                     }
                 }
+                if (target != null) {
+                    targetId = target.getId();
+                    Card myProp = null;
+                    for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { myProp = group.get(0); break; }
+                    }
+                    Card theirProp = null;
+                    for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { theirProp = group.get(0); break; }
+                    }
+                    if (myProp != null) payload.addProperty("myPropertyId", myProp.getId());
+                    if (theirProp != null) payload.addProperty("theirPropertyId", theirProp.getId());
+                }
             } else if (actionName.contains("Sly Deal")) {
-                // 自动选择：第一个有可偷取地产的玩家作为目标
+                // 仅偷取非完整组合中的地产卡（符合官方规则）
+                Player victim = null;
+                Card toSteal = null;
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
-                        boolean found = false;
                         for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
                             if (!group.isEmpty() && !p.getPropertyZone().getCompleteSets()
                                     .contains(group.get(0).getEffectiveColor())) {
-                                targetId = p.getId();
-                                found = true;
+                                victim = p;
+                                toSteal = group.get(0);
                                 break;
                             }
                         }
-                        if (found) break;
+                        if (victim != null) break;
                     }
                 }
+                // 无合法目标（所有其他玩家的地产都在完整组合中）
+                if (victim == null || toSteal == null) return false;
+                targetId = victim.getId();
+                payload.addProperty("targetCardId", toSteal.getId());
             } else if (actionName.contains("Birthday")) {
                 // Birthday：收集所有其他玩家，第一个作为响应人，剩余存入 _remainingTargets
                 java.util.List<String> allTargets = new java.util.ArrayList<>();
@@ -559,48 +556,10 @@ public class GameSession {
 
         if (targetId.isEmpty()) return false;
 
-        // 偷取类卡牌：补充目标地产选择（无论 targetId 来自客户端还是服务端自动选择，都必须执行）
-        if (actionName.contains("Sly Deal") && !payload.has("targetCardId")) {
-            Player victim = findPlayer(targetId);
-            if (victim != null) {
-                Card toSteal = null;
-                for (List<Card> group : victim.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty() && !victim.getPropertyZone().getCompleteSets()
-                            .contains(group.get(0).getEffectiveColor())) {
-                        toSteal = group.get(0);
-                        break;
-                    }
-                }
-                if (toSteal == null) return false;
-                payload.addProperty("targetCardId", toSteal.getId());
-            }
-        }
-
-        if (actionName.contains("Forced Deal") && (!payload.has("myPropertyId") || !payload.has("theirPropertyId"))) {
-            Player target = findPlayer(targetId);
-            if (target != null) {
-                Card myProp = null;
-                for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty()) { myProp = group.get(0); break; }
-                }
-                Card theirProp = null;
-                for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty()) { theirProp = group.get(0); break; }
-                }
-                if (myProp == null || theirProp == null) return false;
-                payload.addProperty("myPropertyId", myProp.getId());
-                payload.addProperty("theirPropertyId", theirProp.getId());
-            }
-        }
-
         // 确保 payload 中包含 targetPlayerId
         if (!payload.has("targetPlayerId")) {
             payload.addProperty("targetPlayerId", targetId);
         }
-
-        // 校验通过，从手牌移除并弃牌
-        activePlayer.removeCardFromHand(card);
-        deck.discard(card);
 
         // 推入决议栈
         pushResolution(actionType, activePlayer.getId(), targetId, card, payload);
@@ -728,7 +687,7 @@ public class GameSession {
     }
 
     /** 反应超时 —— 视为放弃，自动 resolveTop */
-    private synchronized void handleReactionTimeout(String responderId) {
+    private void handleReactionTimeout(String responderId) {
         if (resolutionStack.isEmpty()) return;
         ResolutionItem top = resolutionStack.peek();
         if (top == null || !top.getResponderId().equals(responderId)) return;
@@ -742,7 +701,7 @@ public class GameSession {
     }
 
     /** 处理玩家打出 Just Say No */
-    public synchronized void handlePlayJustSayNo(String playerId, JsonObject payload) {
+    public void handlePlayJustSayNo(String playerId, JsonObject payload) {
         if (phase != GamePhase.WAITING_FOR_REACTION) {
             sendError(playerId, "当前阶段不允许打出 Just Say No");
             return;
@@ -790,7 +749,7 @@ public class GameSession {
     }
 
     /** 处理玩家放弃响应（不打 Just Say No） */
-    public synchronized void handlePassReaction(String playerId) {
+    public void handlePassReaction(String playerId) {
         if (resolutionStack.isEmpty()) {
             sendError(playerId, "当前没有待响应的行动");
             return;
@@ -859,19 +818,8 @@ public class GameSession {
             return;
         }
 
-        // 如果还有挂起的多目标决议（如前一个目标余额为0跳过支付），推进到下一个目标
-        if (pendingMultiTargetResolution != null) {
-            ResolutionItem saved = pendingMultiTargetResolution;
-            pendingMultiTargetResolution = null;
-            if (continueMultiTargetResolution(saved)) {
-                broadcastGameState();
-                return;
-            }
-        }
-
-        // 无待处理支付且无挂起多目标 → 直接恢复出牌阶段
+        // 无待处理支付 → 直接恢复出牌阶段
         phase = GamePhase.PLAY;
-        startTurnTimer();
         broadcastGameState();
 
         if (activePlayer != null && activePlayer.getRemainingPlays() <= 0) {
@@ -1016,6 +964,7 @@ public class GameSession {
             }
             rentAmount = initiator.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
         }
+        initiator.setDoubleRentActive(false);
 
         // 单目标收费（多目标场景下每个玩家由各自的决议元素逐个处理）
         String targetPlayerId = payload.has("targetPlayerId")
@@ -1137,12 +1086,7 @@ public class GameSession {
      * @param amount   支付金额
      */
     private void requirePayment(Player debtor, Player creditor, int amount) {
-        if (debtor.getBank().getTotal() == 0) {
-            recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_SKIPPED",
-                    creditor.getNickname(), amount, "余额为零，无需支付");
-            broadcastGameState();
-            return;
-        }
+        if (debtor.getBank().getTotal() == 0) return;
 
         int actualAmount = Math.min(amount, debtor.getBank().getTotal());
 
@@ -1187,7 +1131,7 @@ public class GameSession {
     }
 
     /** 支付超时兜底 —— 使用贪心算法自动选取卡牌支付 */
-    private synchronized void handlePaymentTimeout(Player debtor, Player creditor, int expectedAmount) {
+    private void handlePaymentTimeout(Player debtor, Player creditor, int expectedAmount) {
         if (pendingPaymentDebtorId == null
                 || !pendingPaymentDebtorId.equals(debtor.getId())
                 || pendingPaymentAmount != expectedAmount) {
@@ -1199,7 +1143,7 @@ public class GameSession {
             int actualPaid = 0;
             for (Card moneyCard : payment) {
                 actualPaid += moneyCard.getValue();
-                creditor.getBank().deposit(moneyCard.transferCopy());
+                creditor.getBank().deposit(moneyCard.clone());
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                     creditor.getNickname(), actualPaid,
@@ -1214,11 +1158,7 @@ public class GameSession {
      * 处理玩家提交的支付选择 —— 由 ClientHandler 路由
      * 债务人选择要支付的卡牌后调用，执行校验和转账
      */
-    public synchronized void handleSubmitPayment(String playerId, JsonObject payload) {
-        if (phase != GamePhase.WAITING_FOR_PAYMENT) {
-            sendError(playerId, "当前阶段不允许支付");
-            return;
-        }
+    public void handleSubmitPayment(String playerId, JsonObject payload) {
         if (!playerId.equals(pendingPaymentDebtorId)) {
             sendError(playerId, "当前没有待处理的支付请求");
             return;
@@ -1241,7 +1181,7 @@ public class GameSession {
             int totalPaid = 0;
             for (Card moneyCard : payment) {
                 totalPaid += moneyCard.getValue();
-                creditor.getBank().deposit(moneyCard.transferCopy());
+                creditor.getBank().deposit(moneyCard.clone());
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_MADE",
                     creditor.getNickname(), totalPaid,
@@ -1291,7 +1231,6 @@ public class GameSession {
 
         // 所有目标处理完毕，恢复出牌阶段
         phase = GamePhase.PLAY;
-        startTurnTimer();
         broadcastGameState();
 
         // 如果活跃玩家出牌次数已用完，自动结束回合
@@ -1301,15 +1240,12 @@ public class GameSession {
     }
 
     /** 处理玩家主动结束回合 */
-    public synchronized void endTurn(String playerId) {
+    public void endTurn(String playerId) {
         if (activePlayer == null || !playerId.equals(activePlayer.getId())) return;
 
+        // 等待支付或等待反应期间不允许结束回合
         if (phase == GamePhase.WAITING_FOR_PAYMENT || phase == GamePhase.WAITING_FOR_REACTION) {
             sendError(playerId, "请等待当前操作完成后再结束回合");
-            return;
-        }
-        if (phase == GamePhase.DISCARD) {
-            sendError(playerId, "请在弃牌完成后等待自动结束回合");
             return;
         }
 
@@ -1321,10 +1257,6 @@ public class GameSession {
      * 对当前待处理和队列中的所有支付使用兜底贪心算法自动结算
      */
     private void forceSettleAllPendingPayments() {
-        // 取消支付超时定时器，防止竞态
-        if (paymentTimeoutTask != null && !paymentTimeoutTask.isCancelled()) {
-            paymentTimeoutTask.cancel(false);
-        }
         // 先结算当前待处理的支付
         if (pendingPaymentDebtorId != null) {
             Player debtor = findPlayer(pendingPaymentDebtorId);
@@ -1334,7 +1266,7 @@ public class GameSession {
                     int actualAmount = Math.min(pendingPaymentAmount, debtor.getBank().getTotal());
                     List<Card> payment = debtor.getBank().removeCardsFallback(actualAmount);
                     for (Card c : payment) {
-                        creditor.getBank().deposit(c.transferCopy());
+                        creditor.getBank().deposit(c.clone());
                     }
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
@@ -1355,7 +1287,7 @@ public class GameSession {
                     int actualAmount = Math.min(amount, debtor.getBank().getTotal());
                     List<Card> payment = debtor.getBank().removeCardsFallback(actualAmount);
                     for (Card c : payment) {
-                        creditor.getBank().deposit(c.transferCopy());
+                        creditor.getBank().deposit(c.clone());
                     }
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
@@ -1380,12 +1312,11 @@ public class GameSession {
      * 4. 广播游戏状态
      * 5. 延迟1.5秒后开始下一回合
      */
-    private synchronized void forceEndTurn() {
+    private void forceEndTurn() {
         cancelTimer();
         cancelReactionTimeout();
 
         // 清空决议栈（回合结束，所有未响应的决议视为被目标放弃）
-        pendingMultiTargetResolution = null;
         while (!resolutionStack.isEmpty()) {
             ResolutionItem item = resolutionStack.pop();
             if (!item.isJustSayNo()) {
@@ -1403,122 +1334,17 @@ public class GameSession {
             forceSettleAllPendingPayments();
         }
 
-        if (activePlayer != null && activePlayer.needsToDiscard()) {
-            // 进入弃牌阶段：通知客户端选择要弃的牌
-            startDiscardPhase();
-            return;
-        }
-        finalizeEndTurn();
-    }
-
-    /**
-     * 开始弃牌阶段
-     * 通知客户端选择要弃掉的牌，启动15秒超时定时器
-     */
-    private void startDiscardPhase() {
-        phase = GamePhase.DISCARD;
-
-        // 构建手牌列表JSON
-        com.google.gson.JsonArray handCardsArr = new com.google.gson.JsonArray();
-        for (Card card : activePlayer.getHand()) {
-            JsonObject cardObj = new JsonObject();
-            cardObj.addProperty("cardId", card.getId());
-            cardObj.addProperty("cardName", card.getName());
-            cardObj.addProperty("cardType", card.getType().name());
-            cardObj.addProperty("color", card.getColor().name());
-            cardObj.addProperty("value", card.getValue());
-            handCardsArr.add(cardObj);
-        }
-
-        int discardCount = activePlayer.getHand().size() - GameConstants.MAX_HAND_SIZE;
-
-        JsonObject payload = new JsonObject();
-        payload.add("handCards", handCardsArr);
-        payload.addProperty("discardCount", discardCount);
-        payload.addProperty("timeoutSeconds", GameConstants.DISCARD_TIMEOUT_SECONDS);
-
-        room.sendToPlayer(activePlayer.getId(), MessageProtocol.MessageType.DISCARD_REQUIRED,
-                payload.toString());
-
-        broadcastGameState();
-
-        // 启动弃牌超时定时器：超时后自动从手牌开头弃牌
-        discardTimeoutTask = scheduler.schedule(() -> {
-            synchronized (GameSession.this) {
-                if (phase == GamePhase.DISCARD && activePlayer != null) {
-                    int needToDiscard = activePlayer.getHand().size() - GameConstants.MAX_HAND_SIZE;
-                    for (int i = 0; i < needToDiscard && !activePlayer.getHand().isEmpty(); i++) {
-                        Card discarded = activePlayer.removeCardFromHand(0);
-                        deck.discard(discarded);
-                        recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                                "DISCARD_TIMEOUT", "", 0, "超时自动弃掉了 " + discarded.getName());
-                    }
-                    finalizeEndTurn();
-                }
-            }
-        }, GameConstants.DISCARD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    }
-
-    /**
-     * 处理客户端提交的弃牌选择
-     * 移除用户选中的卡牌，如果不够则自动补齐
-     */
-    public synchronized void handleSubmitDiscard(String playerId, JsonObject payload) {
-        if (activePlayer == null || !playerId.equals(activePlayer.getId())) {
-            sendError(playerId, "不是你的回合");
-            return;
-        }
-        if (phase != GamePhase.DISCARD) {
-            sendError(playerId, "当前不在弃牌阶段");
-            return;
-        }
-
-        // 取消超时定时器
-        if (discardTimeoutTask != null && !discardTimeoutTask.isCancelled()) {
-            discardTimeoutTask.cancel(false);
-        }
-
-        // 移除用户选择的卡牌
-        com.google.gson.JsonArray cardIdsArr = payload.getAsJsonArray("cardIds");
-        java.util.Set<String> selectedIds = new java.util.HashSet<>();
-        for (com.google.gson.JsonElement elem : cardIdsArr) {
-            selectedIds.add(elem.getAsString());
-        }
-
-        java.util.List<Card> toRemove = new java.util.ArrayList<>();
-        for (Card card : activePlayer.getHand()) {
-            if (selectedIds.contains(card.getId())) {
-                toRemove.add(card);
-            }
-        }
-        for (Card card : toRemove) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
-            recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "弃掉了 " + card.getName());
-        }
-
-        // 兜底：如果还不够，自动从手牌开头补齐弃牌（防止客户端作弊少选）
-        while (activePlayer.needsToDiscard() && !activePlayer.getHand().isEmpty()) {
-            Card discarded = activePlayer.removeCardFromHand(0);
-            deck.discard(discarded);
-            recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "弃掉了 " + discarded.getName());
-        }
-
-        finalizeEndTurn();
-    }
-
-    /**
-     * 完成回合结束的最后步骤
-     * 取消定时器、清除活跃玩家、广播状态、调度下一回合
-     */
-    private void finalizeEndTurn() {
-        if (discardTimeoutTask != null && !discardTimeoutTask.isCancelled()) {
-            discardTimeoutTask.cancel(false);
-        }
-
         if (activePlayer != null) {
+            if (activePlayer.needsToDiscard()) {
+                phase = GamePhase.DISCARD;
+            }
+            // 自动弃牌：从手牌开头开始弃，直到手牌数<=7
+            while (activePlayer.needsToDiscard() && !activePlayer.getHand().isEmpty()) {
+                Card discarded = activePlayer.removeCardFromHand(0);
+                deck.discard(discarded);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(),
+                        "DISCARD", "", 0, "弃掉了 " + discarded.getName());
+            }
             activePlayer.setActivePlayer(false);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
                     "END_TURN", "", 0, "回合结束");
@@ -1540,7 +1366,6 @@ public class GameSession {
     private void endGame(Player winner) {
         gameRunning = false;
         cancelTimer();
-        cancelReactionTimeout();
         phase = GamePhase.GAME_OVER;
 
         JsonObject result = new JsonObject();
@@ -1559,7 +1384,7 @@ public class GameSession {
      * 校验：必须是活跃玩家、在 PLAY 阶段、卡牌必须在物业区
      * 核心规则：不消耗出牌次数（不调用 incrementPlaysUsed）
      */
-    public synchronized void handleFlipWildCard(String playerId, String cardId, String newColor) {
+    public void handleFlipWildCard(String playerId, String cardId, String newColor) {
         if (!gameRunning || activePlayer == null) return;
         if (!playerId.equals(activePlayer.getId())) return;
         if (phase != GamePhase.PLAY) return;
@@ -1599,7 +1424,7 @@ public class GameSession {
      * 如果剩余在线玩家不足2人，游戏平局结束。
      * 如果断线的是活跃玩家，自动结束其回合。
      */
-    public synchronized void handlePlayerDisconnect(String clientId) {
+    public void handlePlayerDisconnect(String clientId) {
         Player disconnected = findPlayer(clientId);
         if (disconnected == null) return;
 
@@ -1614,10 +1439,6 @@ public class GameSession {
             // 在线玩家不足，游戏结束（平局）
             gameRunning = false;
             cancelTimer();
-            cancelReactionTimeout();
-            if (paymentTimeoutTask != null && !paymentTimeoutTask.isCancelled()) {
-                paymentTimeoutTask.cancel(false);
-            }
             JsonObject drawResult = new JsonObject();
             drawResult.addProperty("reason", "在线玩家不足");
             drawResult.addProperty("connectedPlayers", connectedPlayers);

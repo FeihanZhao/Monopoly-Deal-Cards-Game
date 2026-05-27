@@ -88,10 +88,6 @@ public class Bank {
         if (cardIds == null || cardIds.isEmpty()) {
             throw new IllegalArgumentException("未选择任何卡牌");
         }
-        // 防止重复卡牌ID攻击：同一张卡不能支付两次
-        if (new HashSet<>(cardIds).size() != cardIds.size()) {
-            throw new IllegalArgumentException("存在重复的卡牌ID");
-        }
 
         List<Card> selected = new ArrayList<>();
         for (String cardId : cardIds) {
@@ -194,4 +190,5 @@ public class Bank {
             super(message);
         }
     }
+
 }

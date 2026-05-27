@@ -1,5 +1,6 @@
 package com.monopolydeal.view;
 
+import com.google.gson.JsonObject;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -67,15 +68,27 @@ public class CardRenderer extends JPanel {
     private static final Map<String, CardPalette> PALETTES = new HashMap<>();
 
     static {
-        // ===== 纯地产颜色配色（颜色值统一来自 AppTheme） =====
-        for (Map.Entry<String, Color> entry : AppTheme.PROPERTY_COLORS.entrySet()) {
-            String colorName = entry.getKey();
-            Color bg = entry.getValue();
-            Color gradient = AppTheme.PROPERTY_GRADIENT_COLORS.getOrDefault(
-                    colorName, bg.darker().darker());
-            Color text = isLightColor(colorName) ? new Color(0x1A1A1A) : Color.WHITE;
-            PALETTES.put(colorName, new CardPalette(bg, gradient, text));
-        }
+        // ===== 纯地产颜色配色 =====
+        PALETTES.put("BROWN",
+                new CardPalette(new Color(0x8B5E3C), new Color(0x5D3A1A), new Color(0xFFFFFF)));
+        PALETTES.put("LIGHT_BLUE",
+                new CardPalette(new Color(0x87CEEB), new Color(0x4A9EC4), new Color(0x1A1A1A)));
+        PALETTES.put("PINK",
+                new CardPalette(new Color(0xFF69B4), new Color(0xC2185B), new Color(0xFFFFFF)));
+        PALETTES.put("ORANGE",
+                new CardPalette(new Color(0xFF8C00), new Color(0xE65100), new Color(0xFFFFFF)));
+        PALETTES.put("RED",
+                new CardPalette(new Color(0xDC143C), new Color(0x8B0000), new Color(0xFFFFFF)));
+        PALETTES.put("YELLOW",
+                new CardPalette(new Color(0xFFD700), new Color(0xB8860B), new Color(0x1A1A1A)));
+        PALETTES.put("GREEN",
+                new CardPalette(new Color(0x228B22), new Color(0x145214), new Color(0xFFFFFF)));
+        PALETTES.put("BLUE",
+                new CardPalette(new Color(0x00008B), new Color(0x000055), new Color(0xFFFFFF)));
+        PALETTES.put("BLACK",
+                new CardPalette(new Color(0x2B2B2B), new Color(0x111111), new Color(0xFFFFFF)));
+        PALETTES.put("LIGHT_GREEN",
+                new CardPalette(new Color(0x90EE90), new Color(0x4CAF50), new Color(0x1A1A1A)));
 
         // ===== 双色租金卡配色（左色→右色渐变） =====
         PALETTES.put("BROWN_LIGHT_BLUE",
@@ -106,13 +119,6 @@ public class CardRenderer extends JPanel {
                 new CardPalette(Color.GRAY, Color.DARK_GRAY, Color.WHITE));
     }
 
-    /** 判断是否为浅色背景（需要深色文字以保证可读性） */
-    private static boolean isLightColor(String colorName) {
-        return "LIGHT_BLUE".equals(colorName)
-                || "YELLOW".equals(colorName)
-                || "LIGHT_GREEN".equals(colorName);
-    }
-
     /** 卡牌类型图标映射表 */
     private static final Map<String, String> TYPE_ICONS = new HashMap<>();
 
@@ -133,8 +139,6 @@ public class CardRenderer extends JPanel {
     private final String colorKey;
     /** 金钱面值（仅金钱卡，其他=0） */
     private final int    value;
-    /** 卡牌视图模型（用于外部查询 cardId、cardName 等） */
-    private CardViewModel viewModel;
 
     /** 是否处于选中状态 */
     private boolean selected  = false;
@@ -175,11 +179,15 @@ public class CardRenderer extends JPanel {
         initComponent();
     }
 
-    /** 从 CardViewModel 构造（常用方式，由 GamePanel 调用） */
-    public CardRenderer(CardViewModel vm) {
-        this(vm.getCardId(), vm.getCardName(), vm.getCardType(),
-             vm.getColor(), vm.getValue());
-        this.viewModel = vm;
+    /** 从JSON对象构造（常用方式） */
+    public CardRenderer(JsonObject cardJson) {
+        this(
+                cardJson.get("cardId").getAsString(),
+                cardJson.get("cardName").getAsString(),
+                cardJson.get("cardType").getAsString(),
+                cardJson.get("color").getAsString(),
+                cardJson.has("value") ? cardJson.get("value").getAsInt() : 0
+        );
     }
 
     /** 初始化组件 - 设置尺寸、鼠标事件和动画系统 */
@@ -243,14 +251,6 @@ public class CardRenderer extends JPanel {
     /** 获取卡牌ID */
     public String getCardId() {
         return cardId;
-    }
-
-    /**
-     * 获取卡牌视图模型（用于查询 cardId、cardName 等信息）
-     * 仅通过 CardViewModel 构造函数创建的实例有值；静态工厂创建的返回 null。
-     */
-    public CardViewModel getViewModel() {
-        return viewModel;
     }
 
     /** 设置启用/禁用状态（禁用时卡片半透明、鼠标变回默认） */
