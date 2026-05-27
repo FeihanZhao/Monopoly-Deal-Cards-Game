@@ -36,7 +36,7 @@ public class Deck {
         addCards(CardType.PROPERTY, CardColor.BLUE, 0, 2);
         addCards(CardType.PROPERTY, CardColor.PURPLE, 0, 3);
         addCards(CardType.PROPERTY, CardColor.BLACK, 0, 4);
-        addCards(CardType.PROPERTY, CardColor.LIGHT_GREEN, 0, 3);
+        addCards(CardType.PROPERTY, CardColor.LIGHT_GREEN, 0, 2);
 
         // Wild Properties
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Multi-Color Wild");
@@ -44,6 +44,9 @@ public class Deck {
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Red/Yellow Wild");
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Brown/Light Blue Wild");
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Orange/Pink Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Railroad/Utility Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Green/Railroad Wild");
+        addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Light Blue/Railroad Wild");
 
         // Rent Cards
         addCards(CardType.RENT, CardColor.BROWN_LIGHT_BLUE, 0, 2, "Brown/Light Blue Rent");
@@ -57,11 +60,11 @@ public class Deck {
         // Action Cards
         addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Deal Breaker");
         addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Just Say No");
-        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Pass Go");
+        addCards(CardType.ACTION, CardColor.NONE, 0, 10, "Pass Go");
         addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Forced Deal");
         addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Sly Deal");
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Debt Collector");
-        addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Birthday");
+        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Debt Collector");
+        addCards(CardType.ACTION, CardColor.NONE, 0, 3, "Birthday");
         addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Double Rent");
         addCards(CardType.ACTION, CardColor.NONE, 0, 3, "House");
         addCards(CardType.ACTION, CardColor.NONE, 0, 2, "Hotel");
