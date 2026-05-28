@@ -57,7 +57,7 @@ public class LobbyPanel extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JLabel titleLabel = new JLabel("Monopoly Deal");
-        titleLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 52));
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 52));
         titleLabel.setForeground(new Color(255, 215, 0));
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -66,8 +66,8 @@ public class LobbyPanel extends JPanel {
         gbc.gridwidth = 2;
         loginPanel.add(titleLabel, gbc);
 
-        JLabel subtitleLabel = new JLabel("大富翁交易卡牌游戏");
-        subtitleLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 22));
+        JLabel subtitleLabel = new JLabel("The Trading Card Game");
+        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 22));
         subtitleLabel.setForeground(new Color(180, 180, 220));
         subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridy = 1;
@@ -76,36 +76,36 @@ public class LobbyPanel extends JPanel {
         gbc.gridwidth = 1;
         gbc.gridy = 2;
         gbc.gridx = 0;
-        JLabel nicknameLabel = new JLabel("昵称:");
+        JLabel nicknameLabel = new JLabel("Nickname:");
         nicknameLabel.setForeground(new Color(220, 220, 255));
-        nicknameLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
+        nicknameLabel.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         loginPanel.add(nicknameLabel, gbc);
 
         gbc.gridx = 1;
         nicknameField = new JTextField(20);
-        nicknameField.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
+        nicknameField.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         nicknameField.setText("Player" + (int)(Math.random() * 1000));
         styleTextField(nicknameField);
         loginPanel.add(nicknameField, gbc);
 
         gbc.gridy = 3;
         gbc.gridx = 0;
-        JLabel roomLabel = new JLabel("房间代码:");
+        JLabel roomLabel = new JLabel("Room Code:");
         roomLabel.setForeground(new Color(220, 220, 255));
-        roomLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
+        roomLabel.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         loginPanel.add(roomLabel, gbc);
 
         gbc.gridx = 1;
         roomCodeField = new JTextField(20);
-        roomCodeField.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
+        roomCodeField.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         styleTextField(roomCodeField);
         loginPanel.add(roomCodeField, gbc);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 15));
         buttonPanel.setOpaque(false);
 
-        createRoomButton = createGradientButton("创建房间", new Color(34, 186, 157), new Color(27, 156, 133));
-        joinRoomButton = createGradientButton("加入房间", new Color(72, 133, 237), new Color(58, 112, 207));
+        createRoomButton = createGradientButton("Create Room", new Color(34, 186, 157), new Color(27, 156, 133));
+        joinRoomButton = createGradientButton("Join Room", new Color(72, 133, 237), new Color(58, 112, 207));
 
         createRoomButton.addActionListener(e -> createRoom());
         joinRoomButton.addActionListener(e -> joinRoom());
@@ -119,9 +119,9 @@ public class LobbyPanel extends JPanel {
         loginPanel.add(buttonPanel, gbc);
 
         gbc.gridy = 5;
-        statusLabel = new JLabel("输入昵称开始游戏");
+        statusLabel = new JLabel("Enter nickname to start");
         statusLabel.setForeground(new Color(180, 180, 200));
-        statusLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 16));
+        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         loginPanel.add(statusLabel, gbc);
     }
@@ -143,18 +143,18 @@ public class LobbyPanel extends JPanel {
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
 
-        roomCodeLabel = new JLabel("房间: -----");
-        roomCodeLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 28));
+        roomCodeLabel = new JLabel("Room: -----");
+        roomCodeLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
         roomCodeLabel.setForeground(new Color(255, 215, 0));
         topPanel.add(roomCodeLabel, BorderLayout.WEST);
 
         JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
         topButtonPanel.setOpaque(false);
 
-        readyButton = createGradientButton("准备", new Color(46, 204, 113), new Color(39, 174, 96));
+        readyButton = createGradientButton("Ready", new Color(46, 204, 113), new Color(39, 174, 96));
         readyButton.addActionListener(e -> toggleReady());
 
-        leaveButton = createGradientButton("离开房间", new Color(231, 76, 60), new Color(192, 57, 43));
+        leaveButton = createGradientButton("Leave Room", new Color(231, 76, 60), new Color(192, 57, 43));
         leaveButton.addActionListener(e -> leaveRoom());
 
         topButtonPanel.add(readyButton);
@@ -167,7 +167,7 @@ public class LobbyPanel extends JPanel {
         playerList = new JList<>(playerListModel);
         playerList.setBackground(new Color(60, 55, 100, 180));
         playerList.setForeground(Color.WHITE);
-        playerList.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
+        playerList.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         playerList.setFixedCellHeight(48);
         playerList.setSelectionBackground(new Color(100, 90, 160));
         playerList.setSelectionForeground(Color.WHITE);
@@ -196,7 +196,7 @@ public class LobbyPanel extends JPanel {
                 g2d.drawString(getText(), x, y);
             }
         };
-        button.setFont(new Font("Microsoft YaHei", Font.BOLD, 16));
+        button.setFont(new Font("Segoe UI", Font.BOLD, 16));
         button.setFocusPainted(false);
         button.setBorderPainted(false);
         button.setContentAreaFilled(false);
@@ -228,40 +228,40 @@ public class LobbyPanel extends JPanel {
     private void createRoom() {
         String nickname = nicknameField.getText().trim();
         if (nickname.isEmpty()) {
-            setStatus("请输入昵称", Color.RED);
+            setStatus("Please enter nickname", Color.RED);
             return;
         }
         JsonObject payload = new JsonObject();
         payload.addProperty("nickname", nickname);
         client.sendMessage(MessageProtocol.MessageType.CREATE_ROOM, payload.toString());
-        setStatus("正在创建房间...", new Color(255, 200, 0));
+        setStatus("Creating room...", new Color(255, 200, 0));
     }
 
     private void joinRoom() {
         String nickname = nicknameField.getText().trim();
         String roomCode = roomCodeField.getText().trim().toUpperCase();
         if (nickname.isEmpty()) {
-            setStatus("请输入昵称", Color.RED);
+            setStatus("Please enter nickname", Color.RED);
             return;
         }
         if (roomCode.isEmpty()) {
-            setStatus("请输入房间代码", Color.RED);
+            setStatus("Please enter room code", Color.RED);
             return;
         }
         JsonObject payload = new JsonObject();
         payload.addProperty("nickname", nickname);
         payload.addProperty("roomCode", roomCode);
         client.sendMessage(MessageProtocol.MessageType.JOIN_ROOM, payload.toString());
-        setStatus("正在加入房间...", new Color(255, 200, 0));
+        setStatus("Joining room...", new Color(255, 200, 0));
     }
 
     private void toggleReady() {
         isReady = !isReady;
         if (isReady) {
-            readyButton = createGradientButton("取消准备", new Color(231, 76, 60), new Color(192, 57, 43));
+            readyButton = createGradientButton("Cancel Ready", new Color(231, 76, 60), new Color(192, 57, 43));
             readyButton.addActionListener(e -> toggleReady());
         } else {
-            readyButton = createGradientButton("准备", new Color(46, 204, 113), new Color(39, 174, 96));
+            readyButton = createGradientButton("Ready", new Color(46, 204, 113), new Color(39, 174, 96));
             readyButton.addActionListener(e -> toggleReady());
         }
         JsonObject payload = new JsonObject();
@@ -286,7 +286,7 @@ public class LobbyPanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.LEAVE_ROOM, "{}");
         isInRoom = false;
         isReady = false;
-        readyButton = createGradientButton("准备", new Color(46, 204, 113), new Color(39, 174, 96));
+        readyButton = createGradientButton("Ready", new Color(46, 204, 113), new Color(39, 174, 96));
         readyButton.addActionListener(e -> toggleReady());
         showLoginPanel();
     }
@@ -296,7 +296,7 @@ public class LobbyPanel extends JPanel {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 String roomCode = payload.get("roomCode").getAsString();
-                roomCodeLabel.setText("房间: " + roomCode);
+                roomCodeLabel.setText("Room: " + roomCode);
                 JsonArray players = payload.getAsJsonArray("players");
                 playerListModel.clear();
                 for (JsonElement elem : players) {
@@ -305,17 +305,17 @@ public class LobbyPanel extends JPanel {
                     boolean ready = player.get("ready").getAsBoolean();
                     boolean isCreator = player.get("isCreator").getAsBoolean();
                     String displayText = nickname;
-                    if (isCreator) displayText += " [房主]";
-                    displayText += ready ? " ✓已准备" : " ✗未准备";
+                    if (isCreator) displayText += " [Host]";
+                    displayText += ready ? " [Ready]" : " [Not Ready]";
                     playerListModel.addElement(displayText);
                 }
                 if (!isInRoom) {
                     isInRoom = true;
                     showRoomPanel();
                 }
-                setStatus("房间: " + roomCode + " | 玩家: " + players.size(), new Color(46, 204, 113));
+                setStatus("Room: " + roomCode + " | Players: " + players.size(), new Color(46, 204, 113));
             } catch (Exception e) {
-                setStatus("更新房间信息失败", Color.RED);
+                setStatus("Failed to update room info", Color.RED);
             }
         });
     }
@@ -332,7 +332,7 @@ public class LobbyPanel extends JPanel {
         add(loginPanel, BorderLayout.CENTER);
         revalidate();
         repaint();
-        setStatus("输入昵称开始游戏", new Color(180, 180, 200));
+        setStatus("Enter nickname to start", new Color(180, 180, 200));
     }
 
     private void setStatus(String message, Color color) {

@@ -189,7 +189,7 @@ public class GameResultPanel extends JPanel {
         JPanel topPanel = new JPanel(new BorderLayout(0, 8));
         topPanel.setOpaque(false);
 
-        titleLabel = new JLabel("🏆 GAME OVER", SwingConstants.CENTER);
+        titleLabel = new JLabel("GAME OVER", SwingConstants.CENTER);
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 32));
         titleLabel.setForeground(GOLD);
 
@@ -253,7 +253,7 @@ public class GameResultPanel extends JPanel {
 
     private void refresh() {
         if (isDraw) {
-            titleLabel.setText("🤝 GAME DRAW");
+            titleLabel.setText("GAME DRAW");
             titleLabel.setForeground(SILVER);
             subtitleLabel.setText("The game has ended without a winner.");
             winnerNameLabel.setText("");
@@ -261,7 +261,7 @@ public class GameResultPanel extends JPanel {
             reasonLabel.setText("Reason: " + drawReason);
             reasonLabel.setVisible(true);
         } else {
-            titleLabel.setText("🏆 GAME OVER");
+            titleLabel.setText("GAME OVER");
             titleLabel.setForeground(GOLD);
             subtitleLabel.setText("Congratulations to the winner!");
             winnerNameLabel.setText(winnerName);

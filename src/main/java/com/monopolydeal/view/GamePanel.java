@@ -110,16 +110,16 @@ public class GamePanel extends JPanel {
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 30, 0));
         leftPanel.setOpaque(false);
 
-        phaseLabel = new JLabel("阶段: 等待中");
+        phaseLabel = new JLabel("Phase: Waiting");
         phaseLabel.setForeground(GOLD_PRIMARY);
-        phaseLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 13));
+        phaseLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         phaseLabel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(100, 30, 140, 100)),
                 BorderFactory.createEmptyBorder(0, 0, 0, 15)));
 
-        turnLabel = new JLabel("当前回合: -");
+        turnLabel = new JLabel("Current turn: -");
         turnLabel.setForeground(Color.WHITE);
-        turnLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 16));
+        turnLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
 
         leftPanel.add(phaseLabel);
         leftPanel.add(turnLabel);
@@ -127,7 +127,7 @@ public class GamePanel extends JPanel {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 25, 0));
         rightPanel.setOpaque(false);
 
-        drawPileLabel = new JLabel("牌堆: 0") {
+        drawPileLabel = new JLabel("Deck: 0") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -138,7 +138,7 @@ public class GamePanel extends JPanel {
                 g2.setPaint(gp);
                 g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
                 g2.setColor(TEXT_WHITE);
-                g2.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
                 g2.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent()) / 2 - 2);
                 g2.dispose();
@@ -148,9 +148,7 @@ public class GamePanel extends JPanel {
         drawPileLabel.setPreferredSize(new Dimension(90, 32));
         drawPileLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
-
         timerBarPanel = new TimerBarPanel(30);
-
 
         endTurnButton = new JButton() {
             @Override
@@ -173,9 +171,9 @@ public class GamePanel extends JPanel {
                 g2.setColor(new Color(255, 255, 255, isEnabled() ? 40 : 10));
                 g2.draw(shape);
                 g2.setColor(Color.WHITE);
-                g2.setFont(new Font("Microsoft YaHei", Font.BOLD, 13));
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 FontMetrics fm = g2.getFontMetrics();
-                String text = "结束回合";
+                String text = "End Turn";
                 g2.drawString(text, (w - fm.stringWidth(text)) / 2, (h + fm.getAscent()) / 2 - 2);
                 g2.dispose();
             }
@@ -259,9 +257,9 @@ public class GamePanel extends JPanel {
 
         JPanel handHeader = new JPanel(new BorderLayout());
         handHeader.setOpaque(false);
-        JLabel handLabel = new JLabel("你的手牌");
+        JLabel handLabel = new JLabel("Your Hand");
         handLabel.setForeground(GOLD_GLOW);
-        handLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 15));
+        handLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
         handHeader.add(handLabel, BorderLayout.WEST);
         handPanel.add(handHeader, BorderLayout.NORTH);
 
@@ -311,11 +309,11 @@ public class GamePanel extends JPanel {
                         localPlayerId = myId;
                     }
                 }
-                String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "未知";
-                phaseLabel.setText("阶段: " + phase);
+                String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "Unknown";
+                phaseLabel.setText("Phase: " + phase);
                 String activePlayerId = gameState.has("activePlayerId") ? gameState.get("activePlayerId").getAsString() : "";
                 int drawPileSize = gameState.has("drawPileSize") ? gameState.get("drawPileSize").getAsInt() : 0;
-                drawPileLabel.setText("牌堆: " + drawPileSize);
+                drawPileLabel.setText("Deck: " + drawPileSize);
                 JsonObject playerStates = gameState.has("playerStates") ? gameState.getAsJsonObject("playerStates") : null;
                 if (playerStates != null) {
                     updatePlayerPanelsFromStates(playerStates, activePlayerId);
@@ -327,7 +325,7 @@ public class GamePanel extends JPanel {
                     actionHistoryPanel.updateActions(actions);
                 }
             } catch (Exception e) {
-                System.err.println("更新游戏状态出错: " + e.getMessage());
+                System.err.println("Error updating game state: " + e.getMessage());
             }
         });
     }
@@ -345,7 +343,7 @@ public class GamePanel extends JPanel {
                 playerPanelsContainer.add(panel);
             }
             boolean isActive = playerData.has("isActivePlayer") && playerData.get("isActivePlayer").getAsBoolean();
-            String nickname = playerData.has("nickname") ? playerData.get("nickname").getAsString() : "未知";
+            String nickname = playerData.has("nickname") ? playerData.get("nickname").getAsString() : "Unknown";
             int handCount = playerData.has("handCount") ? playerData.get("handCount").getAsInt() : 0;
             int bankTotal = playerData.has("bankTotal") ? playerData.get("bankTotal").getAsInt() : 0;
             int completeSets = playerData.has("completeSets") ? playerData.get("completeSets").getAsInt() : 0;
@@ -380,17 +378,17 @@ public class GamePanel extends JPanel {
         if (localPlayerId == null) return;
         boolean wasMyTurn = isMyTurn;
         isMyTurn = activePlayerId.equals(localPlayerId);
-        String activeNickname = "未知";
+        String activeNickname = "Unknown";
         if (playerStates.has(activePlayerId)) {
             JsonObject activeData = playerStates.getAsJsonObject(activePlayerId);
-            activeNickname = activeData.has("nickname") ? activeData.get("nickname").getAsString() : "未知";
+            activeNickname = activeData.has("nickname") ? activeData.get("nickname").getAsString() : "Unknown";
         }
-        turnLabel.setText("当前回合: " + activeNickname);
+        turnLabel.setText("Current turn: " + activeNickname);
         if (isMyTurn && !wasMyTurn) {
             startCountdown();
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(3, 0, 0, 0,new Color(255, 215, 0)),
+                    BorderFactory.createMatteBorder(3, 0, 0, 0, new Color(255, 215, 0)),
                     new EmptyBorder(11, 20, 16, 20)));
         } else if (isMyTurn && wasMyTurn) {
             endTurnButton.setEnabled(true);
@@ -409,12 +407,10 @@ public class GamePanel extends JPanel {
     private void startCountdown() {
         stopCountdown();
         secondsRemaining = 30;
-        // 关键：通知进度条开始倒计时
         timerBarPanel.start(30);
 
         countdownTimer = new javax.swing.Timer(1000, e -> {
             secondsRemaining--;
-            // 关键：每秒让进度条前进一步
             timerBarPanel.tick();
 
             if (secondsRemaining <= 0) {
@@ -465,19 +461,19 @@ public class GamePanel extends JPanel {
 
     private void onCardClicked(String cardId, String cardType) {
         if (!isMyTurn) {
-            showStyledMessage("还没轮到你的回合！", "提示", JOptionPane.INFORMATION_MESSAGE);
+            showStyledMessage("Not your turn yet!", "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         String[] options;
         String[] actions;
         switch (cardType) {
-            case "MONEY": options = new String[]{"存入银行"}; actions = new String[]{"PLAY_MONEY"}; break;
-            case "PROPERTY": options = new String[]{"放置地产"}; actions = new String[]{"PLAY_PROPERTY"}; break;
-            case "RENT": options = new String[]{"收取租金"}; actions = new String[]{"PLAY_RENT"}; break;
-            case "ACTION": options = new String[]{"使用行动卡"}; actions = new String[]{"PLAY_ACTION"}; break;
-            default: options = new String[]{"存入银行"}; actions = new String[]{"PLAY_MONEY"};
+            case "MONEY": options = new String[]{"Deposit to bank"}; actions = new String[]{"PLAY_MONEY"}; break;
+            case "PROPERTY": options = new String[]{"Place property"}; actions = new String[]{"PLAY_PROPERTY"}; break;
+            case "RENT": options = new String[]{"Collect rent"}; actions = new String[]{"PLAY_RENT"}; break;
+            case "ACTION": options = new String[]{"Use action card"}; actions = new String[]{"PLAY_ACTION"}; break;
+            default: options = new String[]{"Deposit to bank"}; actions = new String[]{"PLAY_MONEY"};
         }
-        int choice = showStyledOptionDialog("这张卡牌要怎么使用？", "出牌", options);
+        int choice = showStyledOptionDialog("How would you like to use this card?", "Play Card", options);
         if (choice >= 0) {
             JsonObject payload = new JsonObject();
             payload.addProperty("cardId", cardId);
@@ -502,7 +498,7 @@ public class GamePanel extends JPanel {
         UIManager.put("OptionPane.background", PANEL_BG);
         UIManager.put("Panel.background", PANEL_BG);
         UIManager.put("OptionPane.messageForeground", Color.WHITE);
-        UIManager.put("OptionPane.messageFont", new Font("Microsoft YaHei", Font.PLAIN, 14));
+        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
 
@@ -510,22 +506,22 @@ public class GamePanel extends JPanel {
         UIManager.put("OptionPane.background", PANEL_BG);
         UIManager.put("Panel.background", PANEL_BG);
         UIManager.put("OptionPane.messageForeground", Color.WHITE);
-        UIManager.put("OptionPane.messageFont", new Font("Microsoft YaHei", Font.PLAIN, 14));
+        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
         UIManager.put("Button.background", new Color(80, 55, 140));
         UIManager.put("Button.foreground", Color.WHITE);
-        UIManager.put("Button.font", new Font("Microsoft YaHei", Font.BOLD, 13));
+        UIManager.put("Button.font", new Font("Segoe UI", Font.BOLD, 13));
         return JOptionPane.showOptionDialog(this, message, title, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
     }
 
     private String showWildColorPicker(String cardName) {
         String[] colors = WILD_COLOR_OPTIONS.get(cardName);
         if (colors == null) colors = WILD_COLOR_OPTIONS.get("Multi-Color Wild");
-        return (String) JOptionPane.showInputDialog(this, "为万能地产选择颜色：", "万能地产颜色", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
+        return (String) JOptionPane.showInputDialog(this, "Select color for wild property:", "Wild Property Color", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
     }
 
     private String showColorPicker() {
         String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED", "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"};
-        return (String) JOptionPane.showInputDialog(this, "选择颜色：", "颜色选择", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
+        return (String) JOptionPane.showInputDialog(this, "Select color:", "Color Selection", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
     }
 
     public void handleReactionRequired(String jsonPayload) {
@@ -535,7 +531,7 @@ public class GamePanel extends JPanel {
                 String targetPlayer = payload.has("targetPlayer") ? payload.get("targetPlayer").getAsString() : "";
                 String actionType = payload.has("actionType") ? payload.get("actionType").getAsString() : "";
                 int amount = payload.has("amount") ? payload.get("amount").getAsInt() : 0;
-                int choice = JOptionPane.showConfirmDialog(this, targetPlayer + " 使用了 " + actionType + (amount > 0 ? " 索要 " + amount + "M" : "") + "。\n是否使用 Just Say No 拒绝？", "响应操作", JOptionPane.YES_NO_OPTION);
+                int choice = JOptionPane.showConfirmDialog(this, targetPlayer + " used " + actionType + (amount > 0 ? " demanding " + amount + "M" : "") + ".\nDo you want to use Just Say No to cancel?", "React to Action", JOptionPane.YES_NO_OPTION);
                 JsonObject response = new JsonObject();
                 response.addProperty("useJustSayNo", choice == JOptionPane.YES_OPTION);
                 client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO, response.toString());
@@ -548,8 +544,8 @@ public class GamePanel extends JPanel {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 int amount = payload.has("amount") ? payload.get("amount").getAsInt() : 0;
-                String from = payload.has("from") ? payload.get("from").getAsString() : "未知";
-                JOptionPane.showMessageDialog(this, from + " 要求支付 " + amount + "M。", "需要付款", JOptionPane.INFORMATION_MESSAGE);
+                String from = payload.has("from") ? payload.get("from").getAsString() : "Unknown";
+                JOptionPane.showMessageDialog(this, from + " demands payment of " + amount + "M.", "Payment Required", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {}
         });
     }
@@ -559,7 +555,7 @@ public class GamePanel extends JPanel {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 int excess = payload.has("excess") ? payload.get("excess").getAsInt() : 1;
-                JOptionPane.showMessageDialog(this, "手牌超过7张！需弃掉 " + excess + " 张。", "需要弃牌", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Hand exceeds 7 cards! Discard " + excess + " card(s).", "Discard Required", JOptionPane.WARNING_MESSAGE);
             } catch (Exception e) {}
         });
     }
