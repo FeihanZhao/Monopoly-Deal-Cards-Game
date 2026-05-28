@@ -37,21 +37,30 @@ public class GamePanel extends JPanel {
     private int secondsRemaining;
     private JsonObject cardDataForClicked;
 
-    private static final Color BG_DEEP = new Color(8, 10, 18);
-    private static final Color BG_CARD = new Color(14, 16, 26);
-    private static final Color GOLD_PRIMARY = new Color(255, 215, 0);
-    private static final Color GOLD_GLOW = new Color(255, 235, 100);
-    private static final Color RED_ACCENT = new Color(244, 67, 54);
-    private static final Color RED_DARK = new Color(180, 30, 30);
-    private static final Color GREEN_FELT = new Color(22, 62, 38);
-    private static final Color GREEN_SHADOW = new Color(10, 32, 18);
-    private static final Color TEXT_WHITE = new Color(240, 240, 248);
-    private static final Color TEXT_GRAY = new Color(150, 150, 170);
-    private static final Color PURPLE_ROYAL = new Color(100, 30, 140);
-    private static final Color PURPLE_DARK = new Color(60, 15, 90);
-    private static final Color BLUE_STEEL = new Color(30, 40, 60);
-    private static final Color PANEL_BG = new Color(16, 18, 30);
-    private static final Color BORDER_SUBTLE = new Color(50, 45, 75);
+    // ==========================================================================
+    // PREMIUM COLOR SYSTEM – NEON, GLOW, GRADIENT, DARK ELEGANCE
+    // ==========================================================================
+    private static final Color BG_DEEP         = new Color(6, 8, 14);
+    private static final Color BG_MID          = new Color(14, 16, 28);
+    private static final Color BG_CARD         = new Color(20, 22, 38);
+    private static final Color GOLD_PRIMARY    = new Color(255, 215, 0);
+    private static final Color GOLD_GLOW       = new Color(255, 235, 100);
+    private static final Color GOLD_NEON       = new Color(255, 225, 80);
+    private static final Color RED_ACCENT      = new Color(255, 50, 50);
+    private static final Color RED_GLOW        = new Color(255, 100, 100);
+    private static final Color RED_DARK        = new Color(140, 20, 20);
+    private static final Color GREEN_FELT      = new Color(18, 52, 32);
+    private static final Color GREEN_GLOW     = new Color(40, 180, 100);
+    private static final Color GREEN_SHADOW    = new Color(10, 28, 16);
+    private static final Color PURPLE_PRIMARY  = new Color(130, 50, 210);
+    private static final Color PURPLE_GLOW     = new Color(160, 80, 255);
+    private static final Color PURPLE_DARK     = new Color(70, 20, 110);
+    private static final Color BLUE_STEEL      = new Color(36, 46, 70);
+    private static final Color TEXT_WHITE      = new Color(245, 245, 255);
+    private static final Color TEXT_GLOW       = new Color(220, 220, 255);
+    private static final Color TEXT_GRAY       = new Color(140, 140, 170);
+    private static final Color BORDER_GLOW     = new Color(100, 80, 160);
+    private static final Color BORDER_SUBTLE  = new Color(60, 55, 90);
 
     private static final Map<String, String[]> WILD_COLOR_OPTIONS = new LinkedHashMap<>();
     static {
@@ -80,6 +89,9 @@ public class GamePanel extends JPanel {
         add(sidePanel, BorderLayout.EAST);
     }
 
+    // ==========================================================================
+    // TOP BAR – NEON GLowing GRADIENT, LUXURY STYLE
+    // ==========================================================================
     private void createTopBar() {
         topBarPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -87,44 +99,47 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                GradientPaint gp = new GradientPaint(0, 0, new Color(18, 16, 34), 0, getHeight(), new Color(10, 8, 20));
-                g2.setPaint(gp);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+                GradientPaint bg = new GradientPaint(0, 0, BG_MID, 0, getHeight(), BG_DEEP);
+                g2.setPaint(bg);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setStroke(new BasicStroke(1.5f));
-                g2.setColor(new Color(255, 215, 0, 50));
-                g2.drawLine(20, getHeight() - 1, getWidth() - 20, getHeight() - 1);
-                g2.setColor(new Color(100, 30, 140, 60));
-                g2.drawLine(20, getHeight() - 2, getWidth() - 20, getHeight() - 2);
-                int dotSpacing = 40;
-                g2.setColor(new Color(255, 215, 0, 15));
-                for (int x = dotSpacing; x < getWidth(); x += dotSpacing) {
-                    g2.fillOval(x, getHeight() - 4, 4, 4);
+
+                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                GradientPaint lineGlow = new GradientPaint(0, 0, GOLD_GLOW, getWidth(), 0, PURPLE_GLOW);
+                g2.setPaint(lineGlow);
+                g2.drawLine(30, getHeight()-2, getWidth()-30, getHeight()-2);
+
+                g2.setColor(new Color(255,255,255,8));
+                for (int x = 40; x < getWidth(); x += 40) {
+                    g2.fillOval(x, getHeight()-5, 5,5);
                 }
                 g2.dispose();
             }
         };
         topBarPanel.setOpaque(false);
-        topBarPanel.setBorder(new EmptyBorder(16, 30, 16, 30));
-        topBarPanel.setPreferredSize(new Dimension(0, 70));
+        topBarPanel.setBorder(new EmptyBorder(18, 32, 18, 32));
+        topBarPanel.setPreferredSize(new Dimension(0, 76));
 
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 30, 0));
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 32, 0));
         leftPanel.setOpaque(false);
 
         phaseLabel = new JLabel("Phase: Waiting");
-        phaseLabel.setForeground(GOLD_PRIMARY);
-        phaseLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        phaseLabel.setForeground(GOLD_GLOW);
+        phaseLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         phaseLabel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(100, 30, 140, 100)),
-                BorderFactory.createEmptyBorder(0, 0, 0, 15)));
+                BorderFactory.createMatteBorder(0,0,0,1, new Color(120,80,180,60)),
+                BorderFactory.createEmptyBorder(0,0,0,16)
+        ));
 
         turnLabel = new JLabel("Current turn: -");
-        turnLabel.setForeground(Color.WHITE);
-        turnLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        turnLabel.setForeground(TEXT_WHITE);
+        turnLabel.setFont(new Font("Segoe UI", Font.BOLD, 17));
 
         leftPanel.add(phaseLabel);
         leftPanel.add(turnLabel);
 
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 25, 0));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 24, 0));
         rightPanel.setOpaque(false);
 
         drawPileLabel = new JLabel("Deck: 0") {
@@ -132,20 +147,27 @@ public class GamePanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0, 0, 0, 60));
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
-                GradientPaint gp = new GradientPaint(0, 0, new Color(40, 35, 65), 0, getHeight(), new Color(25, 20, 45));
+                int w = getWidth(), h = getHeight();
+
+                g2.setColor(new Color(0,0,0,90));
+                g2.fillRoundRect(1,1,w-2,h-2,16,16);
+
+                GradientPaint gp = new GradientPaint(0,0, PURPLE_DARK, 0,h, BG_DEEP);
                 g2.setPaint(gp);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
-                g2.setColor(TEXT_WHITE);
+                g2.fillRoundRect(1,1,w-3,h-3,16,16);
+
+                g2.setColor(BORDER_GLOW);
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.drawRoundRect(1,1,w-3,h-3,16,16);
+
+                g2.setColor(TEXT_GLOW);
                 g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
-                g2.drawString(getText(), (getWidth() - fm.stringWidth(getText())) / 2, (getHeight() + fm.getAscent()) / 2 - 2);
+                g2.drawString(getText(), (w-fm.stringWidth(getText()))/2, (h+fm.getAscent())/2 -2);
                 g2.dispose();
             }
         };
-        drawPileLabel.setForeground(TEXT_WHITE);
-        drawPileLabel.setPreferredSize(new Dimension(90, 32));
+        drawPileLabel.setPreferredSize(new Dimension(94, 34));
         drawPileLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
         timerBarPanel = new TimerBarPanel(30);
@@ -156,33 +178,42 @@ public class GamePanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 int w = getWidth(), h = getHeight();
-                RoundRectangle2D shape = new RoundRectangle2D.Float(0, 0, w, h, 25, 25);
+                RoundRectangle2D.Float shape = new RoundRectangle2D.Float(0,0,w,h,26,26);
+
                 if (getModel().isPressed()) {
                     g2.setColor(RED_DARK);
                 } else if (getModel().isRollover() && isEnabled()) {
-                    GradientPaint gp = new GradientPaint(0, 0, new Color(240, 70, 70), 0, h, RED_ACCENT);
+                    GradientPaint gp = new GradientPaint(0,0, RED_GLOW, 0,h, RED_ACCENT);
                     g2.setPaint(gp);
                 } else {
-                    GradientPaint gp = new GradientPaint(0, 0, isEnabled() ? RED_ACCENT : new Color(60, 60, 60), 0, h, isEnabled() ? RED_DARK : new Color(40, 40, 40));
+                    GradientPaint gp = new GradientPaint(0,0, isEnabled()?RED_ACCENT:new Color(50,50,50),
+                                                       0,h, isEnabled()?RED_DARK:new Color(35,35,35));
                     g2.setPaint(gp);
                 }
                 g2.fill(shape);
-                g2.setStroke(new BasicStroke(1.5f));
-                g2.setColor(new Color(255, 255, 255, isEnabled() ? 40 : 10));
+
+                g2.setStroke(new BasicStroke(1.8f));
+                g2.setColor(new Color(255,255,255, isEnabled()?35:8));
                 g2.draw(shape);
-                g2.setColor(Color.WHITE);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+
+                if(isEnabled()){
+                    g2.setColor(new Color(255,255,255,20));
+                    g2.fill(new RoundRectangle2D.Float(4,4,w-8,h/2-2,20,20));
+                }
+
+                g2.setColor(TEXT_WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
                 FontMetrics fm = g2.getFontMetrics();
-                String text = "End Turn";
-                g2.drawString(text, (w - fm.stringWidth(text)) / 2, (h + fm.getAscent()) / 2 - 2);
+                String txt = "End Turn";
+                g2.drawString(txt, (w-fm.stringWidth(txt))/2, (h+fm.getAscent())/2 -2);
                 g2.dispose();
             }
         };
-        endTurnButton.setPreferredSize(new Dimension(130, 42));
+        endTurnButton.setPreferredSize(new Dimension(140, 44));
         endTurnButton.setBorderPainted(false);
         endTurnButton.setContentAreaFilled(false);
         endTurnButton.setFocusPainted(false);
-        endTurnButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        endTurnButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         endTurnButton.setEnabled(false);
         endTurnButton.addActionListener(e -> endTurn());
 
@@ -194,6 +225,9 @@ public class GamePanel extends JPanel {
         topBarPanel.add(rightPanel, BorderLayout.EAST);
     }
 
+    // ==========================================================================
+    // MAIN GAME AREA – CASINO FELT + DYNAMIC LIGHTS + PREMIUM TEXTURE
+    // ==========================================================================
     private void createMainGameArea() {
         mainGamePanel = new JPanel(new BorderLayout()) {
             @Override
@@ -201,21 +235,26 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                GradientPaint gp = new GradientPaint(getWidth() / 2f, 0, GREEN_SHADOW, getWidth() / 2f, getHeight(), GREEN_FELT);
-                g2.setPaint(gp);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setColor(new Color(255, 255, 255, 4));
-                g2.setStroke(new BasicStroke(0.8f));
-                for (int x = 0; x < getWidth(); x += 100) {
-                    for (int y = 0; y < getHeight(); y += 100) {
-                        g2.drawRoundRect(x + 5, y + 5, 90, 90, 12, 12);
-                    }
-                }
-                g2.setColor(new Color(255, 215, 0, 8));
-                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{10, 25}, 0));
-                int cx = getWidth() / 2, cy = getHeight() / 2;
-                g2.drawOval(cx - 160, cy - 160, 320, 320);
-                g2.drawOval(cx - 200, cy - 200, 400, 400);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+                GradientPaint table = new GradientPaint(getWidth()/2f,0, GREEN_SHADOW, getWidth()/2f, getHeight(), GREEN_FELT);
+                g2.setPaint(table);
+                g2.fillRect(0,0,getWidth(), getHeight());
+
+                g2.setColor(new Color(255,255,255,3));
+                for(int x=0;x<getWidth();x+=100)
+                    for(int y=0;y<getHeight();y+=100)
+                        g2.drawRoundRect(x+8,y+8,84,84,14,14);
+
+                g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{12,28},0));
+                g2.setColor(new Color(255,215,0,10));
+                int cx = getWidth()/2, cy=getHeight()/2;
+                g2.drawOval(cx-170,cy-170,340,340);
+                g2.drawOval(cx-210,cy-210,420,420);
+
+                g2.setColor(new Color(40,180,100,6));
+                g2.drawOval(cx-190,cy-190,380,380);
+
                 g2.dispose();
             }
         };
@@ -223,15 +262,19 @@ public class GamePanel extends JPanel {
         playerPanelsContainer = new JPanel();
         playerPanelsContainer.setLayout(new BoxLayout(playerPanelsContainer, BoxLayout.Y_AXIS));
         playerPanelsContainer.setOpaque(false);
-        playerPanelsContainer.setBorder(new EmptyBorder(15, 20, 15, 20));
-        JScrollPane scrollPane = new JScrollPane(playerPanelsContainer);
-        scrollPane.setOpaque(false);
-        scrollPane.getViewport().setOpaque(false);
-        scrollPane.setBorder(null);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(20);
-        mainGamePanel.add(scrollPane, BorderLayout.CENTER);
+        playerPanelsContainer.setBorder(new EmptyBorder(20,24,20,24));
+
+        JScrollPane scroll = new JScrollPane(playerPanelsContainer);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(22);
+        mainGamePanel.add(scroll, BorderLayout.CENTER);
     }
 
+    // ==========================================================================
+    // HAND PANEL – GLASSMORPHISM + NEON TOP BORDER + PREMIUM CARD TRAY
+    // ==========================================================================
     private void createHandPanel() {
         handPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -239,66 +282,80 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                GradientPaint gp = new GradientPaint(0, 0, new Color(20, 18, 36), 0, getHeight(), new Color(10, 8, 20));
-                g2.setPaint(gp);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setStroke(new BasicStroke(2f));
-                GradientPaint lineGp = new GradientPaint(0, 0, GOLD_PRIMARY, getWidth(), 0, new Color(100, 30, 140));
-                g2.setPaint(lineGp);
-                g2.drawLine(0, 0, getWidth(), 0);
-                g2.setColor(new Color(255, 255, 255, 10));
-                g2.drawLine(0, 1, getWidth(), 1);
+
+                GradientPaint bg = new GradientPaint(0,0, BG_CARD, 0,getHeight(), BG_DEEP);
+                g2.setPaint(bg);
+                g2.fillRect(0,0,getWidth(),getHeight());
+
+                g2.setStroke(new BasicStroke(3f));
+                GradientPaint neon = new GradientPaint(0,0, GOLD_NEON, getWidth(),0, PURPLE_GLOW);
+                g2.setPaint(neon);
+                g2.drawLine(0,0,getWidth(),0);
+
+                g2.setColor(new Color(255,255,255,10));
+                g2.drawLine(0,1,getWidth(),1);
                 g2.dispose();
             }
         };
         handPanel.setOpaque(false);
-        handPanel.setBorder(new EmptyBorder(14, 20, 16, 20));
-        handPanel.setPreferredSize(new Dimension(0, 230));
+        handPanel.setBorder(new EmptyBorder(16,24,18,24));
+        handPanel.setPreferredSize(new Dimension(0, 240));
 
-        JPanel handHeader = new JPanel(new BorderLayout());
-        handHeader.setOpaque(false);
-        JLabel handLabel = new JLabel("Your Hand");
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        JLabel handLabel = new JLabel(" Your Hand");
         handLabel.setForeground(GOLD_GLOW);
-        handLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
-        handHeader.add(handLabel, BorderLayout.WEST);
-        handPanel.add(handHeader, BorderLayout.NORTH);
+        handLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        header.add(handLabel, BorderLayout.WEST);
+        handPanel.add(header, BorderLayout.NORTH);
 
-        handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 14, 10)) {
+        handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT,16,12)) {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(255, 255, 255, 3));
-                g2.fillRoundRect(5, 5, getWidth() - 10, getHeight() - 10, 20, 20);
-                g2.setStroke(new BasicStroke(1f));
-                g2.setColor(new Color(255, 255, 255, 8));
-                g2.drawRoundRect(5, 5, getWidth() - 10, getHeight() - 10, 20, 20);
+
+                g2.setColor(new Color(255,255,255,4));
+                g2.fillRoundRect(6,6,getWidth()-12,getHeight()-12,22,22);
+
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.setColor(BORDER_GLOW);
+                g2.drawRoundRect(6,6,getWidth()-12,getHeight()-12,22,22);
+
                 g2.dispose();
             }
         };
         handCardsPanel.setOpaque(false);
-        JScrollPane handScrollPane = new JScrollPane(handCardsPanel);
-        handScrollPane.setOpaque(false);
-        handScrollPane.getViewport().setOpaque(false);
-        handScrollPane.setBorder(null);
-        handScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        handScrollPane.setPreferredSize(new Dimension(0, 180));
-        handScrollPane.getHorizontalScrollBar().setUnitIncrement(20);
-        handPanel.add(handScrollPane, BorderLayout.CENTER);
+
+        JScrollPane handScroll = new JScrollPane(handCardsPanel);
+        handScroll.setOpaque(false);
+        handScroll.getViewport().setOpaque(false);
+        handScroll.setBorder(null);
+        handScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        handScroll.setPreferredSize(new Dimension(0,190));
+        handScroll.getHorizontalScrollBar().setUnitIncrement(24);
+        handPanel.add(handScroll, BorderLayout.CENTER);
     }
 
+    // ==========================================================================
+    // SIDE PANEL – DARK GLASS WITH NEON BORDER
+    // ==========================================================================
     private void createSidePanel() {
         sidePanel = new JPanel(new BorderLayout());
-        sidePanel.setBackground(new Color(10, 12, 20));
+        sidePanel.setBackground(BG_DEEP);
         sidePanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 2, 0, 0, new Color(80, 60, 120, 120)),
-                BorderFactory.createEmptyBorder(0, 0, 0, 0)));
-        sidePanel.setPreferredSize(new Dimension(280, 0));
+                BorderFactory.createMatteBorder(0,2,0,0, BORDER_GLOW),
+                new EmptyBorder(0,0,0,0)
+        ));
+        sidePanel.setPreferredSize(new Dimension(290,0));
         actionHistoryPanel = new ActionHistoryPanel();
         sidePanel.add(actionHistoryPanel, BorderLayout.CENTER);
     }
 
+    // ==========================================================================
+    // GAME LOGIC – NO CHANGES, FULLY COMPATIBLE
+    // ==========================================================================
     public void updateGameState(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
@@ -388,14 +445,14 @@ public class GamePanel extends JPanel {
             startCountdown();
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(3, 0, 0, 0, new Color(255, 215, 0)),
-                    new EmptyBorder(11, 20, 16, 20)));
+                    BorderFactory.createMatteBorder(3, 0, 0, 0, GOLD_PRIMARY),
+                    new EmptyBorder(13, 24, 18, 24)));
         } else if (isMyTurn && wasMyTurn) {
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
             stopCountdown();
             endTurnButton.setEnabled(false);
-            handPanel.setBorder(new EmptyBorder(14, 20, 16, 20));
+            handPanel.setBorder(new EmptyBorder(16, 24, 18, 24));
         }
         for (Component comp : handCardsPanel.getComponents()) {
             if (comp instanceof CardRenderer) {
@@ -495,20 +552,20 @@ public class GamePanel extends JPanel {
     }
 
     private void showStyledMessage(String message, String title, int messageType) {
-        UIManager.put("OptionPane.background", PANEL_BG);
-        UIManager.put("Panel.background", PANEL_BG);
-        UIManager.put("OptionPane.messageForeground", Color.WHITE);
+        UIManager.put("OptionPane.background", BG_MID);
+        UIManager.put("Panel.background", BG_MID);
+        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
         UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
 
     private int showStyledOptionDialog(String message, String title, String[] options) {
-        UIManager.put("OptionPane.background", PANEL_BG);
-        UIManager.put("Panel.background", PANEL_BG);
-        UIManager.put("OptionPane.messageForeground", Color.WHITE);
+        UIManager.put("OptionPane.background", BG_MID);
+        UIManager.put("Panel.background", BG_MID);
+        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
         UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
-        UIManager.put("Button.background", new Color(80, 55, 140));
-        UIManager.put("Button.foreground", Color.WHITE);
+        UIManager.put("Button.background", PURPLE_PRIMARY);
+        UIManager.put("Button.foreground", TEXT_WHITE);
         UIManager.put("Button.font", new Font("Segoe UI", Font.BOLD, 13));
         return JOptionPane.showOptionDialog(this, message, title, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
     }
