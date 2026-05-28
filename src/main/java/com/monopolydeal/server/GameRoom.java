@@ -9,133 +9,152 @@ import com.google.gson.JsonArray;
 import com.google.gson.Gson;
 
 /**
- * Game room - manages players from lobby to game start
- *
- * Lifecycle:
- * 1. Creator creates room (CREATE_ROOM), becomes first player
- * 2. Others join via room code (JOIN_ROOM), up to MAX_PLAYERS
- * 3. Players click "ready" in lobby (PLAYER_READY)
- * 4. When all players (>=MIN_PLAYERS) are ready, game auto-starts
- * 5. Creates GameSession and calls start() to begin game flow
- *
- * State broadcast:
- * - On join/leave/ready change, broadcast ROOM_UPDATE to all members
- * - ROOM_UPDATE contains room code, player list, and ready states
+ * Manages a single game room instance for the Monopoly Deal game.
+ * Handles player management, ready states, game initialization, and room state broadcasting.
+ * Acts as an intermediary between connected clients and the active game session.
  */
 public class GameRoom {
-    /** Room code (6 alphanumeric uppercase chars) */
+    // Unique 6-character alphanumeric code identifying this game room
     private final String roomCode;
-    /** Room creator */
+    
+    // The client who created and owns this game room (has admin privileges)
     private final ClientHandler creator;
-    /** Players in room: key=clientId, value=ClientHandler */
+    
+    // Thread-safe map of all connected players in the room (clientId -> ClientHandler)
     private final Map<String, ClientHandler> players;
-    /** Player ready states: key=clientId, value=ready */
+    
+    // Thread-safe map tracking ready status for each player (clientId -> isReady)
     private final Map<String, Boolean> readyStates;
-    /** Game session (created after game starts) */
+    
+    // The active game session instance - null when game hasn't started
     private GameSession gameSession;
-    /** Whether game has started */
+    
+    // Flag indicating if the game has started (prevents new joins/ready checks)
     private boolean gameStarted;
-    /** Gson serializer */
+    
+    // Gson instance for JSON serialization/deserialization of network messages
     private final Gson gson;
-    /** Parent server (for removing empty rooms) */
-    private GameServer server = null;
+    
+    // Reference to the main game server for room management operations
+    private GameServer server;
 
     /**
-     * Constructor - creates new room, creator auto-joins
+     * Constructs a new GameRoom with the specified creator and room code.
+     * Initializes thread-safe collections for player management and adds the creator to the room.
      *
-     * @param roomCode room code
-     * @param creator  room creator
+     * @param roomCode Unique identifier code for the game room
+     * @param creator  ClientHandler representing the user who created the room
      */
     public GameRoom(String roomCode, ClientHandler creator) {
         this.roomCode = roomCode;
         this.creator = creator;
+        // Use ConcurrentHashMap for thread safety in multi-client environment
         this.players = new ConcurrentHashMap<>();
         this.readyStates = new ConcurrentHashMap<>();
         this.gameStarted = false;
         this.gson = new Gson();
-        this.server = server;
+        this.server = null;
+        // Automatically add the room creator as the first player
         addPlayer(creator);
     }
 
     /**
-     * Adds a player to the room
-     * @param player player to add
-     * @return true=success, false=room full
+     * Adds a new player to the game room if the room isn't full.
+     * Initializes their ready state to false when joining.
+     *
+     * @param player ClientHandler representing the connecting player
+     * @return true if player was added successfully, false if room is full
      */
     public boolean addPlayer(ClientHandler player) {
+        // Check if room has reached maximum player capacity
         if (players.size() >= GameConstants.MAX_PLAYERS) {
             return false;
         }
         players.put(player.getClientId(), player);
+        // New players start with unready status
         readyStates.put(player.getClientId(), false);
         return true;
     }
 
     /**
-     * Removes a player from the room
-     * If game started, notifies GameSession of disconnection
-     * If room becomes empty, marks game as ended
+     * Removes a player from the room when they disconnect or leave.
+     * Handles game session cleanup if needed and removes empty rooms from the server.
+     * Broadcasts updated room state to remaining players after removal.
      *
-     * @param clientId player ID to remove
+     * @param clientId Unique identifier of the player to remove
      */
     public void removePlayer(String clientId) {
         players.remove(clientId);
         readyStates.remove(clientId);
-
+        
+        // Notify active game session if a player leaves during gameplay
         if (gameStarted && gameSession != null) {
             gameSession.handlePlayerDisconnect(clientId);
         }
-
+        
+        // Clean up empty room - remove from server and reset game state
         if (players.isEmpty()) {
             gameStarted = false;
             gameSession = null;
-            server.removeRoom(roomCode);
+            if (server != null) server.removeRoom(roomCode);
         }
-
+        
+        // Update all remaining players with new room state
         broadcastRoomUpdate();
     }
 
     /**
-     * Sets player's ready status
-     * When all players (>=MIN_PLAYERS) are ready and game not started, auto-starts
+     * Updates the ready status of a player and checks if game can start.
+     * Automatically starts the game if all players are ready and minimum requirements met.
      *
-     * @param clientId player ID
-     * @param ready true=ready, false=not ready
+     * @param clientId Unique identifier of the player
+     * @param ready    New ready state (true = ready, false = not ready)
      */
     public void setPlayerReady(String clientId, boolean ready) {
         readyStates.put(clientId, ready);
         broadcastRoomUpdate();
-
+        
+        // Start game automatically if: all ready, min players present, and not already started
         if (allPlayersReady() && players.size() >= GameConstants.MIN_PLAYERS && !gameStarted) {
             startGame();
         }
     }
 
-    /** Checks if all players are ready */
+    /**
+     * Checks if ALL players in the room have marked themselves as ready.
+     * Also verifies minimum player count is satisfied before allowing game start.
+     *
+     * @return true if all players are ready and min count reached, false otherwise
+     */
     private boolean allPlayersReady() {
         return players.size() >= GameConstants.MIN_PLAYERS &&
                 readyStates.values().stream().allMatch(Boolean::booleanValue);
     }
 
     /**
-     * Starts the game - creates Player list, initializes GameSession
-     * Player info extracted from ClientHandler (ID and nickname)
+     * Initializes and starts a new game session.
+     * Creates Player objects from connected clients and launches the game logic thread.
+     * Sets gameStarted flag to prevent further room modifications.
      */
     private void startGame() {
         gameStarted = true;
         List<Player> playerList = new ArrayList<>();
+        
+        // Convert ClientHandlers to Player model objects for game session
         for (Map.Entry<String, ClientHandler> entry : players.entrySet()) {
             Player player = new Player(entry.getKey(), entry.getValue().getNickname());
             playerList.add(player);
         }
-
+        
+        // Create and start new game session with room reference and player list
         gameSession = new GameSession(this, playerList);
         gameSession.start();
     }
 
     /**
-     * Broadcasts room state update to all players
-     * Contains room code, player list, ready states, creator flag
+     * Broadcasts the current room state to ALL connected players.
+     * Creates a JSON payload containing room info, player list, ready states, and game status.
+     * Used to update clients when players join/leave/change ready status.
      */
     public void broadcastRoomUpdate() {
         JsonObject roomState = new JsonObject();
@@ -143,7 +162,8 @@ public class GameRoom {
         roomState.addProperty("playerCount", players.size());
         roomState.addProperty("maxPlayers", GameConstants.MAX_PLAYERS);
         roomState.addProperty("gameStarted", gameStarted);
-
+        
+        // Build player list array with detailed info for each player
         JsonArray playerArray = new JsonArray();
         for (Map.Entry<String, ClientHandler> entry : players.entrySet()) {
             JsonObject playerInfo = new JsonObject();
@@ -153,20 +173,35 @@ public class GameRoom {
             playerInfo.addProperty("isCreator", entry.getKey().equals(creator.getClientId()));
             playerArray.add(playerInfo);
         }
+        
         roomState.add("players", playerArray);
-
         System.out.println("Broadcasting room update: " + roomCode + ", players: " + players.size());
+        
+        // Send complete room state to all players
         broadcast(MessageProtocol.MessageType.ROOM_UPDATE, roomState.toString());
     }
 
-    /** Broadcasts message to all players in room */
+    /**
+     * Sends a message to ALL players in the room.
+     * Utility method for room-wide notifications and game state updates.
+     *
+     * @param type    Message type enum for protocol handling
+     * @param payload JSON string containing message data
+     */
     public void broadcast(MessageProtocol.MessageType type, String payload) {
         for (ClientHandler player : players.values()) {
             player.sendMessage(type, payload);
         }
     }
 
-    /** Sends message to a specific player */
+    /**
+     * Sends a targeted message to a specific player only.
+     * Used for private game information (hand cards, personal notifications).
+     *
+     * @param clientId Target player's unique identifier
+     * @param type     Message type enum for protocol handling
+     * @param payload  JSON string containing message data
+     */
     public void sendToPlayer(String clientId, MessageProtocol.MessageType type, String payload) {
         ClientHandler player = players.get(clientId);
         if (player != null) {
@@ -174,9 +209,13 @@ public class GameRoom {
         }
     }
 
-    // ==================== Getters ====================
-
+    // --- Getter Methods ---
+    /** @return Unique room code string */
     public String getRoomCode() { return roomCode; }
+    
+    /** @return Active game session instance (null if not started) */
     public GameSession getGameSession() { return gameSession; }
+    
+    /** @return Thread-safe map of current players in the room */
     public Map<String, ClientHandler> getPlayers() { return players; }
 }
