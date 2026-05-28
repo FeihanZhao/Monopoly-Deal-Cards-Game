@@ -44,7 +44,7 @@ public class Bank {
      */
     public void deposit(Card card) {
         if (!card.canBeUsedAsMoney()) {
-            throw new IllegalArgumentException("该卡不能存入银行（面值为0）");
+            throw new IllegalArgumentException("This card cannot be deposited (value is 0)");
         }
         int denomination = card.getValue();
         moneyCards.computeIfAbsent(denomination, k -> new ArrayList<>()).add(card);

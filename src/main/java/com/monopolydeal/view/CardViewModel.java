@@ -1,31 +1,31 @@
 package com.monopolydeal.view;
 
 /**
- * 卡牌视图模型 - 封装卡牌在UI层展示所需的数据
+ * Card view model - encapsulates card data needed for UI display
  *
- * 作为服务端下发的卡牌JSON数据与UI组件（CardRenderer）之间的桥梁。
- * 包含卡牌的基本属性：ID、名称、类型、颜色和面值。
+ * Acts as a bridge between server-side card JSON data and UI components (CardRenderer).
+ * Contains basic card properties: ID, name, type, color, and monetary value.
  */
 public class CardViewModel {
 
-    /** 卡牌唯一标识符 */
+    /** Unique card identifier */
     private final String cardId;
-    /** 卡牌显示名称 */
+    /** Card display name */
     private final String cardName;
-    /** 卡牌类型（MONEY/PROPERTY/ACTION/RENT） */
+    /** Card type (MONEY/PROPERTY/ACTION/RENT) */
     private final String cardType;
-    /** 卡牌颜色键（对应CardColor枚举名称，如BROWN、WILD等） */
+    /** Card color key (corresponds to CardColor enum name, e.g. BROWN, WILD) */
     private final String color;
-    /** 金钱面值（仅金钱卡有值，其他类型为0） */
+    /** Monetary value (only money cards have a value; 0 for other types) */
     private final int value;
 
     /**
-     * 构造函数
-     * @param cardId 卡牌唯一标识符
-     * @param cardName 卡牌显示名称
-     * @param cardType 卡牌类型
-     * @param color 颜色键
-     * @param value 金钱面值
+     * Constructor
+     * @param cardId unique card identifier
+     * @param cardName card display name
+     * @param cardType card type
+     * @param color color key
+     * @param value monetary value
      */
     public CardViewModel(String cardId, String cardName, String cardType, String color, int value) {
         this.cardId = cardId;

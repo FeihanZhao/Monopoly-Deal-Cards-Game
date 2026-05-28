@@ -33,9 +33,9 @@ public class MainFrame extends JFrame {
         lobbyPanel = new LobbyPanel(client);
         gamePanel = new GamePanel(client);
         gameResultPanel = new GameResultPanel(() -> {
-            cardLayout.show(mainPanel, "LOBBY"); // 点按钮回大厅
+            cardLayout.show(mainPanel, "LOBBY"); // Click button to return to lobby
         });
-        mainPanel.add(gameResultPanel, "RESULT"); // 赋予唯一 Key
+        mainPanel.add(gameResultPanel, "RESULT"); // Assign unique key
         mainPanel.add(lobbyPanel, "LOBBY");
         mainPanel.add(gamePanel, "GAME");
         add(mainPanel);

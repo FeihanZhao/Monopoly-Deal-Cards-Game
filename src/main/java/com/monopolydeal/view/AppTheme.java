@@ -6,67 +6,67 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 应用主题类 - 集中管理游戏UI的配色方案
+ * Application theme class - centralized management of game UI color schemes
  *
- * 定义了大富翁纸牌游戏中所有地产颜色的标准RGB值、渐变色、
- * 以及万能卡的颜色选择选项。
+ * Defines standard RGB values, gradient colors for all property colors,
+ * and color selection options for wild cards in the Monopoly Deal card game.
  *
- * 颜色名称与 CardColor 枚举中的名称保持一致（如 BROWN、LIGHT_BLUE 等）。
+ * Color names are consistent with those in the CardColor enum (e.g. BROWN, LIGHT_BLUE, etc.).
  */
 public final class AppTheme {
 
     private AppTheme() {}
 
-    /** 地产颜色映射表 key=颜色名（与CardColor枚举名一致）, value=标准显示颜色 */
+    /** Property color mapping: key=color name (matching CardColor enum), value=standard display color */
     public static final Map<String, Color> PROPERTY_COLORS;
 
-    /** 地产渐变色映射表 key=颜色名, value=渐变终点色（用于卡牌从上到下的渐变效果） */
+    /** Property gradient color mapping: key=color name, value=gradient end color (for top-to-bottom card gradient effect) */
     public static final Map<String, Color> PROPERTY_GRADIENT_COLORS;
 
     /**
-     * 万能卡颜色选择选项映射表
-     * key=万能卡名称, value=可选颜色名称数组
-     * 用于万能地产卡和万能租金卡打出时弹出颜色选择对话框
+     * Wild card color selection options mapping
+     * key=wild card name, value=array of selectable color names
+     * Used to display a color picker dialog when playing wild property/rent cards
      */
     public static final Map<String, String[]> WILD_COLOR_OPTIONS;
 
     static {
-        // ===== 十种纯地产颜色的标准配色 =====
+        // ===== Standard colors for the ten pure property colors =====
         Map<String, Color> colors = new HashMap<>();
-        colors.put("BROWN",        new Color(0x8B5E3C));  // 棕色
-        colors.put("LIGHT_BLUE",   new Color(0x87CEEB));  // 浅蓝色
-        colors.put("PINK",         new Color(0xFF69B4));  // 粉色
-        colors.put("ORANGE",       new Color(0xFF8C00));  // 橙色
-        colors.put("RED",          new Color(0xDC143C));  // 红色
-        colors.put("YELLOW",       new Color(0xFFD700));  // 黄色
-        colors.put("GREEN",        new Color(0x228B22));  // 绿色
-        colors.put("BLUE",         new Color(0x0000CD));  // 蓝色
-        colors.put("BLACK",        new Color(0x2B2B2B));  // 黑色
-        colors.put("LIGHT_GREEN",  new Color(0x90EE90));  // 浅绿色
+        colors.put("BROWN",        new Color(0x8B5E3C));  // Brown
+        colors.put("LIGHT_BLUE",   new Color(0x87CEEB));  // Light blue
+        colors.put("PINK",         new Color(0xFF69B4));  // Pink
+        colors.put("ORANGE",       new Color(0xFF8C00));  // Orange
+        colors.put("RED",          new Color(0xDC143C));  // Red
+        colors.put("YELLOW",       new Color(0xFFD700));  // Yellow
+        colors.put("GREEN",        new Color(0x228B22));  // Green
+        colors.put("BLUE",         new Color(0x0000CD));  // Blue
+        colors.put("BLACK",        new Color(0x2B2B2B));  // Black
+        colors.put("LIGHT_GREEN",  new Color(0x90EE90));  // Light green
         PROPERTY_COLORS = Collections.unmodifiableMap(colors);
 
-        // ===== 地产渐变色（卡牌从上到下由PROPERTY_COLORS渐变到此处） =====
+        // ===== Property gradient colors (card top-to-bottom gradient from PROPERTY_COLORS to here) =====
         Map<String, Color> gradients = new HashMap<>();
-        gradients.put("BROWN",        new Color(0x5C3A1E));  // 深棕
-        gradients.put("LIGHT_BLUE",   new Color(0x4A90B8));  // 深蓝
-        gradients.put("PINK",         new Color(0xC44A8A));  // 深粉
-        gradients.put("ORANGE",       new Color(0xCC6600));  // 深橙
-        gradients.put("RED",          new Color(0x8B0000));  // 深红
-        gradients.put("YELLOW",       new Color(0xCC9900));  // 深黄
-        gradients.put("GREEN",        new Color(0x145214));  // 深绿
-        gradients.put("BLUE",         new Color(0x000080));  // 深蓝
-        gradients.put("BLACK",        new Color(0x111111));  // 更深黑
-        gradients.put("LIGHT_GREEN",  new Color(0x4CAF50));  // 深浅绿
+        gradients.put("BROWN",        new Color(0x5C3A1E));  // Dark brown
+        gradients.put("LIGHT_BLUE",   new Color(0x4A90B8));  // Dark blue
+        gradients.put("PINK",         new Color(0xC44A8A));  // Dark pink
+        gradients.put("ORANGE",       new Color(0xCC6600));  // Dark orange
+        gradients.put("RED",          new Color(0x8B0000));  // Dark red
+        gradients.put("YELLOW",       new Color(0xCC9900));  // Dark yellow
+        gradients.put("GREEN",        new Color(0x145214));  // Dark green
+        gradients.put("BLUE",         new Color(0x000080));  // Dark blue
+        gradients.put("BLACK",        new Color(0x111111));  // Deeper black
+        gradients.put("LIGHT_GREEN",  new Color(0x4CAF50));  // Dark light green
         PROPERTY_GRADIENT_COLORS = Collections.unmodifiableMap(gradients);
 
-        // ===== 万能卡颜色选择选项 =====
-        // 多彩万能卡（Multi-Color Wild）可以选择任意一种地产颜色
+        // ===== Wild card color selection options =====
+        // Multi-Color Wild can select any property color
         String[] allColors = {
                 "BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
                 "YELLOW", "GREEN", "BLUE", "BLACK", "LIGHT_GREEN"
         };
 
-        // 双色万能卡只能选择对应的两种颜色
+        // Two-color wild cards can only select from their two corresponding colors
         String[] brownLightBlue  = {"BROWN", "LIGHT_BLUE"};
         String[] pinkOrange      = {"PINK", "ORANGE"};
         String[] redYellow       = {"RED", "YELLOW"};
@@ -81,7 +81,7 @@ public final class AppTheme {
         wildOptions.put("Red/Yellow Wild",       redYellow);
         wildOptions.put("Green/Blue Wild",       greenBlue);
         wildOptions.put("Black/Light Green Wild", blackLightGreen);
-        // 通用默认
+        // Generic default
         wildOptions.put("Wild",                  allColors);
         WILD_COLOR_OPTIONS = Collections.unmodifiableMap(wildOptions);
     }
