@@ -36,6 +36,8 @@ public class GamePanel extends JPanel {
     private javax.swing.Timer countdownTimer;
     private int secondsRemaining;
     private JsonObject cardDataForClicked;
+    /** Cached hand card data for Just Say No card lookup */
+    private final List<JsonObject> cachedHandCards = new ArrayList<>();
 
     // ==========================================================================
     // PREMIUM COLOR SYSTEM – NEON, GLOW, GRADIENT, DARK ELEGANCE
@@ -491,6 +493,7 @@ public class GamePanel extends JPanel {
 
     private void updateLocalHand(JsonObject playerStates) {
         handCardsPanel.removeAll();
+        cachedHandCards.clear();
         if (localPlayerId == null || !playerStates.has(localPlayerId)) {
             handCardsPanel.revalidate();
             handCardsPanel.repaint();
@@ -501,6 +504,7 @@ public class GamePanel extends JPanel {
             JsonArray handCards = myData.getAsJsonArray("handCards");
             for (JsonElement elem : handCards) {
                 JsonObject cardData = elem.getAsJsonObject();
+                cachedHandCards.add(cardData);
                 CardRenderer card = new CardRenderer(cardData);
                 card.setEnabled(isMyTurn);
                 String cardType = cardData.has("cardType") ? cardData.get("cardType").getAsString() : "MONEY";
@@ -585,14 +589,42 @@ public class GamePanel extends JPanel {
         SwingUtilities.invokeLater(() -> {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
-                String targetPlayer = payload.has("targetPlayer") ? payload.get("targetPlayer").getAsString() : "";
-                String actionType = payload.has("actionType") ? payload.get("actionType").getAsString() : "";
-                int amount = payload.has("amount") ? payload.get("amount").getAsInt() : 0;
-                int choice = JOptionPane.showConfirmDialog(this, targetPlayer + " used " + actionType + (amount > 0 ? " demanding " + amount + "M" : "") + ".\nDo you want to use Just Say No to cancel?", "React to Action", JOptionPane.YES_NO_OPTION);
-                JsonObject response = new JsonObject();
-                response.addProperty("useJustSayNo", choice == JOptionPane.YES_OPTION);
-                client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO, response.toString());
-            } catch (Exception e) {}
+                // Server sends: initiatorName, actionType, cardName, resolutionId
+                String initiatorName = payload.has("initiatorName") ? payload.get("initiatorName").getAsString() : "Unknown";
+                String actionType = payload.has("actionType") ? payload.get("actionType").getAsString() : "Unknown";
+                String cardName = payload.has("cardName") ? payload.get("cardName").getAsString() : "";
+
+                int choice = JOptionPane.showConfirmDialog(this,
+                        initiatorName + " used " + cardName + " (" + actionType + ").\nDo you want to use Just Say No to cancel?",
+                        "React to Action", JOptionPane.YES_NO_OPTION);
+
+                if (choice == JOptionPane.YES_OPTION) {
+                    // Find a Just Say No card in cached hand
+                    JsonObject jsnCard = null;
+                    synchronized (cachedHandCards) {
+                        for (JsonObject card : cachedHandCards) {
+                            String name = card.has("cardName") ? card.get("cardName").getAsString() : "";
+                            if (name.contains("Just Say No")) {
+                                jsnCard = card;
+                                break;
+                            }
+                        }
+                    }
+                    if (jsnCard != null && jsnCard.has("cardId")) {
+                        JsonObject response = new JsonObject();
+                        response.addProperty("cardId", jsnCard.get("cardId").getAsString());
+                        client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO, response.toString());
+                    } else {
+                        // No Just Say No card available — auto pass
+                        client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                    }
+                } else {
+                    // Player chose not to use Just Say No
+                    client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                }
+            } catch (Exception e) {
+                System.err.println("Error handling reaction: " + e.getMessage());
+            }
         });
     }
 
