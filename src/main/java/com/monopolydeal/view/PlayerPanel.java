@@ -53,24 +53,24 @@ public class PlayerPanel extends JPanel {
         leftPanel.setOpaque(false);
         leftPanel.setPreferredSize(new Dimension(180, 0));
 
-        nicknameLabel = new JLabel("玩家");
+        nicknameLabel = new JLabel("Player");
         nicknameLabel.setForeground(Color.WHITE);
-        nicknameLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 15));
+        nicknameLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
 
         statusLabel = new JLabel("");
-        statusLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 10));
+        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
 
-        bankTotalLabel = new JLabel("银行: 0M");
+        bankTotalLabel = new JLabel("Bank: 0M");
         bankTotalLabel.setForeground(new Color(255, 215, 0));
-        bankTotalLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 13));
+        bankTotalLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-        setsLabel = new JLabel("组合: 0");
+        setsLabel = new JLabel("Sets: 0");
         setsLabel.setForeground(new Color(100, 255, 100));
-        setsLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
+        setsLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
 
-        handCountLabel = new JLabel("手牌: 0 张");
+        handCountLabel = new JLabel("Hand: 0 cards");
         handCountLabel.setForeground(new Color(180, 180, 180));
-        handCountLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
+        handCountLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
 
         leftPanel.add(nicknameLabel);
         leftPanel.add(Box.createVerticalStrut(2));
@@ -87,12 +87,12 @@ public class PlayerPanel extends JPanel {
 
     private void createPropertyArea() {
         propertyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        propertyPanel.setOpaque(false); // 设为透明，以便透出底部的绿色毡布背景
-        add(propertyPanel, BorderLayout.CENTER); // 将卡牌堆放区添加到布局中央
+        propertyPanel.setOpaque(false); // Transparent to reveal green felt background beneath
+        add(propertyPanel, BorderLayout.CENTER); // Add card pile area to center of layout
     }
 
     public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
-        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "玩家";
+        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "Player";
         boolean isActive = data.has("isActive") && data.get("isActive").getAsBoolean();
         boolean connected = !data.has("connected") || data.get("connected").getAsBoolean();
         int bankTotal = data.has("bankTotal") ? data.get("bankTotal").getAsInt() : 0;
@@ -102,19 +102,19 @@ public class PlayerPanel extends JPanel {
         nicknameLabel.setText(nickname);
 
         if (!connected) {
-            statusLabel.setText("已断线");
+            statusLabel.setText("Disconnected");
             statusLabel.setForeground(Color.RED);
         } else if (isActive) {
-            statusLabel.setText("当前回合");
+            statusLabel.setText("Current Turn");
             statusLabel.setForeground(new Color(255, 215, 0));
         } else {
-            statusLabel.setText("等待中");
+            statusLabel.setText("Waiting");
             statusLabel.setForeground(new Color(150, 150, 150));
         }
 
-        bankTotalLabel.setText("银行: " + bankTotal + "M");
-        setsLabel.setText("组合: " + completeSets + "/3");
-        handCountLabel.setText("手牌: " + handCount + " 张");
+        bankTotalLabel.setText("Bank: " + bankTotal + "M");
+        setsLabel.setText("Sets: " + completeSets + "/3");
+        handCountLabel.setText("Hand: " + handCount + " cards");
 
         if (isActive) {
             setBorder(BorderFactory.createCompoundBorder(
@@ -167,7 +167,7 @@ public class PlayerPanel extends JPanel {
                     }
                     if (count > 0) {
                         g2.setColor(Color.WHITE);
-                        g2.setFont(new Font("Microsoft YaHei", Font.BOLD, 9));
+                        g2.setFont(new Font("Segoe UI", Font.BOLD, 9));
                         FontMetrics fm = g2.getFontMetrics();
                         String text = count + "";
                         int maxOffset = (count - 1) * 3;
@@ -178,7 +178,7 @@ public class PlayerPanel extends JPanel {
             };
             pilePanel.setOpaque(false);
             pilePanel.setPreferredSize(new Dimension(50, 64));
-            pilePanel.setToolTipText(colorName + ": " + count + "张");
+            pilePanel.setToolTipText(colorName + ": " + count + " cards");
             propertyPanel.add(pilePanel);
         }
 
