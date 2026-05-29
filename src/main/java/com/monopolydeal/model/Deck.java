@@ -101,7 +101,7 @@ public class Deck {
         int total = drawPile.size();
         if (total != 106) {
             throw new IllegalStateException(
-                "牌组初始化错误：期望106张，实际生成了" + total + "张");
+                "Deck init error: expected 106, generated " + total);
         }
     }
 

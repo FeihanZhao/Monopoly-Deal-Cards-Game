@@ -142,9 +142,9 @@ public class MainFrame extends JFrame {
         try {
             JsonObject result = JsonParser.parseString(payload).getAsJsonObject();
             String winnerNickname = result.get("winnerNickname").getAsString();
-            JOptionPane.showMessageDialog(this, "游戏结束！\n获胜者：" + winnerNickname);
+            JOptionPane.showMessageDialog(this, "Game Over!\nWinner: " + winnerNickname);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "游戏结束！");
+            JOptionPane.showMessageDialog(this, "Game Over!");
         }
         cardLayout.show(mainPanel, "LOBBY");  // 返回大厅
     }
@@ -157,10 +157,10 @@ public class MainFrame extends JFrame {
         try {
             JsonObject error = JsonParser.parseString(payload).getAsJsonObject();
             String errorMessage = error.has("message") ?
-                    error.get("message").getAsString() : "未知错误";
-            JOptionPane.showMessageDialog(this, errorMessage, "错误", JOptionPane.ERROR_MESSAGE);
+                    error.get("message").getAsString() : "Unknown error";
+            JOptionPane.showMessageDialog(this, errorMessage, "Error", JOptionPane.ERROR_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "发生了一个错误", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "An error occurred", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 }

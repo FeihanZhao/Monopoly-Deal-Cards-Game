@@ -203,12 +203,12 @@ public class TimerBarPanel extends JPanel {
             textFont  = new Font("SansSerif", Font.BOLD, 13);
         } else if (secondsRemaining <= 10) {
             // 紧急：红色大字（脉冲效果）
-            label     = secondsRemaining + "秒";
+            label     = secondsRemaining + "s";
             textColor = TEXT_URGENT;
             textFont  = new Font("SansSerif", Font.BOLD, 15);
         } else {
             // 正常：白色普通字
-            label     = secondsRemaining + "秒";
+            label     = secondsRemaining + "s";
             textColor = TEXT_NORMAL;
             textFont  = new Font("SansSerif", Font.BOLD, 13);
         }

@@ -76,8 +76,8 @@ public class MonopolyDealApplication {
             } catch (Exception e) {
                 logger.error("连接服务器失败", e);
                 JOptionPane.showMessageDialog(null,
-                        "连接服务器失败：" + e.getMessage(),
-                        "连接错误", JOptionPane.ERROR_MESSAGE);
+                        "Connection failed: " + e.getMessage(),
+                        "Connection Error", JOptionPane.ERROR_MESSAGE);
             }
         });
     }

@@ -235,9 +235,9 @@ public class CardSelectionBar extends JPanel {
         actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         actionRow.setOpaque(false);
 
-        confirmButton = makeButton(" 打出",   BTN_CONFIRM);
-        bankButton    = makeButton(" 银行",   BTN_BANK);
-        cancelButton  = makeButton(" 取消",   BTN_CANCEL);
+        confirmButton = makeButton(" Play",   BTN_CONFIRM);
+        bankButton    = makeButton(" Bank",   BTN_BANK);
+        cancelButton  = makeButton(" Cancel",   BTN_CANCEL);
 
         confirmButton.addActionListener(e -> onConfirm());
         bankButton   .addActionListener(e -> onBank());
@@ -252,7 +252,7 @@ public class CardSelectionBar extends JPanel {
         targetRow.setOpaque(false);
         targetRow.setVisible(false);
 
-        JLabel targetLabel = new JLabel("目标: ");
+        JLabel targetLabel = new JLabel("Target: ");
         targetLabel.setForeground(TEXT_MUTED);
         targetLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         targetRow.add(targetLabel);
@@ -323,13 +323,13 @@ public class CardSelectionBar extends JPanel {
                 bankButton.setVisible(true);
                 break;
             case "PROPERTY":
-                confirmButton.setText(" 放置");     // 地产卡可以放置到物业区
+                confirmButton.setText(" Place");     // property card can be placed
                 confirmButton.setVisible(true);
                 bankButton.setVisible(true);
                 break;
             case "ACTION":
             case "RENT":
-                confirmButton.setText(" 打出");
+                confirmButton.setText(" Play");
                 confirmButton.setVisible(true);
                 bankButton.setVisible(true);
                 break;
@@ -410,7 +410,7 @@ public class CardSelectionBar extends JPanel {
 
         // 验证：严格目标卡牌必须选择目标
         if (isStrictTargetRequired(selectedCardName) && selectedTargetId == null) {
-            cardNameLabel.setText("请先选择目标");
+            cardNameLabel.setText("Select a target first");
             cardNameLabel.setForeground(new Color(255, 100, 100));
             javax.swing.Timer reset = new javax.swing.Timer(1200, e -> {
                 cardNameLabel.setText(selectedCardName);

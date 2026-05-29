@@ -134,7 +134,7 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             System.err.println("处理消息时出错：" + e.getMessage());
             e.printStackTrace();
-            sendError("内部服务器错误：" + e.getMessage());
+            sendError("Internal server error: " + e.getMessage());
         }
     }
 
@@ -142,7 +142,7 @@ public class ClientHandler implements Runnable {
     private void handleCreateRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
-            sendError("昵称无效：长度需为1-12个字符，不能包含特殊字符");
+            sendError("Invalid nickname: 1-12 characters, no special characters");
             return;
         }
         this.nickname = rawNickname.trim();
@@ -157,7 +157,7 @@ public class ClientHandler implements Runnable {
     private void handleJoinRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
-            sendError("昵称无效：长度需为1-12个字符，不能包含特殊字符");
+            sendError("Invalid nickname: 1-12 characters, no special characters");
             return;
         }
         this.nickname = rawNickname.trim();
@@ -165,12 +165,12 @@ public class ClientHandler implements Runnable {
         GameRoom room = server.getRoom(roomCode);
 
         if (room == null) {
-            sendError("未找到该房间");
+            sendError("Room not found");
             return;
         }
 
         if (!room.addPlayer(this)) {
-            sendError("房间已满");
+            sendError("Room is full");
             return;
         }
 

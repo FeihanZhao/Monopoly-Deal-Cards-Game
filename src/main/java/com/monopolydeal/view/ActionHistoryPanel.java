@@ -112,7 +112,7 @@ public class ActionHistoryPanel extends JPanel {
         setBackground(new Color(30, 35, 42));
         setBorder(new TitledBorder(
                 BorderFactory.createLineBorder(new Color(60, 65, 75)),
-                "行动记录",
+                "Action Log",
                 TitledBorder.LEFT,
                 TitledBorder.TOP,
                 new Font("SansSerif", Font.BOLD, 12),
@@ -154,7 +154,7 @@ public class ActionHistoryPanel extends JPanel {
         for (int i = 0; i < actions.size(); i++) {
             JsonObject action = actions.get(i).getAsJsonObject();
             String nickname = action.has("playerNickname")
-                    ? action.get("playerNickname").getAsString() : "未知";
+                    ? action.get("playerNickname").getAsString() : "Unknown";
             String actionType = action.has("actionType")
                     ? action.get("actionType").getAsString() : "";
             String target = action.has("targetPlayer") && !action.get("targetPlayer").isJsonNull()
@@ -205,31 +205,31 @@ public class ActionHistoryPanel extends JPanel {
 
     private String formatAction(String actionType, String target, int amount) {
         switch (actionType) {
-            case "DRAW":          return "抽了牌";
-            case "PLAY_MONEY":    return "打出了金钱卡";
-            case "PLAY_PROPERTY": return "打出了地产卡";
-            case "PLAY_RENT":     return "打出了租金卡";
-            case "PLAY_ACTION":   return "打出了行动卡";
-            case "RENT":          return "向 " + (target.isEmpty() ? "" : target + " ") + "收取了 " + amount + "M 租金";
-            case "RENT_ALL":      return "向所有玩家收取了 " + amount + "M 租金";
-            case "DEBT_COLLECTOR": return "从 " + target + " 收取了 " + amount + "M";
-            case "BIRTHDAY":       return "所有人各支付 " + amount + "M";
-            case "DEAL_BREAKER":   return "偷取了 " + target + " 的完整地产组合";
-            case "PASS_GO":        return "额外抽了2张牌";
-            case "DOUBLE_RENT":    return "下次租金翻倍";
-            case "HOUSE":          return "建造了一栋房屋";
-            case "HOTEL":          return "建造了一座酒店";
-            case "FORCED_DEAL":    return "与 " + target + " 交换了地产卡";
-            case "SLY_DEAL":       return "偷取了 " + target + " 的地产卡";
-            case "JUST_SAY_NO":    return "使用了拒绝卡";
-            case "PAY":            return "支付了 " + amount + "M 给 " + target;
-            case "PARTIAL_PAY":    return "支付了 " + amount + "M（部分）给 " + target;
-            case "DISCARD":        return "弃掉了一张牌";
-            case "END_TURN":       return "回合结束";
-            case "DISCONNECT":     return "断开了连接";
-            case "RECONNECT":      return "重新连接";
-            case "WINNER":         return "赢得了游戏！";
-            case "DRAW_EXTRA":     return "额外抽了2张牌";
+            case "DRAW":          return "drew cards";
+            case "PLAY_MONEY":    return "played money card";
+            case "PLAY_PROPERTY": return "played property card";
+            case "PLAY_RENT":     return "played rent card";
+            case "PLAY_ACTION":   return "played action card";
+            case "RENT":          return "charged " + (target.isEmpty() ? "" : target + " ") + amount + "M rent";
+            case "RENT_ALL":      return "charged all players " + amount + "M rent";
+            case "DEBT_COLLECTOR": return "collected " + amount + "M from " + target;
+            case "BIRTHDAY":       return "everyone pays " + amount + "M";
+            case "DEAL_BREAKER":   return "stole " + target + "'s complete property set";
+            case "PASS_GO":        return "drew 2 extra cards";
+            case "DOUBLE_RENT":    return "next rent is doubled";
+            case "HOUSE":          return "built a house";
+            case "HOTEL":          return "built a hotel";
+            case "FORCED_DEAL":    return "swapped property with " + target;
+            case "SLY_DEAL":       return "stole " + target + "'s property card";
+            case "JUST_SAY_NO":    return "used Just Say No";
+            case "PAY":            return "paid " + amount + "M to " + target;
+            case "PARTIAL_PAY":    return "paid " + amount + "M (partial) to " + target;
+            case "DISCARD":        return "discarded a card";
+            case "END_TURN":       return "ended turn";
+            case "DISCONNECT":     return "disconnected";
+            case "RECONNECT":      return "reconnected";
+            case "WINNER":         return "won the game!";
+            case "DRAW_EXTRA":     return "drew 2 extra cards";
             default:               return actionType;
         }
     }

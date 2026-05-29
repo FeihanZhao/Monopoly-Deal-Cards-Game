@@ -166,16 +166,16 @@ public class GameRoom {
      */
     public String requestStartGame(String clientId) {
         if (!clientId.equals(creator.getClientId())) {
-            return "只有房主可以开始游戏";
+            return "Only the host can start the game";
         }
         if (players.size() < GameConstants.MIN_PLAYERS) {
-            return "至少需要 " + GameConstants.MIN_PLAYERS + " 名玩家";
+            return "At least " + GameConstants.MIN_PLAYERS + " players required";
         }
         if (!allPlayersReady()) {
-            return "还有玩家未准备";
+            return "Not all players are ready";
         }
         if (gameStarted) {
-            return "游戏已经开始";
+            return "Game has already started";
         }
         startGame();
         return null;

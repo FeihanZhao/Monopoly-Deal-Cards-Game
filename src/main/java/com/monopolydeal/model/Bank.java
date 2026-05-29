@@ -42,7 +42,7 @@ public class Bank {
      */
     public void deposit(Card card) {
         if (!card.canBeUsedAsMoney()) {
-            throw new IllegalArgumentException("该卡不能存入银行（面值为0）");
+            throw new IllegalArgumentException("Card cannot be banked (value is 0)");
         }
         int denomination = card.getValue();
         moneyCards.computeIfAbsent(denomination, k -> new ArrayList<>()).add(card);
@@ -86,18 +86,18 @@ public class Bank {
      */
     public List<Card> removeCardsByIds(List<String> cardIds, int amount) {
         if (cardIds == null || cardIds.isEmpty()) {
-            throw new IllegalArgumentException("未选择任何卡牌");
+            throw new IllegalArgumentException("No cards selected");
         }
         // 防止重复卡牌ID攻击：同一张卡不能支付两次
         if (new HashSet<>(cardIds).size() != cardIds.size()) {
-            throw new IllegalArgumentException("存在重复的卡牌ID");
+            throw new IllegalArgumentException("Duplicate card IDs");
         }
 
         List<Card> selected = new ArrayList<>();
         for (String cardId : cardIds) {
             Card card = findCardById(cardId);
             if (card == null) {
-                throw new IllegalArgumentException("卡牌不在银行中: " + cardId);
+                throw new IllegalArgumentException("Card not in bank: " + cardId);
             }
             selected.add(card);
         }
@@ -105,7 +105,7 @@ public class Bank {
         int totalValue = selected.stream().mapToInt(Card::getValue).sum();
         if (totalValue < amount) {
             throw new IllegalArgumentException(
-                "支付金额不足。需要至少 " + amount + "M，但只选择了 " + totalValue + "M");
+                "Insufficient payment. Need at least " + amount + "M, but only selected " + totalValue + "M");
         }
 
         for (Card card : selected) {
@@ -128,8 +128,8 @@ public class Bank {
      */
     public List<Card> removeCardsFallback(int amount) throws InsufficientFundsException {
         if (getTotal() < amount) {
-            throw new InsufficientFundsException("余额不足。需要 " + amount +
-                    "M，但只有 " + getTotal() + "M");
+            throw new InsufficientFundsException("Insufficient balance. Need " + amount +
+                    "M, but only have " + getTotal() + "M");
         }
 
         List<Card> sorted = new ArrayList<>(allMoneyCards);

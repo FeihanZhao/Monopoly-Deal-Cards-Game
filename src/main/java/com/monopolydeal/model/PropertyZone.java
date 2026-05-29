@@ -52,7 +52,7 @@ public class PropertyZone {
      */
     public void addProperty(Card propertyCard) {
         if (!propertyCard.isPropertyCard()) {
-            throw new IllegalArgumentException("只有地产卡可以添加到物业区");
+            throw new IllegalArgumentException("Only property cards can be added to property zone");
         }
         CardColor effectiveColor = propertyCard.getEffectiveColor();
         // 如果该颜色分组尚不存在（万能地产卡选了之前没有的颜色），动态创建
@@ -157,7 +157,7 @@ public class PropertyZone {
      */
     public void addHouse(CardColor color) {
         if (!canPlaceHouse(color)) {
-            throw new IllegalStateException("无法在 " + color.getName() + " 上建造房屋");
+            throw new IllegalStateException("Cannot build house on " + color.getName());
         }
         houseCount.merge(color, 1, Integer::sum);
     }
@@ -186,7 +186,7 @@ public class PropertyZone {
      */
     public void addHotel(CardColor color) {
         if (!canPlaceHotel(color)) {
-            throw new IllegalStateException("无法在 " + color.getName() + " 上建造酒店");
+            throw new IllegalStateException("Cannot build hotel on " + color.getName());
         }
         houseCount.put(color, 0);  // 官方规则：Hotel 替代 House，House 被弃掉
         hasHotel.put(color, true);

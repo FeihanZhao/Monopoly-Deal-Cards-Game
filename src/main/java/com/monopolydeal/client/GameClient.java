@@ -145,11 +145,11 @@ public class GameClient {
             } catch (Exception e) {
                 System.err.println("连接服务器失败：" + e.getMessage());
                 JOptionPane.showMessageDialog(null,
-                        "无法连接到服务器 " +
+                        "Unable to connect to server " +
                                 (args.length > 0 ? args[0] : "localhost") + ":" +
                                 GameConstants.SERVER_PORT +
-                                "\n请确保服务器已启动。",
-                        "连接错误",
+                                "\nPlease ensure the server is running.",
+                        "Connection Error",
                         JOptionPane.ERROR_MESSAGE);
             }
         });

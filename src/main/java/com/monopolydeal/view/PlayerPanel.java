@@ -72,7 +72,7 @@ public class PlayerPanel extends JPanel {
         leftPanel.setPreferredSize(new Dimension(180, 0));
 
         // 昵称（白色加粗）
-        nicknameLabel = new JLabel("玩家");
+        nicknameLabel = new JLabel("Player");
         nicknameLabel.setForeground(Color.WHITE);
         nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
 
@@ -81,17 +81,17 @@ public class PlayerPanel extends JPanel {
         statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
 
         // 银行余额（金色）
-        bankTotalLabel = new JLabel("银行: 0M");
+        bankTotalLabel = new JLabel("Bank: 0M");
         bankTotalLabel.setForeground(new Color(255, 215, 0));
         bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
         // 完整组合数（绿色）
-        setsLabel = new JLabel("组合: 0");
+        setsLabel = new JLabel("Sets: 0");
         setsLabel.setForeground(new Color(100, 255, 100));
         setsLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
 
         // 手牌数量（灰色）
-        handCountLabel = new JLabel("手牌: 0 张");
+        handCountLabel = new JLabel("Hand: 0 cards");
         handCountLabel.setForeground(new Color(180, 180, 180));
         handCountLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
 
@@ -125,7 +125,7 @@ public class PlayerPanel extends JPanel {
      */
     public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
         // 解析JSON字段
-        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "玩家";
+        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "Player";
         boolean isActive = data.has("isActive") && data.get("isActive").getAsBoolean();
         boolean connected = !data.has("connected") || data.get("connected").getAsBoolean();
         int bankTotal = data.has("bankTotal") ? data.get("bankTotal").getAsInt() : 0;
@@ -137,19 +137,19 @@ public class PlayerPanel extends JPanel {
 
         // 状态指示器
         if (!connected) {
-            statusLabel.setText("已断线");
+            statusLabel.setText("Disconnected");
             statusLabel.setForeground(Color.RED);
         } else if (isActive) {
-            statusLabel.setText("当前回合");
+            statusLabel.setText("Active");
             statusLabel.setForeground(new Color(255, 215, 0));  // 金色
         } else {
-            statusLabel.setText("等待中");
+            statusLabel.setText("Waiting");
             statusLabel.setForeground(new Color(150, 150, 150));
         }
 
-        bankTotalLabel.setText("银行: " + bankTotal + "M");
-        setsLabel.setText("组合: " + completeSets + "/3");
-        handCountLabel.setText("手牌: " + handCount + " 张");
+        bankTotalLabel.setText("Bank: " + bankTotal + "M");
+        setsLabel.setText("Sets: " + completeSets + "/3");
+        handCountLabel.setText("Hand: " + handCount + " cards");
 
         // 活跃玩家左侧金色高亮边框
         if (isActive) {
@@ -236,7 +236,7 @@ public class PlayerPanel extends JPanel {
             };
             pilePanel.setOpaque(false);
             pilePanel.setPreferredSize(new Dimension(50, 64));
-            pilePanel.setToolTipText(colorName + ": " + count + "张");  // 鼠标悬停提示
+            pilePanel.setToolTipText(colorName + ": " + count + " cards");  // tooltip
             propertyPanel.add(pilePanel);
         }
 

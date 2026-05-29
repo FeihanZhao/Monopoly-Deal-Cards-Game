@@ -147,7 +147,7 @@ public class GameSession {
         List<Card> drawnCards = deck.drawMultiple(drawCount);
         drawnCards.forEach(activePlayer::addCardToHand);
         recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW", "", 0,
-                "抽了 " + drawnCards.size() + " 张牌");
+                "drew " + drawnCards.size() + " cards");
 
         phase = GamePhase.PLAY;
         broadcastGameState();
@@ -166,7 +166,7 @@ public class GameSession {
                     "{\"secondsRemaining\":" + GameConstants.TIMEOUT_WARNING_SECONDS + "}");
             turnTimerWarning = scheduler.schedule(() -> {
                 room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT,
-                        "{\"playerId\":\"" + activePlayer.getId() + "\",\"reason\":\"回合超时\"}");
+                        "{\"playerId\":\"" + activePlayer.getId() + "\",\"reason\":\"Turn timeout\"}");
                 forceEndTurn();
             }, GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
         }, GameConstants.TURN_TIMEOUT_SECONDS - GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
@@ -199,11 +199,11 @@ public class GameSession {
         if (!gameRunning || activePlayer == null) return;
         if (!playerId.equals(activePlayer.getId())) return;
         if (phase != GamePhase.PLAY) {
-            sendError(playerId, "当前阶段不允许出牌");
+            sendError(playerId, "Cannot play cards in the current phase");
             return;
         }
         if (!activePlayer.canPlay()) {
-            sendError(playerId, "本回合已无出牌次数");
+            sendError(playerId, "No remaining plays this turn");
             return;
         }
 
@@ -212,7 +212,7 @@ public class GameSession {
         Card card = activePlayer.findCardById(cardId);
 
         if (card == null) {
-            sendError(playerId, "手牌中未找到该卡牌");
+            sendError(playerId, "Card not found in hand");
             return;
         }
 
@@ -232,7 +232,7 @@ public class GameSession {
                     played = playActionCard(card, payload);  // 执行行动
                     break;
                 default:
-                    sendError(playerId, "未知的操作：" + action);
+                    sendError(playerId, "Unknown action: " + action);
                     return;
             }
 
@@ -351,7 +351,7 @@ public class GameSession {
             // 没有对应颜色的地产时拒绝出牌
             if (baseRentAmount == 0) {
                 sendError(activePlayer.getId(),
-                    "你没有对应颜色的地产，无法收取租金");
+                    "You don't have matching property color to charge rent");
                 return false;
             }
         }
@@ -651,7 +651,7 @@ public class GameSession {
         thief.getPropertyZone().addProperty(stolenCard);
 
         recordAction(thief.getId(), thief.getNickname(), "SLY_DEAL",
-                victim.getNickname(), 0, "偷取了 " + stolenCard.getName());
+                victim.getNickname(), 0, "stole " + stolenCard.getName());
     }
 
     /** 在玩家的物业区中根据ID查找地产卡 */
@@ -736,7 +736,7 @@ public class GameSession {
         // 超时视为放弃
         recordAction(responderId, findPlayer(responderId) != null ?
                 findPlayer(responderId).getNickname() : "",
-                "PASS_REACTION", "", 0, "超时未响应");
+                "PASS_REACTION", "", 0, "reaction timeout");
 
         resolveTopResolution();
     }
@@ -744,18 +744,18 @@ public class GameSession {
     /** 处理玩家打出 Just Say No */
     public synchronized void handlePlayJustSayNo(String playerId, JsonObject payload) {
         if (phase != GamePhase.WAITING_FOR_REACTION) {
-            sendError(playerId, "当前阶段不允许打出 Just Say No");
+            sendError(playerId, "Cannot play Just Say No in the current phase");
             return;
         }
         if (resolutionStack.isEmpty()) {
-            sendError(playerId, "当前没有待响应的行动");
+            sendError(playerId, "No pending action to react to");
             return;
         }
 
         ResolutionItem currentTop = resolutionStack.peek();
         // 校验：必须是当前响应人在操作
         if (!playerId.equals(currentTop.getResponderId())) {
-            sendError(playerId, "当前不需要你响应");
+            sendError(playerId, "You are not the current responder");
             return;
         }
 
@@ -766,7 +766,7 @@ public class GameSession {
 
         Card jsnCard = responder.findCardById(cardId);
         if (jsnCard == null || !jsnCard.getName().contains("Just Say No")) {
-            sendError(playerId, "手牌中未找到 Just Say No 卡");
+            sendError(playerId, "Just Say No card not found in hand");
             return;
         }
 
@@ -785,27 +785,27 @@ public class GameSession {
         recordAction(playerId, responder.getNickname(), "JUST_SAY_NO",
                 findPlayer(newResponderId) != null ?
                         findPlayer(newResponderId).getNickname() : "",
-                0, "打出 Just Say No 拒绝 " + currentTop.getActionType());
+                0, "played Just Say No to counter " + currentTop.getActionType());
         broadcastGameState();
     }
 
     /** 处理玩家放弃响应（不打 Just Say No） */
     public synchronized void handlePassReaction(String playerId) {
         if (resolutionStack.isEmpty()) {
-            sendError(playerId, "当前没有待响应的行动");
+            sendError(playerId, "No pending action to react to");
             return;
         }
 
         ResolutionItem top = resolutionStack.peek();
         if (!playerId.equals(top.getResponderId())) {
-            sendError(playerId, "当前不需要你响应");
+            sendError(playerId, "You are not the current responder");
             return;
         }
 
         cancelReactionTimeout();
         recordAction(playerId, findPlayer(playerId) != null ?
                 findPlayer(playerId).getNickname() : "",
-                "PASS_REACTION", "", 0, "放弃响应 " + top.getActionType());
+                "PASS_REACTION", "", 0, "passed on " + top.getActionType());
 
         resolveTopResolution();
     }
@@ -832,7 +832,7 @@ public class GameSession {
                         findPlayer(resolved.getInitiatorId()) != null ?
                                 findPlayer(resolved.getInitiatorId()).getNickname() : "",
                         "ACTION_CANCELLED", "",
-                        0, cancelled.getActionType() + " 被 Just Say No 取消");
+                        0, cancelled.getActionType() + " cancelled by Just Say No");
                 // 多目标：被 JSN 取消的只是当前玩家的义务，继续处理下一个目标
                 if (continueMultiTargetResolution(cancelled)) return;
             }
@@ -966,7 +966,7 @@ public class GameSession {
             recordAction(initiator.getId(), initiator.getNickname(),
                     "DEBT_COLLECTOR", target.getNickname(),
                     GameConstants.DEBT_COLLECTOR_AMOUNT,
-                    "收取 " + GameConstants.DEBT_COLLECTOR_AMOUNT + "M");
+                    "collecting " + GameConstants.DEBT_COLLECTOR_AMOUNT + "M");
         }
     }
 
@@ -980,7 +980,7 @@ public class GameSession {
             requirePayment(target, initiator, amount);
             recordAction(initiator.getId(), initiator.getNickname(),
                     "BIRTHDAY", target.getNickname(), amount,
-                    target.getNickname() + " 支付 " + amount + "M");
+                    target.getNickname() + " pays " + amount + "M");
         }
     }
 
@@ -1025,7 +1025,7 @@ public class GameSession {
             requirePayment(targetPlayer, initiator, rentAmount);
             recordAction(initiator.getId(), initiator.getNickname(), "RENT",
                     targetPlayer.getNickname(), rentAmount,
-                    "向 " + targetPlayer.getNickname() + " 收取租金 " + rentAmount + "M");
+                    "charged " + targetPlayer.getNickname() + " rent " + rentAmount + "M");
         }
     }
 
@@ -1061,7 +1061,7 @@ public class GameSession {
         }
         recordAction(initiator.getId(), initiator.getNickname(),
                 "DEAL_BREAKER", target.getNickname(), 0,
-                "偷取了完整组合：" + setToSteal.getName());
+                "stole complete set: " + setToSteal.getName());
         // 检查是否因此获胜
         if (initiator.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
             endGame(initiator);
@@ -1084,7 +1084,7 @@ public class GameSession {
             if (stolenCard.isWildProperty()) stolenCard.setWildColor(null);
             initiator.getPropertyZone().addProperty(stolenCard);
             recordAction(initiator.getId(), initiator.getNickname(), "SLY_DEAL",
-                    target.getNickname(), 0, "偷取了 " + stolenCard.getName());
+                    target.getNickname(), 0, "stole " + stolenCard.getName());
         }
     }
 
@@ -1139,7 +1139,7 @@ public class GameSession {
     private void requirePayment(Player debtor, Player creditor, int amount) {
         if (debtor.getBank().getTotal() == 0) {
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_SKIPPED",
-                    creditor.getNickname(), amount, "余额为零，无需支付");
+                    creditor.getNickname(), amount, "zero balance, no payment needed");
             broadcastGameState();
             return;
         }
@@ -1203,7 +1203,7 @@ public class GameSession {
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                     creditor.getNickname(), actualPaid,
-                    "超时自动支付 " + actualPaid + "M");
+                    "auto-paid on timeout " + actualPaid + "M");
         } catch (Bank.InsufficientFundsException ignored) {}
 
         clearPendingPayment();
@@ -1216,11 +1216,11 @@ public class GameSession {
      */
     public synchronized void handleSubmitPayment(String playerId, JsonObject payload) {
         if (phase != GamePhase.WAITING_FOR_PAYMENT) {
-            sendError(playerId, "当前阶段不允许支付");
+            sendError(playerId, "Cannot pay in the current phase");
             return;
         }
         if (!playerId.equals(pendingPaymentDebtorId)) {
-            sendError(playerId, "当前没有待处理的支付请求");
+            sendError(playerId, "No pending payment request");
             return;
         }
 
@@ -1245,7 +1245,7 @@ public class GameSession {
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_MADE",
                     creditor.getNickname(), totalPaid,
-                    "支付了 " + totalPaid + "M (需付 " + pendingPaymentAmount + "M)");
+                    "paid " + totalPaid + "M (required " + pendingPaymentAmount + "M)");
         } catch (IllegalArgumentException e) {
             sendError(playerId, e.getMessage());
             return;
@@ -1305,11 +1305,11 @@ public class GameSession {
         if (activePlayer == null || !playerId.equals(activePlayer.getId())) return;
 
         if (phase == GamePhase.WAITING_FOR_PAYMENT || phase == GamePhase.WAITING_FOR_REACTION) {
-            sendError(playerId, "请等待当前操作完成后再结束回合");
+            sendError(playerId, "Please wait for current action to finish before ending turn");
             return;
         }
         if (phase == GamePhase.DISCARD) {
-            sendError(playerId, "请在弃牌完成后等待自动结束回合");
+            sendError(playerId, "Please wait for discard to complete, turn will end automatically");
             return;
         }
 
@@ -1339,7 +1339,7 @@ public class GameSession {
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
                             payment.stream().mapToInt(Card::getValue).sum(),
-                            "回合结束自动支付 " + actualAmount + "M");
+                            "auto-paid at end of turn " + actualAmount + "M");
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
@@ -1360,7 +1360,7 @@ public class GameSession {
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
                             payment.stream().mapToInt(Card::getValue).sum(),
-                            "回合结束自动支付 " + actualAmount + "M");
+                            "auto-paid at end of turn " + actualAmount + "M");
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
@@ -1394,7 +1394,7 @@ public class GameSession {
                         findPlayer(item.getInitiatorId()) != null ?
                                 findPlayer(item.getInitiatorId()).getNickname() : "",
                         "ACTION_EXPIRED", "", 0,
-                        item.getActionType() + " 因回合结束失效");
+                        item.getActionType() + " expired (turn ended)");
             }
         }
 
@@ -1451,7 +1451,7 @@ public class GameSession {
                         Card discarded = activePlayer.removeCardFromHand(0);
                         deck.discard(discarded);
                         recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                                "DISCARD_TIMEOUT", "", 0, "超时自动弃掉了 " + discarded.getName());
+                                "DISCARD_TIMEOUT", "", 0, "auto-discarded on timeout " + discarded.getName());
                     }
                     finalizeEndTurn();
                 }
@@ -1465,11 +1465,11 @@ public class GameSession {
      */
     public synchronized void handleSubmitDiscard(String playerId, JsonObject payload) {
         if (activePlayer == null || !playerId.equals(activePlayer.getId())) {
-            sendError(playerId, "不是你的回合");
+            sendError(playerId, "Not your turn");
             return;
         }
         if (phase != GamePhase.DISCARD) {
-            sendError(playerId, "当前不在弃牌阶段");
+            sendError(playerId, "Not in discard phase");
             return;
         }
 
@@ -1495,7 +1495,7 @@ public class GameSession {
             activePlayer.removeCardFromHand(card);
             deck.discard(card);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "弃掉了 " + card.getName());
+                    "DISCARD", "", 0, "discarded " + card.getName());
         }
 
         // 兜底：如果还不够，自动从手牌开头补齐弃牌（防止客户端作弊少选）
@@ -1503,7 +1503,7 @@ public class GameSession {
             Card discarded = activePlayer.removeCardFromHand(0);
             deck.discard(discarded);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "弃掉了 " + discarded.getName());
+                    "DISCARD", "", 0, "discarded " + discarded.getName());
         }
 
         finalizeEndTurn();
@@ -1521,7 +1521,7 @@ public class GameSession {
         if (activePlayer != null) {
             activePlayer.setActivePlayer(false);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "END_TURN", "", 0, "回合结束");
+                    "END_TURN", "", 0, "turn ended");
         }
         phase = GamePhase.END;
         broadcastGameState();
@@ -1549,7 +1549,7 @@ public class GameSession {
         result.addProperty("gameDuration", getGameDuration());
         result.addProperty("completeSets", winner.getCompleteSetsCount());
 
-        recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "赢得了游戏！");
+        recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "won the game!");
         broadcastGameState();
         room.broadcast(MessageProtocol.MessageType.GAME_OVER, result.toString());
     }
@@ -1570,27 +1570,27 @@ public class GameSession {
         try {
             CardColor color = CardColor.valueOf(newColor);
             if (!color.isPropertyColor()) {
-                sendError(playerId, "无效的地产颜色: " + newColor);
+                sendError(playerId, "Invalid property color: " + newColor);
                 return;
             }
 
             boolean ok = player.getPropertyZone().changeWildCardColor(cardId, color);
             if (!ok) {
                 sendError(playerId,
-                    "变色失败：万能卡不存在、该卡不支持此颜色，"
-                    + "或原地产组建有房屋/酒店无法移走");
+                    "Color change failed: card not found, color not supported,"
+                    + " or set has house/hotel");
                 return;
             }
 
             recordAction(playerId, player.getNickname(), "FLIP_WILD", "", 0,
-                    "切换万能地产为 " + color.getName());
+                    "flipped wild property to " + color.getName());
             broadcastGameState();
 
             if (player.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
                 endGame(player);
             }
         } catch (IllegalArgumentException e) {
-            sendError(playerId, "无效的颜色名称: " + newColor);
+            sendError(playerId, "Invalid color name: " + newColor);
         }
     }
 
@@ -1605,7 +1605,7 @@ public class GameSession {
 
         disconnected.setConnected(false);
         disconnected.setReady(false);
-        recordAction(clientId, disconnected.getNickname(), "DISCONNECT", "", 0, "玩家断线");
+        recordAction(clientId, disconnected.getNickname(), "DISCONNECT", "", 0, "Player disconnected");
 
         broadcastGameState();
 
@@ -1619,7 +1619,7 @@ public class GameSession {
                 paymentTimeoutTask.cancel(false);
             }
             JsonObject drawResult = new JsonObject();
-            drawResult.addProperty("reason", "在线玩家不足");
+            drawResult.addProperty("reason", "Insufficient online players");
             drawResult.addProperty("connectedPlayers", connectedPlayers);
             room.broadcast(MessageProtocol.MessageType.GAME_DRAW, drawResult.toString());
         } else if (activePlayer != null && clientId.equals(activePlayer.getId())) {

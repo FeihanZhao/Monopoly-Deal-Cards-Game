@@ -149,12 +149,12 @@ public class GamePanel extends JPanel {
         leftPanel.setOpaque(false);
 
         // 游戏阶段标签（金色）
-        phaseLabel = new JLabel("阶段: 等待中");
+        phaseLabel = new JLabel("Phase: Waiting");
         phaseLabel.setForeground(GOLD);
         phaseLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
         // 当前回合标签（白色）
-        turnLabel = new JLabel("当前回合: -");
+        turnLabel = new JLabel("Turn: -");
         turnLabel.setForeground(Color.WHITE);
         turnLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
 
@@ -166,14 +166,14 @@ public class GamePanel extends JPanel {
         rightPanel.setOpaque(false);
 
         // 抽牌堆数量标签
-        drawPileLabel = new JLabel("牌堆: 0");
+        drawPileLabel = new JLabel("Deck: 0");
         drawPileLabel.setForeground(TEXT_LIGHT);
         drawPileLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
         timerBarPanel = new TimerBarPanel(30);
 
         // 结束回合按钮（红色圆角，带按压和悬停效果）
-        endTurnButton = new JButton("结束回合") {
+        endTurnButton = new JButton("End Turn") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -191,7 +191,7 @@ public class GamePanel extends JPanel {
                 g2.setColor(new Color(255, 255, 255, 200));
                 g2.setFont(new Font("SansSerif", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
-                g2.drawString("结束回合", (getWidth() - fm.stringWidth("结束回合")) / 2,
+                g2.drawString("End Turn", (getWidth() - fm.stringWidth("End Turn")) / 2,
                         (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
                 g2.dispose();
             }
@@ -276,7 +276,7 @@ public class GamePanel extends JPanel {
         handPanel.setPreferredSize(new Dimension(0, 210));
 
         // "你的手牌"标签
-        JLabel handLabel = new JLabel("你的手牌");
+        JLabel handLabel = new JLabel("Your Hand");
         handLabel.setForeground(GOLD);
         handLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         handPanel.add(handLabel, BorderLayout.NORTH);
@@ -326,14 +326,14 @@ public class GamePanel extends JPanel {
                 }
 
                 // 更新阶段和牌堆信息
-                String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "未知";
-                phaseLabel.setText("阶段: " + phase.toUpperCase());
+                String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "Unknown";
+                phaseLabel.setText("Phase: " + phase.toUpperCase());
 
                 String activePlayerId = gameState.has("activePlayerId") ?
                         gameState.get("activePlayerId").getAsString() : "";
                 int drawPileSize = gameState.has("drawPileSize") ?
                         gameState.get("drawPileSize").getAsInt() : 0;
-                drawPileLabel.setText("牌堆: " + drawPileSize);
+                drawPileLabel.setText("Deck: " + drawPileSize);
 
                 // 更新所有玩家面板
                 JsonObject playerStates = gameState.has("playerStates") ?
@@ -372,15 +372,15 @@ public class GamePanel extends JPanel {
                 String cardName = req.has("cardName") ? req.get("cardName").getAsString() : "";
                 int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 5;
 
-                String msg = initiatorName + " 对你使用了 " + cardName + "（" + actionType + "）！\n是否打出 Just Say No？";
-                String[] options = new String[]{"打出 Just Say No", "放弃"};
+                String msg = initiatorName + " used " + cardName + " (" + actionType + ") on you!\nPlay Just Say No?";
+                String[] options = new String[]{"Play Just Say No", "Pass"};
 
                 // 模态对话框 + 独立线程超时定时器
                 // 关键：保持模态（不调用 setModal(false)），setVisible 会阻塞 EDT 等待用户操作
                 // 使用 java.util.Timer（非 EDT 线程）在超时时 dispose 对话框解除阻塞
                 JOptionPane pane = new JOptionPane(msg, JOptionPane.QUESTION_MESSAGE,
                         JOptionPane.YES_NO_OPTION, null, options, options[1]);
-                JDialog dialog = pane.createDialog(GamePanel.this, "响应行动");
+                JDialog dialog = pane.createDialog(GamePanel.this, "React");
 
                 java.util.Timer timeoutTimer = new java.util.Timer();
                 timeoutTimer.schedule(new java.util.TimerTask() {
@@ -409,7 +409,7 @@ public class GamePanel extends JPanel {
                                 jsnPayload.toString());
                     } else {
                         JOptionPane.showMessageDialog(GamePanel.this,
-                                "你没有 Just Say No 卡牌！", "提示", JOptionPane.WARNING_MESSAGE);
+                                "You don't have a Just Say No card!", "Notice", JOptionPane.WARNING_MESSAGE);
                         client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
                     }
                 }
@@ -454,7 +454,7 @@ public class GamePanel extends JPanel {
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
                     JsonObject c = bankCardsArr.get(i).getAsJsonObject();
-                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "卡牌";
+                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "Card";
                     int value = c.has("value") ? c.get("value").getAsInt() : 0;
                     cardDescriptions[i] = name + " (" + value + "M)";
                 }
@@ -466,10 +466,10 @@ public class GamePanel extends JPanel {
                 JScrollPane scrollPane = new JScrollPane(cardList);
 
                 JPanel panel = new JPanel(new BorderLayout(0, 10));
-                panel.add(new JLabel("需支付 " + creditorName + " " + amount + "M，请选择要支付的卡牌："),
+                panel.add(new JLabel("Pay " + creditorName + " " + amount + "M. Select cards to pay:"),
                         BorderLayout.NORTH);
                 panel.add(scrollPane, BorderLayout.CENTER);
-                JLabel totalLabel = new JLabel("已选: 0 M / 需支付: " + amount + " M");
+                JLabel totalLabel = new JLabel("Selected: 0 M / Required: " + amount + " M");
                 panel.add(totalLabel, BorderLayout.SOUTH);
 
                 // 监听选择变化，实时显示已选总额
@@ -480,11 +480,11 @@ public class GamePanel extends JPanel {
                         JsonObject c = bankCardsArr.get(idx).getAsJsonObject();
                         total += c.has("value") ? c.get("value").getAsInt() : 0;
                     }
-                    totalLabel.setText("已选: " + total + " M / 需支付: " + amount + " M");
+                    totalLabel.setText("Selected: " + total + " M / Required: " + amount + " M");
                 });
 
                 int result = JOptionPane.showConfirmDialog(GamePanel.this, panel,
-                        "支付", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                        "Pay", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
                 if (result == JOptionPane.OK_OPTION) {
                     JsonObject submitPayload = new JsonObject();
@@ -524,7 +524,7 @@ public class GamePanel extends JPanel {
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
                     JsonObject c = handCardsArr.get(i).getAsJsonObject();
-                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "卡牌";
+                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "Card";
                     String type = c.has("cardType") ? c.get("cardType").getAsString() : "";
                     cardDescriptions[i] = name + " [" + type + "]";
                 }
@@ -536,14 +536,14 @@ public class GamePanel extends JPanel {
                 JScrollPane scrollPane = new JScrollPane(cardList);
 
                 // 信息标签（含倒计时）
-                JLabel infoLabel = new JLabel("回合结束，手牌超上限！请选择要弃掉的 " + discardCount + " 张牌（剩余 " + timeout + " 秒）");
+                JLabel infoLabel = new JLabel("Hand limit exceeded! Select " + discardCount + " cards to discard (" + timeout + "s remaining)");
                 infoLabel.setForeground(new Color(255, 200, 100));
-                JLabel countLabel = new JLabel("已选: 0 / 需弃: " + discardCount);
+                JLabel countLabel = new JLabel("Selected: 0 / Need: " + discardCount);
 
                 // 选择变化监听：实时更新已选数量
                 cardList.addListSelectionListener(e -> {
                     if (e.getValueIsAdjusting()) return;
-                    countLabel.setText("已选: " + cardList.getSelectedIndices().length + " / 需弃: " + discardCount);
+                    countLabel.setText("Selected: " + cardList.getSelectedIndices().length + " / Need: " + discardCount);
                 });
 
                 // 组装面板
@@ -554,10 +554,10 @@ public class GamePanel extends JPanel {
                 panel.add(countLabel, BorderLayout.SOUTH);
 
                 // 确认/取消按钮
-                String[] options = new String[]{"确认弃牌", "取消（将自动弃牌）"};
+                String[] options = new String[]{"Confirm Discard", "Cancel (auto-discard)"};
                 JOptionPane pane = new JOptionPane(panel, JOptionPane.PLAIN_MESSAGE,
                         JOptionPane.OK_CANCEL_OPTION, null, options, options[0]);
-                JDialog dialog = pane.createDialog(GamePanel.this, "弃牌");
+                JDialog dialog = pane.createDialog(GamePanel.this, "Discard");
 
                 // 倒计时定时器（非EDT线程，超时时 dispose 对话框）
                 java.util.Timer countdownTimer = new java.util.Timer();
@@ -570,7 +570,7 @@ public class GamePanel extends JPanel {
                             dialog.dispose();
                         } else {
                             SwingUtilities.invokeLater(() ->
-                                    infoLabel.setText("回合结束，手牌超上限！请选择要弃掉的 " + discardCount + " 张牌（剩余 " + remaining[0] + " 秒）"));
+                                    infoLabel.setText("Hand limit exceeded! Select " + discardCount + " cards to discard (" + remaining[0] + "s remaining)"));
                         }
                     }
                 }, 1000L, 1000L);
@@ -586,8 +586,8 @@ public class GamePanel extends JPanel {
                     // 用户点击"确认弃牌"
                     if (cardList.getSelectedIndices().length < discardCount) {
                         JOptionPane.showMessageDialog(GamePanel.this,
-                                "还需要选择 " + (discardCount - cardList.getSelectedIndices().length) + " 张牌！\n将自动从手牌开头弃牌补齐。",
-                                "提示", JOptionPane.WARNING_MESSAGE);
+                                "Still need " + (discardCount - cardList.getSelectedIndices().length) + " cards!\nAuto-discard from hand start will be used.",
+                                "Notice", JOptionPane.WARNING_MESSAGE);
                     }
                     for (int idx : cardList.getSelectedIndices()) {
                         JsonObject c = handCardsArr.get(idx).getAsJsonObject();
@@ -630,7 +630,7 @@ public class GamePanel extends JPanel {
             boolean isActive = playerData.has("isActivePlayer") &&
                     playerData.get("isActivePlayer").getAsBoolean();
             String nickname = playerData.has("nickname") ?
-                    playerData.get("nickname").getAsString() : "未知";
+                    playerData.get("nickname").getAsString() : "Unknown";
             int handCount = playerData.has("handCount") ?
                     playerData.get("handCount").getAsInt() : 0;
             int bankTotal = playerData.has("bankTotal") ?
@@ -677,7 +677,7 @@ public class GamePanel extends JPanel {
                 if (!pid.equals(localPlayerId)) {
                     try {
                         JsonObject pd = entry.getValue().getAsJsonObject();
-                        String nick = pd.has("nickname") ? pd.get("nickname").getAsString() : "未知";
+                        String nick = pd.has("nickname") ? pd.get("nickname").getAsString() : "Unknown";
                         opponents.put(pid, nick);
                     } catch (Exception ignored) {}
                 }
@@ -699,13 +699,13 @@ public class GamePanel extends JPanel {
         isMyTurn = activePlayerId.equals(localPlayerId);
 
         // 更新当前回合玩家昵称
-        String activeNickname = "未知";
+        String activeNickname = "Unknown";
         if (playerStates.has(activePlayerId)) {
             JsonObject activeData = playerStates.getAsJsonObject(activePlayerId);
             activeNickname = activeData.has("nickname") ?
-                    activeData.get("nickname").getAsString() : "未知";
+                    activeData.get("nickname").getAsString() : "Unknown";
         }
-        turnLabel.setText("当前回合: " + activeNickname);
+        turnLabel.setText("Turn: " + activeNickname);
 
         // 回合切换时更新UI状态
         if (isMyTurn && !wasMyTurn) {
@@ -811,7 +811,7 @@ public class GamePanel extends JPanel {
      */
     private void onCardClicked(String cardId, String cardType) {
         if (!isMyTurn) {
-            JOptionPane.showMessageDialog(this, "还没轮到你的回合！");
+            JOptionPane.showMessageDialog(this, "It's not your turn!");
             return;
         }
 
@@ -874,8 +874,8 @@ public class GamePanel extends JPanel {
             colors = AppTheme.WILD_COLOR_OPTIONS.get("Multi-Color Wild");
         }
         return (String) JOptionPane.showInputDialog(this,
-                "为这张万能地产选择颜色：",
-                "万能地产颜色选择",
+                "Choose a color for this wild property:",
+                "Wild Property Color",
                 JOptionPane.QUESTION_MESSAGE,
                 null, colors, colors[0]);
     }
@@ -888,8 +888,8 @@ public class GamePanel extends JPanel {
         String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
                 "YELLOW", "GREEN", "BLUE", "BLACK", "LIGHT_GREEN"};
         return (String) JOptionPane.showInputDialog(this,
-                "选择颜色：",
-                "颜色选择",
+                "Choose a color:",
+                "Color Selection",
                 JOptionPane.QUESTION_MESSAGE,
                 null, colors, colors[0]);
     }
