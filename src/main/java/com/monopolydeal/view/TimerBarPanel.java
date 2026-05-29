@@ -5,243 +5,221 @@ import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
 
 /**
- * Premium Animated Turn Timer Bar for Monopoly Deal Game
- * This component acts as a visual countdown progress bar for player turn time.
- * All timing logic is controlled externally by GamePanel via timer ticks.
+ * 倒计时进度条面板 - 可视化显示回合剩余时间的进度条
  *
- * Visual Features:
- * 1. 3D gradient progress bar with neon outer glow
- * 2. Color transition: Green (normal time) → Red (urgent, ≤10s left)
- * 3. Pulsing animation & enlarged font when time is running out
- * 4. Dim grey style when current player is inactive (not their turn)
- * 5. High-quality anti-aliasing & smooth rendering
+ * 替代了GamePanel中原本的纯数字timerLabel，提供更直观的时间显示。
+ * 由GamePanel驱动更新，自身不包含计时逻辑。
  *
- * Usage:
- * 1. Initialize: timerBarPanel = new TimerBarPanel(30);
- * 2. Start countdown on turn begin: timerBarPanel.start(30);
- * 3. Decrease time every second: timerBarPanel.tick();
- * 4. Set inactive when turn ends: timerBarPanel.setInactive();
+ * 视觉效果：
+ * - 水平进度条从左到右填充，长度与剩余时间成正比
+ * - 颜色过渡：绿色（>10秒）→ 红色（≤10秒危机状态）
+ * - 紧急状态下秒数文本变大变粗（脉冲效果）
+ * - 非活跃状态显示灰色空进度条和"--"文本
+ *
+ * 使用方式（在GamePanel中）：
+ * - 创建：timerBarPanel = new TimerBarPanel(30);
+ * - 每秒钟：timerBarPanel.tick();
+ * - 回合开始：timerBarPanel.start(30);
+ * - 非自己的回合：timerBarPanel.setInactive();
  */
 public class TimerBarPanel extends JPanel {
 
-    // ---------------------- Dimension Constants ----------------------
-    // Core size of progress bar
-    private static final int BAR_WIDTH      = 160;
-    private static final int BAR_HEIGHT     = 22;
-    // Corner arc radius for rounded rectangle
-    private static final int ROUND_ARC     = 12;
-    // Total panel size (bar + text label area)
-    private static final int PANEL_WIDTH   = BAR_WIDTH + 60;
-    private static final int PANEL_HEIGHT  = 36;
+    // ==================== 尺寸常量 ====================
 
-    // ---------------------- Color Theme Constants ----------------------
-    // Background & border of empty track
-    private static final Color TRACK_BACKGROUND    = new Color(30, 32, 42);
-    private static final Color TRACK_BORDER        = new Color(110, 115, 135);
-    // Outer soft glow border
-    private static final Color GLOW_BORDER_COLOR   = new Color(160, 165, 185, 100);
+    /** 进度条宽度（像素） */
+    private static final int BAR_W      = 140;
+    /** 进度条高度（像素） */
+    private static final int BAR_H      = 18;
+    /** 进度条圆角半径 */
+    private static final int ARC        = 9;
+    /** 整个面板宽度（进度条 + 数字标签间距） */
+    private static final int PANEL_W    = BAR_W + 48;
+    /** 整个面板高度 */
+    private static final int PANEL_H    = 28;
 
-    // Normal state (plenty time left) gradient color
-    private static final Color NORMAL_GRAD_TOP     = new Color(80, 220, 110);
-    private static final Color NORMAL_GRAD_BOTTOM = new Color(40, 160, 70);
-    private static final Color NORMAL_GLOW        = new Color(80, 220, 110, 80);
+    // ==================== 颜色常量 ====================
 
-    // Urgent state (≤ 10 seconds left) gradient color
-    private static final Color URGENT_GRAD_TOP     = new Color(255, 80, 90);
-    private static final Color URGENT_GRAD_BOTTOM = new Color(200, 40, 60);
-    private static final Color URGENT_GLOW        = new Color(255, 80, 90, 100);
+    /** 进度条轨道（背景）颜色 */
+    private static final Color TRACK_COLOR   = new Color(60, 60, 60);
+    /** 进度条轨道边框颜色 */
+    private static final Color TRACK_BORDER  = new Color(90, 90, 90);
+    /** 安全时间（>10秒）的填充主色（绿色） */
+    private static final Color COLOR_SAFE    = new Color(34, 139, 34);
+    /** 安全时间的填充渐变色（浅绿色） */
+    private static final Color COLOR_SAFE2   = new Color(76, 175, 80);
+    /** 紧急时间（≤10秒）的填充主色（红色） */
+    private static final Color COLOR_URGENT  = new Color(198, 40, 40);
+    /** 紧急时间的填充渐变色（浅红色） */
+    private static final Color COLOR_URGENT2 = new Color(239, 83, 80);
+    /** 非活跃状态的填充颜色（灰色） */
+    private static final Color COLOR_INACTIVE = new Color(80, 80, 80);
+    /** 正常文字颜色 */
+    private static final Color TEXT_NORMAL   = Color.WHITE;
+    /** 紧急文字颜色（红色） */
+    private static final Color TEXT_URGENT   = new Color(255, 100, 100);
+    /** 非活跃文字颜色（灰暗） */
+    private static final Color TEXT_INACTIVE = new Color(130, 130, 130);
 
-    // Inactive state (not current player's turn)
-    private static final Color INACTIVE_BAR_COLOR  = new Color(90, 95, 110);
-    private static final Color INACTIVE_TEXT_COLOR = new Color(140, 145, 160);
+    // ==================== 状态字段 ====================
 
-    // ---------------------- Runtime State Variables ----------------------
-    // Maximum seconds for one turn
+    /** 最大秒数（回合时长，通常为30秒） */
     private int maxSeconds;
-    // Remaining countdown seconds
+    /** 剩余秒数 */
     private int secondsRemaining;
-    // Flag: true = turn active / counting down, false = inactive
-    private boolean isActive;
-    // Timestamp for pulse animation calculation
-    private long pulseTimeStamp;
+    /** 是否活跃（轮到本地玩家操作） */
+    private boolean active;
+
+    // ==================== 构造函数 ====================
 
     /**
-     * Constructor
-     * @param maxSeconds Total time limit for a single player turn
+     * 构造函数
+     * @param maxSeconds 回合时长（秒），用于计算进度条填充比例
      */
     public TimerBarPanel(int maxSeconds) {
-        this.maxSeconds = maxSeconds;
+        this.maxSeconds       = maxSeconds;
         this.secondsRemaining = maxSeconds;
-        this.isActive = false;
-        this.pulseTimeStamp = System.currentTimeMillis();
+        this.active           = false;  // 初始非活跃
 
-        // Set panel size and transparency
         setOpaque(false);
-        setPreferredSize(new Dimension(PANEL_WIDTH, PANEL_HEIGHT));
+        setPreferredSize(new Dimension(PANEL_W, PANEL_H));
         setMinimumSize(getPreferredSize());
         setMaximumSize(getPreferredSize());
     }
 
-    // ====================== Public API Methods (Called by GamePanel) ======================
+    // ==================== 公共API（由GamePanel调用） ====================
+
     /**
-     * Start a new countdown timer for current player's turn
-     * @param seconds Total time for this turn
+     * 启动新的倒计时
+     * 当轮到本地玩家操作时调用
+     *
+     * @param seconds 本回合总秒数
      */
     public void start(int seconds) {
-        this.maxSeconds = seconds;
+        this.maxSeconds       = seconds;
         this.secondsRemaining = seconds;
-        this.isActive = true;
-        this.pulseTimeStamp = System.currentTimeMillis();
+        this.active           = true;
         repaint();
     }
 
     /**
-     * Count down 1 second, called every tick by external timer
+     * 每秒递减一次
+     * 由GamePanel的倒计时Timer每秒调用一次
      */
     public void tick() {
-        // Do nothing if panel is inactive
-        if (!isActive) {
-            return;
-        }
-        if (secondsRemaining > 0) {
-            secondsRemaining--;
-        }
-        this.pulseTimeStamp = System.currentTimeMillis();
+        if (!active) return;
+        if (secondsRemaining > 0) secondsRemaining--;
         repaint();
     }
 
     /**
-     * Switch panel to inactive state (not current player's turn)
-     * Show grey style and "--" label
+     * 切换到非活跃状态（灰色）
+     * 当不是本地玩家的回合或游戏未开始时调用
      */
     public void setInactive() {
-        this.isActive = false;
-        this.secondsRemaining = maxSeconds;
+        this.active           = false;
+        this.secondsRemaining = maxSeconds;  // 重置到满值
         repaint();
     }
 
-    /**
-     * Get current remaining seconds
-     * @return Remaining countdown time
-     */
+    /** 获取当前剩余秒数 */
     public int getSecondsRemaining() {
         return secondsRemaining;
     }
 
-    /**
-     * Check if timer is currently active (counting down)
-     * @return true = active, false = inactive
-     */
+    /** 是否处于活跃状态 */
     public boolean isActive() {
-        return isActive;
+        return active;
     }
 
-    // ====================== Custom Painting Logic ======================
+    // ==================== 自定义绘制 ====================
+
     /**
-     * Override paint method to draw gradient bar, glow effect, text and animation
+     * 绘制倒计时进度条
+     * 结构：轨道背景 + 填充进度条 + 秒数文本标签（进度条右侧）
      */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        Graphics2D g2d = (Graphics2D) g.create();
 
-        // Enable highest rendering quality
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
-        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        g2d.setStroke(new BasicStroke(1.8f));
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
 
-        // Calculate vertical position to center the progress bar
-        int barCenterY = getHeight() / 2;
-        int barTopY = barCenterY - BAR_HEIGHT / 2;
+        int barTop = (getHeight() - BAR_H) / 2;  // 垂直居中
 
-        // ---------------------- Step 1: Draw empty track background ----------------------
-        RoundRectangle2D.Float trackShape = new RoundRectangle2D.Float(0, barTopY, BAR_WIDTH, BAR_HEIGHT, ROUND_ARC, ROUND_ARC);
-        // Fill track background
-        g2d.setColor(TRACK_BACKGROUND);
-        g2d.fill(trackShape);
-        // Draw outer soft glow border
-        g2d.setColor(GLOW_BORDER_COLOR);
-        g2d.draw(new RoundRectangle2D.Float(1, barTopY + 1, BAR_WIDTH - 2, BAR_HEIGHT - 2, ROUND_ARC - 2, ROUND_ARC - 2));
-        // Draw main solid border
-        g2d.setColor(TRACK_BORDER);
-        g2d.draw(trackShape);
+        // ===== 1. 绘制轨道（进度条背景） =====
+        g2.setColor(TRACK_COLOR);
+        g2.fill(new RoundRectangle2D.Float(0, barTop, BAR_W, BAR_H, ARC, ARC));
+        g2.setColor(TRACK_BORDER);
+        g2.setStroke(new BasicStroke(1f));
+        g2.draw(new RoundRectangle2D.Float(0.5f, barTop + 0.5f,
+                BAR_W - 1f, BAR_H - 1f, ARC, ARC));
 
-        // ---------------------- Step 2: Draw progress fill area ----------------------
-        if (isActive && secondsRemaining > 0) {
-            // Calculate fill width by time ratio
-            float timeRatio = (float) secondsRemaining / maxSeconds;
-            int fillWidth = Math.round(timeRatio * BAR_WIDTH);
+        // ===== 2. 绘制填充进度条 =====
+        if (active) {
+            // 计算填充比例（剩余时间 / 总时间）
+            float fraction = maxSeconds > 0
+                    ? (float) secondsRemaining / maxSeconds
+                    : 0f;
+            int fillW = Math.round(fraction * BAR_W);
 
-            if (fillWidth > 0) {
-                // Switch color scheme based on remaining time
-                boolean isUrgent = secondsRemaining <= 10;
-                Color gradTop = isUrgent ? URGENT_GRAD_TOP : NORMAL_GRAD_TOP;
-                Color gradBottom = isUrgent ? URGENT_GRAD_BOTTOM : NORMAL_GRAD_BOTTOM;
-                Color glowColor = isUrgent ? URGENT_GLOW : NORMAL_GLOW;
+            if (fillW > 0) {
+                boolean urgent = secondsRemaining <= 10;  // 10秒内进入紧急状态
+                Color c1 = urgent ? COLOR_URGENT  : COLOR_SAFE;   // 底部颜色
+                Color c2 = urgent ? COLOR_URGENT2 : COLOR_SAFE2;  // 顶部颜色（更亮）
 
-                // Create vertical gradient paint
-                GradientPaint gradient = new GradientPaint(0, barTopY, gradTop, 0, barTopY + BAR_HEIGHT, gradBottom);
-                g2d.setPaint(gradient);
+                // 从上到下的渐变填充
+                GradientPaint gp = new GradientPaint(
+                        0, barTop,          c2,
+                        0, barTop + BAR_H,  c1);
+                g2.setPaint(gp);
 
-                // Clip area to rounded track shape
-                g2d.setClip(trackShape);
-                g2d.fillRect(0, barTopY, fillWidth, BAR_HEIGHT);
-                g2d.setClip(null);
-
-                // Draw extra glow effect for urgent state
-                if (isUrgent) {
-                    long currentTime = System.currentTimeMillis();
-                    // Calculate pulse alpha for flickering effect
-                    float pulseAlpha = (float) (Math.sin((currentTime - pulseTimeStamp) / 180.0) * 0.3 + 0.5);
-                    Color dynamicGlow = new Color(
-                            glowColor.getRed(),
-                            glowColor.getGreen(),
-                            glowColor.getBlue(),
-                            (int) (pulseAlpha * 255)
-                    );
-                    g2d.setColor(dynamicGlow);
-                    g2d.draw(new RoundRectangle2D.Float(-2, barTopY - 2, BAR_WIDTH + 4, BAR_HEIGHT + 4, ROUND_ARC + 4, ROUND_ARC + 4));
-                }
+                // 裁剪填充区域到圆角轨道形状
+                Shape track = new RoundRectangle2D.Float(0, barTop, BAR_W, BAR_H, ARC, ARC);
+                g2.setClip(track);
+                g2.fillRect(0, barTop, fillW, BAR_H);
+                g2.setClip(null);
             }
         } else {
-            // Draw dim grey bar when inactive
-            g2d.setColor(INACTIVE_BAR_COLOR);
-            g2d.setClip(trackShape);
-            g2d.fillRect(0, barTopY, BAR_WIDTH, BAR_HEIGHT);
-            g2d.setClip(null);
+            // 非活跃状态：灰色满条
+            g2.setColor(COLOR_INACTIVE);
+            Shape track = new RoundRectangle2D.Float(0, barTop, BAR_W, BAR_H, ARC, ARC);
+            g2.setClip(track);
+            g2.fillRect(0, barTop, BAR_W, BAR_H);
+            g2.setClip(null);
         }
 
-        // ---------------------- Step 3: Draw countdown text label ----------------------
-        String displayText;
-        Color textColor;
-        Font textFont;
+        // ===== 3. 绘制秒数文本标签 =====
+        String label;
+        Color  textColor;
+        Font   textFont;
 
-        if (!isActive) {
-            // Inactive status text
-            displayText = "- -";
-            textColor = INACTIVE_TEXT_COLOR;
-            textFont = new Font("Segoe UI", Font.BOLD, 14);
+        if (!active) {
+            // 非活跃：显示"--"
+            label     = "- -";
+            textColor = TEXT_INACTIVE;
+            textFont  = new Font("SansSerif", Font.BOLD, 13);
         } else if (secondsRemaining <= 10) {
-            // Urgent: enlarged font + red text
-            displayText = secondsRemaining + "s";
-            textColor = URGENT_GRAD_TOP;
-            textFont = new Font("Segoe UI", Font.BOLD, 17);
+            // 紧急：红色大字（脉冲效果）
+            label     = secondsRemaining + "秒";
+            textColor = TEXT_URGENT;
+            textFont  = new Font("SansSerif", Font.BOLD, 15);
         } else {
-            // Normal status text
-            displayText = secondsRemaining + "s";
-            textColor = Color.WHITE;
-            textFont = new Font("Segoe UI", Font.BOLD, 14);
+            // 正常：白色普通字
+            label     = secondsRemaining + "秒";
+            textColor = TEXT_NORMAL;
+            textFont  = new Font("SansSerif", Font.BOLD, 13);
         }
 
-        // Draw text beside progress bar
-        g2d.setFont(textFont);
-        g2d.setColor(textColor);
-        FontMetrics fontMetrics = g2d.getFontMetrics();
-        int textPosX = BAR_WIDTH + 8;
-        int textPosY = (getHeight() + fontMetrics.getAscent() - fontMetrics.getDescent()) / 2;
-        g2d.drawString(displayText, textPosX, textPosY);
+        g2.setFont(textFont);
+        g2.setColor(textColor);
+        FontMetrics fm = g2.getFontMetrics();
+        int tx = BAR_W + 6;  // 文本在进度条右侧6px处
+        int ty = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
+        g2.drawString(label, tx, ty);
 
-        g2d.dispose();
+        g2.dispose();
     }
 }

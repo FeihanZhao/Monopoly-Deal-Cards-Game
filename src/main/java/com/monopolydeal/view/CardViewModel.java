@@ -1,68 +1,41 @@
 package com.monopolydeal.view;
 
 /**
- * Card view model - encapsulates card data needed for UI display
+ * 卡牌视图模型 — CardRenderer 的纯数据载体
  *
- * Acts as a bridge between server-side card JSON data and UI components (CardRenderer).
- * Contains basic card properties: ID, name, type, color, and monetary value.
+ * 在 GamePanel.updateLocalHand() 中从 JSON 解析一次，之后所有视图组件
+ * 通过 getter 访问字段，不再直接依赖 Gson/JsonObject。
  */
 public class CardViewModel {
 
-    /** Unique card identifier */
     private final String cardId;
-    /** Card display name */
     private final String cardName;
-    /** Card type (MONEY/PROPERTY/ACTION/RENT) */
-    private final String cardType;
-    /** Card color key (corresponds to CardColor enum name, e.g. BROWN, WILD) */
-    private final String color;
-    /** Monetary value (only money cards have a value; 0 for other types) */
-    private final int value;
+    private final String cardType;   // MONEY, PROPERTY, ACTION, RENT
+    private final String color;      // 颜色键名，如 "BROWN", "WILD", "NONE"
+    private final int    value;      // 金钱面值（非金钱卡 = 0）
 
-    /**
-     * Constructor
-     * @param cardId unique card identifier
-     * @param cardName card display name
-     * @param cardType card type
-     * @param color color key
-     * @param value monetary value
-     */
-    public CardViewModel(String cardId, String cardName, String cardType, String color, int value) {
-        this.cardId = cardId;
+    public CardViewModel(String cardId, String cardName, String cardType,
+                         String color, int value) {
+        this.cardId   = cardId;
         this.cardName = cardName;
         this.cardType = cardType;
-        this.color = color;
-        this.value = value;
+        this.color    = color;
+        this.value    = value;
     }
 
-    public String getCardId() {
-        return cardId;
-    }
+    // ==================== Getters ====================
 
-    public String getCardName() {
-        return cardName;
-    }
+    public String getCardId()   { return cardId; }
+    public String getCardName() { return cardName; }
+    public String getCardType() { return cardType; }
+    public String getColor()    { return color; }
+    public int    getValue()    { return value; }
 
-    public String getCardType() {
-        return cardType;
-    }
+    // ==================== 类型判断便捷方法 ====================
 
-    public String getColor() {
-        return color;
-    }
-
-    public int getValue() {
-        return value;
-    }
-
-    @Override
-    public String toString() {
-        return "CardViewModel{" +
-                "cardId='" + cardId + '\'' +
-                ", cardName='" + cardName + '\'' +
-                ", cardType='" + cardType + '\'' +
-                ", color='" + color + '\'' +
-                ", value=" + value +
-                '}';
-    }
+    public boolean isWild()     { return "WILD".equals(color); }
+    public boolean isMoney()    { return "MONEY".equals(cardType); }
+    public boolean isProperty() { return "PROPERTY".equals(cardType); }
+    public boolean isAction()   { return "ACTION".equals(cardType); }
+    public boolean isRent()     { return "RENT".equals(cardType); }
 }
