@@ -1,242 +1,217 @@
 package com.monopolydeal.view;
 
 import com.google.gson.JsonObject;
-
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.util.*;
 import java.util.Map;
 
-/**
- * 玩家面板 - 显示单个玩家的状态信息
- *
- * 在GamePanel中每个玩家对应一个PlayerPanel，横向排列显示：
- * 1. 左侧信息区（180px宽）- 昵称、在线状态、银行余额、完整组合数、手牌数
- * 2. 右侧地产展示区 - 以叠放卡片形式展示各颜色的地产数量
- *
- * 视觉特点：
- * - 活跃玩家面板左侧有金色边框高亮
- * - 断线玩家显示红色"已断线"状态
- * - 地产卡按颜色分组叠放显示，颜色与CardColor定义一致
- *
- * 颜色映射：
- * 每种地产颜色都有对应的RGB值，用于在地产展示区中绘制彩色卡片
- */
 public class PlayerPanel extends JPanel {
-    /** 玩家唯一标识符 */
     private final String playerId;
-    /** 昵称标签 */
     private JLabel nicknameLabel;
-    /** 状态标签（在线/活跃/断线） */
     private JLabel statusLabel;
-    /** 银行余额标签 */
     private JLabel bankTotalLabel;
-    /** 完整地产组合数标签 */
     private JLabel setsLabel;
-    /** 手牌数量标签 */
     private JLabel handCountLabel;
-    /** 地产展示面板 */
     private JPanel propertyPanel;
-    /** 地产分组面板映射表 key=颜色名称, value=叠放绘制面板 */
     private Map<String, JPanel> propertyGroupPanels;
-    /** 当前各地产颜色的卡牌数量缓存 */
     private Map<String, Integer> currentPropertyCounts;
 
-    /**
-     * 构造函数 - 创建玩家面板的UI布局
-     * @param playerId 玩家唯一标识符
-     */
+    // ========================= 高级配色系统 =========================
+    private static final Map<String, Color> COLOR_MAP = new LinkedHashMap<>();
+    static {
+        COLOR_MAP.put("BROWN", new Color(150, 100, 50));
+        COLOR_MAP.put("LIGHT_BLUE", new Color(140, 210, 255));
+        COLOR_MAP.put("PINK", new Color(255, 110, 185));
+        COLOR_MAP.put("ORANGE", new Color(255, 150, 20));
+        COLOR_MAP.put("RED", new Color(230, 30, 70));
+        COLOR_MAP.put("YELLOW", new Color(255, 225, 0));
+        COLOR_MAP.put("GREEN", new Color(40, 150, 40));
+        COLOR_MAP.put("BLUE", new Color(0, 0, 160));
+        COLOR_MAP.put("PURPLE", new Color(110, 20, 180));
+        COLOR_MAP.put("BLACK", new Color(50, 50, 50));
+        COLOR_MAP.put("LIGHT_GREEN", new Color(150, 240, 150));
+    }
+
+    private static final Color BG_TRANSPARENT = new Color(0,0,0,0);
+    private static final Color BORDER_NORMAL = new Color(70,75,90);
+    private static final Color BORDER_ACTIVE = new Color(255,215,0);
+    private static final Color GLOW_ACTIVE = new Color(255,215,0,60);
+    private static final Color TEXT_MAIN = Color.WHITE;
+    private static final Color TEXT_BANK = new Color(255,220,80);
+    private static final Color TEXT_SETS = new Color(100,255,140);
+    private static final Color TEXT_HAND = new Color(190,190,210);
+    private static final Color SHADOW = new Color(0,0,0,100);
+
     public PlayerPanel(String playerId) {
         this.playerId = playerId;
         this.propertyGroupPanels = new LinkedHashMap<>();
         this.currentPropertyCounts = new LinkedHashMap<>();
-
-        setLayout(new BorderLayout(15, 0));
+        setLayout(new BorderLayout(18, 0));
         setOpaque(false);
-        // 默认底部灰色分隔线
-        setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(60, 65, 75)),
-                new EmptyBorder(12, 15, 12, 15)));
-        setMaximumSize(new Dimension(Integer.MAX_VALUE, 160));
-
-        createLeftInfo();      // 创建左侧信息区
-        createPropertyArea();  // 创建右侧地产展示区
+        setBorder(createNormalBorder());
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+        createLeftInfo();
+        createPropertyArea();
     }
 
-    /** 创建左侧信息区 - 包含昵称、状态、余额、组合数、手牌数 */
+    // ========================= 左侧玩家信息（精致排版） =========================
     private void createLeftInfo() {
         JPanel leftPanel = new JPanel();
         leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
         leftPanel.setOpaque(false);
-        leftPanel.setPreferredSize(new Dimension(180, 0));
+        leftPanel.setPreferredSize(new Dimension(200, 0));
 
-        // 昵称（白色加粗）
-        nicknameLabel = new JLabel("玩家");
-        nicknameLabel.setForeground(Color.WHITE);
-        nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
+        nicknameLabel = new JLabel("Player");
+        nicknameLabel.setForeground(TEXT_MAIN);
+        nicknameLabel.setFont(new Font("Segoe UI", Font.BOLD, 17));
 
-        // 状态指示器（在线/活跃/断线）
         statusLabel = new JLabel("");
-        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
 
-        // 银行余额（金色）
-        bankTotalLabel = new JLabel("银行: 0M");
-        bankTotalLabel.setForeground(new Color(255, 215, 0));
-        bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        bankTotalLabel = new JLabel("Bank: 0M");
+        bankTotalLabel.setForeground(TEXT_BANK);
+        bankTotalLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
-        // 完整组合数（绿色）
-        setsLabel = new JLabel("组合: 0");
-        setsLabel.setForeground(new Color(100, 255, 100));
-        setsLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        setsLabel = new JLabel("Sets: 0");
+        setsLabel.setForeground(TEXT_SETS);
+        setsLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-        // 手牌数量（灰色）
-        handCountLabel = new JLabel("手牌: 0 张");
-        handCountLabel.setForeground(new Color(180, 180, 180));
-        handCountLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        handCountLabel = new JLabel("Hand: 0 cards");
+        handCountLabel.setForeground(TEXT_HAND);
+        handCountLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
-        // 垂直排列各标签（带间距）
         leftPanel.add(nicknameLabel);
-        leftPanel.add(Box.createVerticalStrut(2));
+        leftPanel.add(Box.createVerticalStrut(4));
         leftPanel.add(statusLabel);
-        leftPanel.add(Box.createVerticalStrut(8));
+        leftPanel.add(Box.createVerticalStrut(10));
         leftPanel.add(bankTotalLabel);
-        leftPanel.add(Box.createVerticalStrut(3));
+        leftPanel.add(Box.createVerticalStrut(4));
         leftPanel.add(setsLabel);
-        leftPanel.add(Box.createVerticalStrut(3));
+        leftPanel.add(Box.createVerticalStrut(4));
         leftPanel.add(handCountLabel);
 
         add(leftPanel, BorderLayout.WEST);
     }
 
-    /** 创建右侧地产展示区 - 水平排列各颜色的地产叠放卡片 */
+    // ========================= 卡牌区域（3D堆叠） =========================
     private void createPropertyArea() {
-        propertyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        propertyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         propertyPanel.setOpaque(false);
         add(propertyPanel, BorderLayout.CENTER);
     }
 
-    /**
-     * 根据JSON数据更新玩家面板显示
-     * 由GamePanel.updatePlayerPanelsFromStates()在每个GAME_STATE_UPDATE中调用
-     *
-     * @param data 简化的玩家JSON数据
-     * @param propertyColorCounts 各颜色地产卡数量映射
-     */
+    // ========================= 数据更新 =========================
     public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
-        // 解析JSON字段
-        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "玩家";
+        String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "Player";
         boolean isActive = data.has("isActive") && data.get("isActive").getAsBoolean();
         boolean connected = !data.has("connected") || data.get("connected").getAsBoolean();
         int bankTotal = data.has("bankTotal") ? data.get("bankTotal").getAsInt() : 0;
         int completeSets = data.has("completeSets") ? data.get("completeSets").getAsInt() : 0;
         int handCount = data.has("handCount") ? data.get("handCount").getAsInt() : 0;
 
-        // 更新显示信息
         nicknameLabel.setText(nickname);
 
-        // 状态指示器
+        // 状态样式强化
         if (!connected) {
-            statusLabel.setText("已断线");
-            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("● Disconnected");
+            statusLabel.setForeground(new Color(255,60,60));
         } else if (isActive) {
-            statusLabel.setText("当前回合");
-            statusLabel.setForeground(new Color(255, 215, 0));  // 金色
+            statusLabel.setText("● CURRENT TURN");
+            statusLabel.setForeground(BORDER_ACTIVE);
         } else {
-            statusLabel.setText("等待中");
-            statusLabel.setForeground(new Color(150, 150, 150));
+            statusLabel.setText("● Waiting");
+            statusLabel.setForeground(new Color(160,160,180));
         }
 
-        bankTotalLabel.setText("银行: " + bankTotal + "M");
-        setsLabel.setText("组合: " + completeSets + "/3");
-        handCountLabel.setText("手牌: " + handCount + " 张");
+        bankTotalLabel.setText("Bank: " + bankTotal + "M");
+        setsLabel.setText("Sets: " + completeSets + "/3");
+        handCountLabel.setText("Hand: " + handCount + " cards");
 
-        // 活跃玩家左侧金色高亮边框
-        if (isActive) {
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 3, 1, 0, new Color(255, 215, 0)),
-                    new EmptyBorder(12, 12, 12, 15)));
-        } else {
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(60, 65, 75)),
-                    new EmptyBorder(12, 15, 12, 15)));
-        }
+        // 边框发光效果
+        setBorder(isActive ? createActiveBorder() : createNormalBorder());
 
         updatePropertyDisplay(propertyColorCounts);
         revalidate();
         repaint();
     }
 
-    /**
-     * 更新地产展示区域
-     * 为每种有卡牌的颜色创建叠放卡片面板
-     *
-     * @param colorCounts 颜色名称 → 卡牌数量
-     */
+    // ========================= 终极3D卡牌渲染 =========================
     private void updatePropertyDisplay(Map<String, Integer> colorCounts) {
         if (colorCounts == null) colorCounts = new LinkedHashMap<>();
-
-        // 更新缓存
-        for (String color : colorCounts.keySet()) {
-            currentPropertyCounts.put(color, colorCounts.get(color));
-        }
-        Map<String, Integer> finalColorCounts = colorCounts;
-        currentPropertyCounts.keySet().removeIf(k -> !finalColorCounts.containsKey(k));
+        currentPropertyCounts.clear();
+        currentPropertyCounts.putAll(colorCounts);
 
         propertyPanel.removeAll();
 
         for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
             String colorName = entry.getKey();
             int count = entry.getValue();
-            Color color = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
+            Color baseColor = COLOR_MAP.getOrDefault(colorName, Color.GRAY);
 
-            // 创建自定义绘制的叠放卡片面板
             JPanel pilePanel = new JPanel() {
                 @Override
                 protected void paintComponent(Graphics g) {
+                    super.paintComponent(g);
                     Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                            RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-                    // 从后向前绘制每张卡片（后面的卡片偏移3px做叠放效果）
+                    int cardW = 48;
+                    int cardH = 62;
+                    int shift = 3;
+
+                    // 绘制阴影层
                     for (int i = count - 1; i >= 0; i--) {
-                        int offsetX = i * 3;
-                        int offsetY = i * 3;
+                        int x = i * shift;
+                        int y = i * shift;
 
-                        // 卡片阴影
-                        g2.setColor(new Color(0, 0, 0, 80));
-                        g2.fillRoundRect(offsetX + 1, offsetY + 1, 44, 56, 8, 8);
-
-                        // 卡片主体（对应颜色）
-                        g2.setColor(color);
-                        g2.fillRoundRect(offsetX, offsetY, 44, 56, 8, 8);
-
-                        // 卡片高光（顶部白色半透明条）
-                        g2.setColor(new Color(255, 255, 255, 60));
-                        g2.fillRoundRect(offsetX + 3, offsetY + 3, 38, 20, 6, 6);
-
-                        // 卡片边框
-                        g2.setColor(color.darker());
-                        g2.setStroke(new BasicStroke(1.2f));
-                        g2.drawRoundRect(offsetX, offsetY, 44, 56, 8, 8);
+                        // 投影
+                        g2.setColor(SHADOW);
+                        g2.fillRoundRect(x + 2, y + 2, cardW, cardH, 10, 10);
                     }
 
-                    // 在最上层绘制数量文本
+                    // 绘制卡牌主体
+                    for (int i = count - 1; i >= 0; i--) {
+                        int x = i * shift;
+                        int y = i * shift;
+
+                        // 卡牌底色
+                        g2.setColor(baseColor);
+                        g2.fillRoundRect(x, y, cardW, cardH, 10, 10);
+
+                        // 高光
+                        g2.setColor(new Color(255,255,255,50));
+                        g2.fillRoundRect(x + 4, y + 4, cardW - 8, 22, 8, 8);
+
+                        // 边框
+                        g2.setColor(baseColor.brighter());
+                        g2.setStroke(new BasicStroke(1.5f));
+                        g2.drawRoundRect(x, y, cardW, cardH, 10, 10);
+                    }
+
+                    // 数量文字
                     if (count > 0) {
-                        g2.setColor(Color.WHITE);
-                        g2.setFont(new Font("SansSerif", Font.BOLD, 9));
+                        int topX = (count - 1) * shift;
+                        int topY = (count - 1) * shift;
+
+                        g2.setColor(TEXT_MAIN);
+                        g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
                         FontMetrics fm = g2.getFontMetrics();
-                        String text = count + "";
-                        int maxOffset = (count - 1) * 3;
-                        g2.drawString(text, maxOffset + (44 - fm.stringWidth(text)) / 2,
-                                maxOffset + 35);
+                        String num = String.valueOf(count);
+                        int tx = topX + (cardW - fm.stringWidth(num)) / 2;
+                        int ty = topY + 38;
+                        g2.drawString(num, tx, ty);
                     }
+
                     g2.dispose();
                 }
             };
+
             pilePanel.setOpaque(false);
-            pilePanel.setPreferredSize(new Dimension(50, 64));
-            pilePanel.setToolTipText(colorName + ": " + count + "张");  // 鼠标悬停提示
+            pilePanel.setPreferredSize(new Dimension(58, 72));
+            pilePanel.setToolTipText(colorName + " · " + count + " cards");
             propertyPanel.add(pilePanel);
         }
 
@@ -244,7 +219,21 @@ public class PlayerPanel extends JPanel {
         propertyPanel.repaint();
     }
 
-    /** 获取玩家ID */
+    // ========================= 边框样式 =========================
+    private Border createNormalBorder() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, BORDER_NORMAL),
+                new EmptyBorder(14, 16, 14, 16)
+        );
+    }
+
+    private Border createActiveBorder() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 4, 1, 0, BORDER_ACTIVE),
+                new EmptyBorder(14, 12, 14, 16)
+        );
+    }
+
     public String getPlayerId() {
         return playerId;
     }
