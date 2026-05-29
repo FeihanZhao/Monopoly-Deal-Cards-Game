@@ -118,6 +118,8 @@ public class ActionHistoryPanel extends JPanel {
                         !action.get("targetPlayer").isJsonNull() ?
                         action.get("targetPlayer").getAsString() : "";
                 int amount = action.has("amount") ? action.get("amount").getAsInt() : 0;
+                String details = action.has("details") && !action.get("details").isJsonNull() ?
+                        action.get("details").getAsString() : "";
                 long timestamp = action.has("timestamp") ?
                         action.get("timestamp").getAsLong() : System.currentTimeMillis();
 
@@ -131,7 +133,8 @@ public class ActionHistoryPanel extends JPanel {
 
                 // Format time
                 String timeStr = timeFormat.format(new Date(timestamp));
-                String actionDesc = formatAction(actionType, target, amount);
+                // Use details if available, otherwise fall back to formatAction
+                String actionDesc = !details.isEmpty() ? details : formatAction(actionType, target, amount);
 
                 // Build colored line
                 // [time]

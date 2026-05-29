@@ -413,24 +413,23 @@ public class GameSession {
         // handlePlayJustSayNo() during WAITING_FOR_REACTION phase when targeted by an action.
         // If sent through PLAY_ACTION, send an error and do not consume the card.
         if (actionName.contains("Just Say No")) {
-            // Card is still in hand — reject without consuming
             sendError(activePlayer.getId(),
                     "Just Say No can only be used when an action card is played against you");
             return false;
         }
 
-        // === Step 1: Remove from hand and discard (card is played regardless of cancellation) ===
-        activePlayer.removeCardFromHand(card);
-        deck.discard(card);
-
-        // === Step 2: No-target actions — execute immediately ===
+        // === Step 1: No-target actions — execute immediately ===
         if (actionName.contains("Pass Go")) {
+            activePlayer.removeCardFromHand(card);
+            deck.discard(card);
             List<Card> extraCards = deck.drawMultiple(2);
             extraCards.forEach(activePlayer::addCardToHand);
             return true;
         }
 
         if (actionName.contains("Double")) {
+            activePlayer.removeCardFromHand(card);
+            deck.discard(card);
             activePlayer.setDoubleRentActive(true);
             return true;
         }
@@ -451,9 +450,12 @@ public class GameSession {
                 }
             }
             if (houseColor != null && activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
+                activePlayer.removeCardFromHand(card);
+                deck.discard(card);
                 activePlayer.getPropertyZone().addHouse(houseColor);
                 return true;
             }
+            sendError(activePlayer.getId(), "No valid color set to place a house on");
             return false;
         }
 
@@ -473,18 +475,22 @@ public class GameSession {
                 }
             }
             if (hotelColor != null && activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
+                activePlayer.removeCardFromHand(card);
+                deck.discard(card);
                 activePlayer.getPropertyZone().addHotel(hotelColor);
                 return true;
             }
+            sendError(activePlayer.getId(), "No valid color set to place a hotel on");
             return false;
         }
 
-        // === Step 3: Target actions — push to resolution stack for deferred execution ===
+        // === Step 2: Target actions — validate target viability BEFORE consuming card ===
         String actionType = mapActionNameToType(actionName);
         String targetId = extractTargetId(payload);
 
-        // Determine target player
+        // Pre-validate target and gather needed info
         if (targetId.isEmpty()) {
+            // Auto-select target — check if any valid target exists
             if (actionName.contains("Deal Breaker")) {
                 for (Player p : players) {
                     if (!p.equals(activePlayer) && p.getCompleteSetsCount() > 0) {
@@ -492,30 +498,54 @@ public class GameSession {
                         break;
                     }
                 }
+                if (targetId.isEmpty()) {
+                    sendError(activePlayer.getId(), "No player has a complete property set to steal");
+                    return false;
+                }
             } else if (actionName.contains("Forced Deal")) {
-                // Auto-select: first other player with property, and auto-select swap cards
+                // Need: initiator has at least 1 property, target has at least 1 non-complete-set property
+                boolean hasMyProp = false;
+                for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty()) { hasMyProp = true; break; }
+                }
+                if (!hasMyProp) {
+                    sendError(activePlayer.getId(), "You have no property to swap");
+                    return false;
+                }
                 Player target = null;
                 for (Player p : players) {
-                    if (!p.equals(activePlayer) && !p.getPropertyZone().getAllPropertyGroups().isEmpty()) {
-                        target = p;
+                    if (!p.equals(activePlayer)) {
+                        for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
+                            if (!group.isEmpty() && !p.getPropertyZone().getCompleteSets()
+                                    .contains(group.get(0).getEffectiveColor())) {
+                                target = p;
+                                break;
+                            }
+                        }
+                        if (target != null) break;
+                    }
+                }
+                if (target == null) {
+                    sendError(activePlayer.getId(), "No other player has a property available to swap");
+                    return false;
+                }
+                targetId = target.getId();
+                // Auto-select first property from each
+                Card myProp = null;
+                for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty()) { myProp = group.get(0); break; }
+                }
+                Card theirProp = null;
+                for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
+                    if (!group.isEmpty() && !target.getPropertyZone().getCompleteSets()
+                            .contains(group.get(0).getEffectiveColor())) {
+                        theirProp = group.get(0);
                         break;
                     }
                 }
-                if (target != null) {
-                    targetId = target.getId();
-                    Card myProp = null;
-                    for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
-                        if (!group.isEmpty()) { myProp = group.get(0); break; }
-                    }
-                    Card theirProp = null;
-                    for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
-                        if (!group.isEmpty()) { theirProp = group.get(0); break; }
-                    }
-                    if (myProp != null) payload.addProperty("myPropertyId", myProp.getId());
-                    if (theirProp != null) payload.addProperty("theirPropertyId", theirProp.getId());
-                }
+                if (myProp != null) payload.addProperty("myPropertyId", myProp.getId());
+                if (theirProp != null) payload.addProperty("theirPropertyId", theirProp.getId());
             } else if (actionName.contains("Sly Deal")) {
-                // Only steal property cards not in complete sets (per official rules)
                 Player victim = null;
                 Card toSteal = null;
                 for (Player p : players) {
@@ -531,28 +561,34 @@ public class GameSession {
                         if (victim != null) break;
                     }
                 }
-                // No legal target (all other players' properties are in complete sets)
-                if (victim == null || toSteal == null) return false;
+                if (victim == null || toSteal == null) {
+                    sendError(activePlayer.getId(), "No valid target with available properties to steal");
+                    return false;
+                }
                 targetId = victim.getId();
                 payload.addProperty("targetCardId", toSteal.getId());
-            } else if (actionName.contains("Birthday")) {
-                // Birthday: collect all other players, first as responder, rest into _remainingTargets
-                java.util.List<String> allTargets = new java.util.ArrayList<>();
+            } else if (actionName.contains("Debt Collector")) {
+                // Default: select first other player
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
-                        allTargets.add(p.getId());
+                        targetId = p.getId();
+                        break;
                     }
                 }
-                if (allTargets.isEmpty()) return false;
-                targetId = allTargets.remove(0);
-                if (!allTargets.isEmpty()) {
-                    com.google.gson.JsonArray remaining = new com.google.gson.JsonArray();
-                    for (String id : allTargets) {
-                        remaining.add(id);
-                    }
-                    payload.add("_remainingTargets", remaining);
+                if (targetId.isEmpty()) {
+                    sendError(activePlayer.getId(), "No other players to target");
+                    return false;
                 }
-                payload.addProperty("_amount", GameConstants.BIRTHDAY_AMOUNT);
+            } else if (actionName.contains("Birthday")) {
+                // Need at least 1 other player
+                boolean hasOther = false;
+                for (Player p : players) {
+                    if (!p.equals(activePlayer)) { hasOther = true; break; }
+                }
+                if (!hasOther) {
+                    sendError(activePlayer.getId(), "No other players to collect from");
+                    return false;
+                }
             } else {
                 // Default: select first other player
                 for (Player p : players) {
@@ -561,10 +597,28 @@ public class GameSession {
                         break;
                     }
                 }
+                if (targetId.isEmpty()) {
+                    sendError(activePlayer.getId(), "No other players to target");
+                    return false;
+                }
+            }
+        } else {
+            // Target specified by client — validate it
+            Player targetPlayer = findPlayer(targetId);
+            if (targetPlayer == null) {
+                sendError(activePlayer.getId(), "Target player not found");
+                return false;
             }
         }
 
-        if (targetId.isEmpty()) return false;
+        if (targetId.isEmpty()) {
+            sendError(activePlayer.getId(), "No valid target for this action");
+            return false;
+        }
+
+        // All validations passed — now consume card
+        activePlayer.removeCardFromHand(card);
+        deck.discard(card);
 
         // Ensure payload contains targetPlayerId
         if (!payload.has("targetPlayerId")) {
@@ -601,8 +655,13 @@ public class GameSession {
         player1.getPropertyZone().addProperty(card2);
         player2.getPropertyZone().addProperty(card1);
 
+        String color1 = card1.isWildProperty() && card1.getWildColor() != null
+                ? card1.getWildColor().getName() : card1.getColor().getName();
+        String color2 = card2.isWildProperty() && card2.getWildColor() != null
+                ? card2.getWildColor().getName() : card2.getColor().getName();
         recordAction(player1.getId(), player1.getNickname(), "FORCED_DEAL",
-                player2.getNickname(), 0, card1.getName() + " <-> " + card2.getName());
+                player2.getNickname(), 0,
+                "Swapped " + card1.getName() + " (" + color1 + ") with " + card2.getName() + " (" + color2 + ")");
     }
 
     /**
@@ -1060,7 +1119,12 @@ public class GameSession {
             if (stolenCard.isWildProperty()) stolenCard.setWildColor(null);
             initiator.getPropertyZone().addProperty(stolenCard);
             recordAction(initiator.getId(), initiator.getNickname(), "SLY_DEAL",
-                    target.getNickname(), 0, "Stole " + stolenCard.getName());
+                    target.getNickname(), 0,
+                    "Stole " + stolenCard.getName() + " (" + stolenCard.getEffectiveColor().getName() + ") from " + target.getNickname());
+            // Check win condition
+            if (initiator.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
+                endGame(initiator);
+            }
         }
     }
 
@@ -1074,6 +1138,10 @@ public class GameSession {
         String myPropId = payload.get("myPropertyId").getAsString();
         String theirPropId = payload.get("theirPropertyId").getAsString();
         executeForcedDeal(initiator, otherPlayer, myPropId, theirPropId);
+        // Check win condition after swap
+        if (initiator.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
+            endGame(initiator);
+        }
     }
 
     // ==================== Helper Methods ====================
