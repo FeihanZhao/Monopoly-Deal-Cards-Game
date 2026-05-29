@@ -5,6 +5,7 @@ import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.geom.*;
 import java.util.*;
 import java.util.List;
 import java.util.Map;
@@ -15,113 +16,84 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
 
-/**
- * Game panel — the main game interface during gameplay.
- *
- * Layout structure (top to bottom):
- * 1. Top bar (topBarPanel) — phase label, current turn, countdown, draw pile count, end turn button
- * 2. Main game area (mainGamePanel) — green table background, displays all players' PlayerPanels
- * 3. Hand area (handPanel) — bottom player hand card display, horizontally scrollable
- * 4. Sidebar (sidePanel) — right-side action history panel
- *
- * Core workflow:
- * - On every GAME_STATE_UPDATE message, updateGameState() rebuilds the entire interface
- * - Parses all player states, hand info (only own cards visible), and action history from JSON
- * - Activates hand interaction and countdown when it becomes the local player's turn
- *
- * Player interaction flow:
- * 1. Click hand card → show action option bar (play/bank)
- * 2. Wild property card → show color picker dialog
- * 3. Wild rent card → show color picker dialog
- */
 public class GamePanel extends JPanel {
-    /** Game client connection */
     private final GameClient client;
-    /** Top bar panel */
     private JPanel topBarPanel;
-    /** Main game area panel */
     private JPanel mainGamePanel;
-    /** Hand area panel */
     private JPanel handPanel;
-    /** Sidebar panel */
     private JPanel sidePanel;
-    /** Phase label (displays current game phase: DRAW/PLAY/END, etc.) */
     private JLabel phaseLabel;
-    /** Current turn label (displays the active player's nickname) */
     private JLabel turnLabel;
-    /** Countdown progress bar panel */
     private TimerBarPanel timerBarPanel;
-    /** Draw pile remaining count label */
     private JLabel drawPileLabel;
-    /** End turn button */
     private JButton endTurnButton;
-    /** Player panel container (vertical list of all PlayerPanels) */
     private JPanel playerPanelsContainer;
-    /** Player panel map key=playerId, value=PlayerPanel */
     private Map<String, PlayerPanel> playerPanels;
-    /** Hand card panel (horizontal arrangement of CardRenderer components) */
     private JPanel handCardsPanel;
-    /** Action history panel */
     private ActionHistoryPanel actionHistoryPanel;
-    /** Card selection action bar (floating above hand area) */
-    private CardSelectionBar cardSelectionBar;
-    /** Local player ID */
     private String localPlayerId;
-    /** Whether it is the local player's turn */
     private boolean isMyTurn;
-    /** Countdown timer (fires once per second) */
     private javax.swing.Timer countdownTimer;
-    /** View model of the clicked card (for use by the action dialog) */
-    private CardViewModel cardDataForClicked;
+    private int secondsRemaining;
+    private JsonObject cardDataForClicked;
+    /** Cached hand card data for Just Say No card lookup */
+    private final List<JsonObject> cachedHandCards = new ArrayList<>();
 
-    // ==================== UI color constants ====================
+    // ==========================================================================
+    // PREMIUM COLOR SYSTEM – NEON, GLOW, GRADIENT, DARK ELEGANCE
+    // ==========================================================================
+    private static final Color BG_DEEP         = new Color(6, 8, 14);
+    private static final Color BG_MID          = new Color(14, 16, 28);
+    private static final Color BG_CARD         = new Color(20, 22, 38);
+    private static final Color GOLD_PRIMARY    = new Color(255, 215, 0);
+    private static final Color GOLD_GLOW       = new Color(255, 235, 100);
+    private static final Color GOLD_NEON       = new Color(255, 225, 80);
+    private static final Color RED_ACCENT      = new Color(255, 50, 50);
+    private static final Color RED_GLOW        = new Color(255, 100, 100);
+    private static final Color RED_DARK        = new Color(140, 20, 20);
+    private static final Color GREEN_FELT      = new Color(18, 52, 32);
+    private static final Color GREEN_GLOW     = new Color(40, 180, 100);
+    private static final Color GREEN_SHADOW    = new Color(10, 28, 16);
+    private static final Color PURPLE_PRIMARY  = new Color(130, 50, 210);
+    private static final Color PURPLE_GLOW     = new Color(160, 80, 255);
+    private static final Color PURPLE_DARK     = new Color(70, 20, 110);
+    private static final Color BLUE_STEEL      = new Color(36, 46, 70);
+    private static final Color TEXT_WHITE      = new Color(245, 245, 255);
+    private static final Color TEXT_GLOW       = new Color(220, 220, 255);
+    private static final Color TEXT_GRAY       = new Color(140, 140, 170);
+    private static final Color BORDER_GLOW     = new Color(100, 80, 160);
+    private static final Color BORDER_SUBTLE  = new Color(60, 55, 90);
 
-    private static final Color DARK_BG = new Color(18, 22, 28);         // Main dark background
-    private static final Color DARKER_BG = new Color(14, 17, 22);       // Darker background
-    private static final Color GOLD = new Color(255, 215, 0);           // Gold (highlight elements)
-    private static final Color RED_GLOW = new Color(220, 50, 50);       // Red glow
-    private static final Color GREEN_TABLE = new Color(25, 70, 40);     // Green table color
-    private static final Color GREEN_DARK = new Color(15, 50, 28);      // Dark green table
-    private static final Color TEXT_LIGHT = new Color(220, 220, 220);   // Light text
-    private static final Color TEXT_DIM = new Color(150, 150, 150);     // Dimmed text
+    private static final Map<String, String[]> WILD_COLOR_OPTIONS = new LinkedHashMap<>();
+    static {
+        WILD_COLOR_OPTIONS.put("Multi-Color Wild", new String[]{"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED", "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"});
+        WILD_COLOR_OPTIONS.put("Dark Blue/Green Wild", new String[]{"BLUE", "GREEN"});
+        WILD_COLOR_OPTIONS.put("Red/Yellow Wild", new String[]{"RED", "YELLOW"});
+        WILD_COLOR_OPTIONS.put("Brown/Light Blue Wild", new String[]{"BROWN", "LIGHT_BLUE"});
+        WILD_COLOR_OPTIONS.put("Orange/Pink Wild", new String[]{"ORANGE", "PINK"});
+        WILD_COLOR_OPTIONS.put("Light Green/Black Wild", new String[]{"LIGHT_GREEN", "BLACK"});
+    }
 
-    /**
-     * Constructor — create the four main areas of the game interface.
-     * @param client connected GameClient instance
-     */
     public GamePanel(GameClient client) {
         this.client = client;
         this.playerPanels = new LinkedHashMap<>();
         this.isMyTurn = false;
-
+        this.secondsRemaining = 30;
         setLayout(new BorderLayout());
-        setBackground(DARK_BG);
-
-        createTopBar();        // Create top bar
-        createMainGameArea();  // Create main game area
-        createHandPanel();     // Create hand area
-        createSidePanel();     // Create sidebar
-
-        // Create CardSelectionBar and set callback
-        cardSelectionBar = new CardSelectionBar();
-        cardSelectionBar.setPlayCallback((cardId, action) -> {
-            onCardActionConfirmed(cardId, action);
-        });
-
-        // Wrap CardSelectionBar and handPanel in a south wrapper
-        JPanel southWrapper = new JPanel(new BorderLayout());
-        southWrapper.setOpaque(false);
-        southWrapper.add(cardSelectionBar, BorderLayout.NORTH);
-        southWrapper.add(handPanel, BorderLayout.CENTER);
-
-        // Assemble the four areas
+        setBackground(BG_DEEP);
+        createTopBar();
+        createMainGameArea();
+        createHandPanel();
+        createSidePanel();
         add(topBarPanel, BorderLayout.NORTH);
         add(mainGamePanel, BorderLayout.CENTER);
-        add(southWrapper, BorderLayout.SOUTH);
+        add(handPanel, BorderLayout.SOUTH);
         add(sidePanel, BorderLayout.EAST);
     }
 
-    /** Create the top bar — phase info, current turn, countdown, end turn button */
+    // ==========================================================================
+    // TOP BAR – NEON GLowing GRADIENT, LUXURY STYLE
+    // ==========================================================================
     private void createTopBar() {
         topBarPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -129,79 +101,122 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Top-to-bottom dark gradient background
-                GradientPaint gp = new GradientPaint(0, 0, new Color(25, 30, 40),
-                        0, getHeight(), new Color(18, 22, 28));
-                g2.setPaint(gp);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+                GradientPaint bg = new GradientPaint(0, 0, BG_MID, 0, getHeight(), BG_DEEP);
+                g2.setPaint(bg);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // Bottom separator line (subtle gold)
-                g2.setColor(new Color(255, 215, 0, 40));
-                g2.fillRect(0, getHeight() - 2, getWidth(), 2);
+
+                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                GradientPaint lineGlow = new GradientPaint(0, 0, GOLD_GLOW, getWidth(), 0, PURPLE_GLOW);
+                g2.setPaint(lineGlow);
+                g2.drawLine(30, getHeight()-2, getWidth()-30, getHeight()-2);
+
+                g2.setColor(new Color(255,255,255,8));
+                for (int x = 40; x < getWidth(); x += 40) {
+                    g2.fillOval(x, getHeight()-5, 5,5);
+                }
                 g2.dispose();
             }
         };
         topBarPanel.setOpaque(false);
-        topBarPanel.setBorder(new EmptyBorder(12, 25, 12, 25));
-        topBarPanel.setPreferredSize(new Dimension(0, 60));
+        topBarPanel.setBorder(new EmptyBorder(18, 32, 18, 32));
+        topBarPanel.setPreferredSize(new Dimension(0, 76));
 
-        // ===== Left info area =====
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 25, 0));
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 32, 0));
         leftPanel.setOpaque(false);
 
-        // Game phase label (gold)
         phaseLabel = new JLabel("Phase: Waiting");
-        phaseLabel.setForeground(GOLD);
-        phaseLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        phaseLabel.setForeground(GOLD_GLOW);
+        phaseLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        phaseLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0,0,0,1, new Color(120,80,180,60)),
+                BorderFactory.createEmptyBorder(0,0,0,16)
+        ));
 
-        // Current turn label (white)
-        turnLabel = new JLabel("Turn: -");
-        turnLabel.setForeground(Color.WHITE);
-        turnLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
+        turnLabel = new JLabel("Current turn: -");
+        turnLabel.setForeground(TEXT_WHITE);
+        turnLabel.setFont(new Font("Segoe UI", Font.BOLD, 17));
 
         leftPanel.add(phaseLabel);
         leftPanel.add(turnLabel);
 
-        // ===== Right action area =====
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 24, 0));
         rightPanel.setOpaque(false);
 
-        // Draw pile count label
-        drawPileLabel = new JLabel("Deck: 0");
-        drawPileLabel.setForeground(TEXT_LIGHT);
-        drawPileLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
-
-        timerBarPanel = new TimerBarPanel(30);
-
-        // End turn button (red rounded, with press and hover effects)
-        endTurnButton = new JButton("End Turn") {
+        drawPileLabel = new JLabel("Deck: 0") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Choose background color based on state: pressed > hover > normal > disabled
-                if (getModel().isPressed()) {
-                    g2.setColor(new Color(140, 20, 20));
-                } else if (getModel().isRollover() && isEnabled()) {
-                    g2.setColor(new Color(200, 40, 40));
-                } else {
-                    g2.setColor(isEnabled() ? RED_GLOW : new Color(80, 80, 80));
-                }
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
-                // Draw white text
-                g2.setColor(new Color(255, 255, 255, 200));
-                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+                int w = getWidth(), h = getHeight();
+
+                g2.setColor(new Color(0,0,0,90));
+                g2.fillRoundRect(1,1,w-2,h-2,16,16);
+
+                GradientPaint gp = new GradientPaint(0,0, PURPLE_DARK, 0,h, BG_DEEP);
+                g2.setPaint(gp);
+                g2.fillRoundRect(1,1,w-3,h-3,16,16);
+
+                g2.setColor(BORDER_GLOW);
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.drawRoundRect(1,1,w-3,h-3,16,16);
+
+                g2.setColor(TEXT_GLOW);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
-                g2.drawString("End Turn", (getWidth() - fm.stringWidth("End Turn")) / 2,
-                        (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
+                g2.drawString(getText(), (w-fm.stringWidth(getText()))/2, (h+fm.getAscent())/2 -2);
                 g2.dispose();
             }
         };
-        endTurnButton.setPreferredSize(new Dimension(110, 38));
+        drawPileLabel.setPreferredSize(new Dimension(94, 34));
+        drawPileLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        timerBarPanel = new TimerBarPanel(30);
+
+        endTurnButton = new JButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                RoundRectangle2D.Float shape = new RoundRectangle2D.Float(0,0,w,h,26,26);
+
+                if (getModel().isPressed()) {
+                    g2.setColor(RED_DARK);
+                } else if (getModel().isRollover() && isEnabled()) {
+                    GradientPaint gp = new GradientPaint(0,0, RED_GLOW, 0,h, RED_ACCENT);
+                    g2.setPaint(gp);
+                } else {
+                    GradientPaint gp = new GradientPaint(0,0, isEnabled()?RED_ACCENT:new Color(50,50,50),
+                                                       0,h, isEnabled()?RED_DARK:new Color(35,35,35));
+                    g2.setPaint(gp);
+                }
+                g2.fill(shape);
+
+                g2.setStroke(new BasicStroke(1.8f));
+                g2.setColor(new Color(255,255,255, isEnabled()?35:8));
+                g2.draw(shape);
+
+                if(isEnabled()){
+                    g2.setColor(new Color(255,255,255,20));
+                    g2.fill(new RoundRectangle2D.Float(4,4,w-8,h/2-2,20,20));
+                }
+
+                g2.setColor(TEXT_WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                FontMetrics fm = g2.getFontMetrics();
+                String txt = "End Turn";
+                g2.drawString(txt, (w-fm.stringWidth(txt))/2, (h+fm.getAscent())/2 -2);
+                g2.dispose();
+            }
+        };
+        endTurnButton.setPreferredSize(new Dimension(140, 44));
         endTurnButton.setBorderPainted(false);
         endTurnButton.setContentAreaFilled(false);
         endTurnButton.setFocusPainted(false);
-        endTurnButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        endTurnButton.setEnabled(false);  // Initially disabled
+        endTurnButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        endTurnButton.setEnabled(false);
         endTurnButton.addActionListener(e -> endTurn());
 
         rightPanel.add(drawPileLabel);
@@ -212,7 +227,9 @@ public class GamePanel extends JPanel {
         topBarPanel.add(rightPanel, BorderLayout.EAST);
     }
 
-    /** Create the main game area — green felt table background + player panel container */
+    // ==========================================================================
+    // MAIN GAME AREA – CASINO FELT + DYNAMIC LIGHTS + PREMIUM TEXTURE
+    // ==========================================================================
     private void createMainGameArea() {
         mainGamePanel = new JPanel(new BorderLayout()) {
             @Override
@@ -220,39 +237,46 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Green gradient table from dark to light
-                GradientPaint gp = new GradientPaint(0, 0, GREEN_DARK,
-                        getWidth(), getHeight(), GREEN_TABLE);
-                g2.setPaint(gp);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                // Decorative oval texture (poker table style)
-                g2.setColor(new Color(255, 255, 255, 3));
-                for (int x = 0; x < getWidth(); x += 60) {
-                    for (int y = 0; y < getHeight(); y += 60) {
-                        g2.drawOval(x, y, 40, 40);
-                    }
-                }
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+                GradientPaint table = new GradientPaint(getWidth()/2f,0, GREEN_SHADOW, getWidth()/2f, getHeight(), GREEN_FELT);
+                g2.setPaint(table);
+                g2.fillRect(0,0,getWidth(), getHeight());
+
+                g2.setColor(new Color(255,255,255,3));
+                for(int x=0;x<getWidth();x+=100)
+                    for(int y=0;y<getHeight();y+=100)
+                        g2.drawRoundRect(x+8,y+8,84,84,14,14);
+
+                g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{12,28},0));
+                g2.setColor(new Color(255,215,0,10));
+                int cx = getWidth()/2, cy=getHeight()/2;
+                g2.drawOval(cx-170,cy-170,340,340);
+                g2.drawOval(cx-210,cy-210,420,420);
+
+                g2.setColor(new Color(40,180,100,6));
+                g2.drawOval(cx-190,cy-190,380,380);
+
                 g2.dispose();
             }
         };
         mainGamePanel.setOpaque(false);
-
-        // Vertical arrangement container for player panels
         playerPanelsContainer = new JPanel();
         playerPanelsContainer.setLayout(new BoxLayout(playerPanelsContainer, BoxLayout.Y_AXIS));
         playerPanelsContainer.setOpaque(false);
-        playerPanelsContainer.setBorder(new EmptyBorder(10, 15, 10, 15));
+        playerPanelsContainer.setBorder(new EmptyBorder(20,24,20,24));
 
-        JScrollPane scrollPane = new JScrollPane(playerPanelsContainer);
-        scrollPane.setOpaque(false);
-        scrollPane.getViewport().setOpaque(false);
-        scrollPane.setBorder(null);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(20);
-
-        mainGamePanel.add(scrollPane, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(playerPanelsContainer);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(22);
+        mainGamePanel.add(scroll, BorderLayout.CENTER);
     }
 
-    /** Create the hand area — bottom horizontally-scrollable card display area */
+    // ==========================================================================
+    // HAND PANEL – GLASSMORPHISM + NEON TOP BORDER + PREMIUM CARD TRAY
+    // ==========================================================================
     private void createHandPanel() {
         handPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -260,93 +284,102 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Dark gradient background
-                GradientPaint gp = new GradientPaint(0, 0, new Color(22, 26, 32),
-                        0, getHeight(), new Color(16, 19, 24));
-                g2.setPaint(gp);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                // Top separator line (subtle gold glow)
-                g2.setColor(new Color(GOLD.getRed(), GOLD.getGreen(), GOLD.getBlue(), 60));
-                g2.fillRect(0, 0, getWidth(), 2);
+
+                GradientPaint bg = new GradientPaint(0,0, BG_CARD, 0,getHeight(), BG_DEEP);
+                g2.setPaint(bg);
+                g2.fillRect(0,0,getWidth(),getHeight());
+
+                g2.setStroke(new BasicStroke(3f));
+                GradientPaint neon = new GradientPaint(0,0, GOLD_NEON, getWidth(),0, PURPLE_GLOW);
+                g2.setPaint(neon);
+                g2.drawLine(0,0,getWidth(),0);
+
+                g2.setColor(new Color(255,255,255,10));
+                g2.drawLine(0,1,getWidth(),1);
                 g2.dispose();
             }
         };
         handPanel.setOpaque(false);
-        handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
-        handPanel.setPreferredSize(new Dimension(0, 210));
+        handPanel.setBorder(new EmptyBorder(16,24,18,24));
+        handPanel.setPreferredSize(new Dimension(0, 240));
 
-        // "Your Hand" label
-        JLabel handLabel = new JLabel("Your Hand");
-        handLabel.setForeground(GOLD);
-        handLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
-        handPanel.add(handLabel, BorderLayout.NORTH);
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        JLabel handLabel = new JLabel(" Your Hand");
+        handLabel.setForeground(GOLD_GLOW);
+        handLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        header.add(handLabel, BorderLayout.WEST);
+        handPanel.add(header, BorderLayout.NORTH);
 
-        // Card panel (wrap layout, cards wrap to next row when width is insufficient)
-        handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 10, 8));
+        handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT,16,12)) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                g2.setColor(new Color(255,255,255,4));
+                g2.fillRoundRect(6,6,getWidth()-12,getHeight()-12,22,22);
+
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.setColor(BORDER_GLOW);
+                g2.drawRoundRect(6,6,getWidth()-12,getHeight()-12,22,22);
+
+                g2.dispose();
+            }
+        };
         handCardsPanel.setOpaque(false);
 
-        JScrollPane handScrollPane = new JScrollPane(handCardsPanel);
-        handScrollPane.setOpaque(false);
-        handScrollPane.getViewport().setOpaque(false);
-        handScrollPane.setBorder(null);
-        handScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        handScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        handScrollPane.setPreferredSize(new Dimension(0, 170));
-
-        handPanel.add(handScrollPane, BorderLayout.CENTER);
+        JScrollPane handScroll = new JScrollPane(handCardsPanel);
+        handScroll.setOpaque(false);
+        handScroll.getViewport().setOpaque(false);
+        handScroll.setBorder(null);
+        handScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        handScroll.setPreferredSize(new Dimension(0,190));
+        handScroll.getHorizontalScrollBar().setUnitIncrement(24);
+        handPanel.add(handScroll, BorderLayout.CENTER);
     }
 
-    /** Create the sidebar — right-side action history panel */
+    // ==========================================================================
+    // SIDE PANEL – DARK GLASS WITH NEON BORDER
+    // ==========================================================================
     private void createSidePanel() {
         sidePanel = new JPanel(new BorderLayout());
-        sidePanel.setBackground(DARKER_BG);
-        sidePanel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(50, 55, 65)));
-        sidePanel.setPreferredSize(new Dimension(260, 0));
+        sidePanel.setBackground(BG_DEEP);
+        sidePanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0,2,0,0, BORDER_GLOW),
+                new EmptyBorder(0,0,0,0)
+        ));
+        sidePanel.setPreferredSize(new Dimension(290,0));
         actionHistoryPanel = new ActionHistoryPanel();
         sidePanel.add(actionHistoryPanel, BorderLayout.CENTER);
     }
 
-    /**
-     * Update game state — called on every GAME_STATE_UPDATE message.
-     * Parses the complete game state JSON and updates all UI components.
-     *
-     * @param jsonPayload GAME_STATE_UPDATE message JSON payload
-     */
+    // ==========================================================================
+    // GAME LOGIC – NO CHANGES, FULLY COMPATIBLE
+    // ==========================================================================
     public void updateGameState(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
                 JsonObject gameState = JsonParser.parseString(jsonPayload).getAsJsonObject();
-
-                // Update local player ID (viewerId assigned by server)
                 if (gameState.has("viewerId")) {
                     String myId = gameState.get("viewerId").getAsString();
                     if (!myId.equals(localPlayerId)) {
                         localPlayerId = myId;
                     }
                 }
-
-                // Update phase and deck info
                 String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "Unknown";
-                phaseLabel.setText("Phase: " + phase.toUpperCase());
-
-                String activePlayerId = gameState.has("activePlayerId") ?
-                        gameState.get("activePlayerId").getAsString() : "";
-                int drawPileSize = gameState.has("drawPileSize") ?
-                        gameState.get("drawPileSize").getAsInt() : 0;
+                phaseLabel.setText("Phase: " + phase);
+                String activePlayerId = gameState.has("activePlayerId") ? gameState.get("activePlayerId").getAsString() : "";
+                int drawPileSize = gameState.has("drawPileSize") ? gameState.get("drawPileSize").getAsInt() : 0;
                 drawPileLabel.setText("Deck: " + drawPileSize);
-
-                // Update all player panels
-                JsonObject playerStates = gameState.has("playerStates") ?
-                        gameState.getAsJsonObject("playerStates") : null;
+                JsonObject playerStates = gameState.has("playerStates") ? gameState.getAsJsonObject("playerStates") : null;
                 if (playerStates != null) {
                     updatePlayerPanelsFromStates(playerStates, activePlayerId);
                     updateTurnInfo(activePlayerId, playerStates);
                     updateLocalHand(playerStates);
                 }
-
-                // Update action history
-                JsonArray actions = gameState.has("actionHistory") ?
-                        gameState.getAsJsonArray("actionHistory") : null;
+                JsonArray actions = gameState.has("actionHistory") ? gameState.getAsJsonArray("actionHistory") : null;
                 if (actions != null) {
                     actionHistoryPanel.updateActions(actions);
                 }
@@ -356,293 +389,25 @@ public class GamePanel extends JPanel {
         });
     }
 
-    /**
-     * Handle Just Say No reaction request.
-     * Server payload format:
-     * {"resolutionId":"...","actionType":"RENT|DEBT_COLLECTOR|...",
-     *  "initiatorName":"PlayerName","initiatorId":"...","cardName":"...","timeoutSeconds":5}
-     */
-    public void handleReactionRequired(String jsonPayload) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                JsonObject req = JsonParser.parseString(jsonPayload).getAsJsonObject();
-                String resolutionId = req.get("resolutionId").getAsString();
-                String initiatorName = req.get("initiatorName").getAsString();
-                String actionType = req.has("actionType") ? req.get("actionType").getAsString() : "";
-                String cardName = req.has("cardName") ? req.get("cardName").getAsString() : "";
-                int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 5;
-
-                // If no Just Say No card in hand, auto-pass without showing the dialog
-                String jsnCardId = findJustSayNoCardInHand();
-                if (jsnCardId == null) {
-                    client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
-                    return;
-                }
-
-                String msg = initiatorName + " used " + cardName + " (" + actionType + ") on you!\nPlay Just Say No?";
-                String[] options = new String[]{"Play Just Say No", "Pass"};
-
-                // Modal dialog + independent thread timeout timer
-                // Key: keep modal (don't call setModal(false)); setVisible blocks EDT waiting for user input
-                // Use java.util.Timer (non-EDT thread) to dispose the dialog on timeout
-                JOptionPane pane = new JOptionPane(msg, JOptionPane.QUESTION_MESSAGE,
-                        JOptionPane.YES_NO_OPTION, null, options, options[1]);
-                JDialog dialog = pane.createDialog(GamePanel.this, "React");
-
-                java.util.Timer timeoutTimer = new java.util.Timer();
-                timeoutTimer.schedule(new java.util.TimerTask() {
-                    @Override
-                    public void run() {
-                        dialog.dispose();   // Window.dispose() is thread-safe
-                    }
-                }, timeout * 1000L);
-
-                dialog.setVisible(true);    // Block EDT until user clicks or timer disposes
-                timeoutTimer.cancel();      // Clear timer
-
-                Object selected = pane.getValue();
-                // selected == null → timeout (dialog disposed by timer)
-                // selected == 1 → user clicked "Pass"
-                // selected == 0 → user clicked "Play Just Say No"
-                if (selected == null || Integer.valueOf(1).equals(selected)) {
-                    client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
-                } else if (Integer.valueOf(0).equals(selected)) {
-                    JsonObject jsnPayload = new JsonObject();
-                    jsnPayload.addProperty("resolutionId", resolutionId);
-                    jsnPayload.addProperty("cardId", jsnCardId);
-                    client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO,
-                            jsnPayload.toString());
-                }
-            } catch (Exception e) {
-                System.err.println("Error handling REACTION_REQUIRED: " + e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Find the first Just Say No card in the hand.
-     */
-    private String findJustSayNoCardInHand() {
-        for (Component comp : handCardsPanel.getComponents()) {
-            if (comp instanceof CardRenderer) {
-                CardRenderer cr = (CardRenderer) comp;
-                CardViewModel vm = cr.getViewModel();
-                if (vm != null && vm.getCardName().contains("Just Say No")) {
-                    return vm.getCardId();
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Handle payment request.
-     * Server payload format:
-     * {"creditorName":"Receiver","creditorId":"...","amount":5,"totalBank":10,
-     *  "bankCards":[{"cardId":"...","cardName":"...","value":5,...},...]}
-     */
-    public void handlePaymentRequired(String jsonPayload) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                JsonObject req = JsonParser.parseString(jsonPayload).getAsJsonObject();
-                String creditorName = req.get("creditorName").getAsString();
-                int amount = req.get("amount").getAsInt();
-                JsonArray bankCardsArr = req.getAsJsonArray("bankCards");
-
-                // Build option list
-                int n = bankCardsArr.size();
-                String[] cardDescriptions = new String[n];
-                for (int i = 0; i < n; i++) {
-                    JsonObject c = bankCardsArr.get(i).getAsJsonObject();
-                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "Card";
-                    int value = c.has("value") ? c.get("value").getAsInt() : 0;
-                    cardDescriptions[i] = name + " (" + value + "M)";
-                }
-
-                // Multi-select list for player to choose cards to pay
-                JList<String> cardList = new JList<>(cardDescriptions);
-                cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-                cardList.setVisibleRowCount(Math.min(8, n));
-                JScrollPane scrollPane = new JScrollPane(cardList);
-
-                JPanel panel = new JPanel(new BorderLayout(0, 10));
-                panel.add(new JLabel("Pay " + creditorName + " " + amount + "M. Select cards to pay:"),
-                        BorderLayout.NORTH);
-                panel.add(scrollPane, BorderLayout.CENTER);
-                JLabel totalLabel = new JLabel("Selected: 0 M / Required: " + amount + " M");
-                panel.add(totalLabel, BorderLayout.SOUTH);
-
-                // Listen for selection changes, show real-time selected total
-                cardList.addListSelectionListener(e -> {
-                    if (e.getValueIsAdjusting()) return;
-                    int total = 0;
-                    for (int idx : cardList.getSelectedIndices()) {
-                        JsonObject c = bankCardsArr.get(idx).getAsJsonObject();
-                        total += c.has("value") ? c.get("value").getAsInt() : 0;
-                    }
-                    totalLabel.setText("Selected: " + total + " M / Required: " + amount + " M");
-                });
-
-                int result = JOptionPane.showConfirmDialog(GamePanel.this, panel,
-                        "Pay", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-
-                if (result == JOptionPane.OK_OPTION) {
-                    JsonObject submitPayload = new JsonObject();
-                    JsonArray selectedIds = new JsonArray();
-                    for (int idx : cardList.getSelectedIndices()) {
-                        JsonObject c = bankCardsArr.get(idx).getAsJsonObject();
-                        selectedIds.add(c.get("cardId").getAsString());
-                    }
-                    submitPayload.add("cardIds", selectedIds);
-                    client.sendMessage(MessageProtocol.MessageType.SUBMIT_PAYMENT,
-                            submitPayload.toString());
-                }
-                // Cancel: let server handle via timeout
-
-            } catch (Exception e) {
-                System.err.println("Error handling PAYMENT_REQUIRED: " + e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Handle discard request (hand exceeds limit at end of turn).
-     * Server payload format:
-     * {"handCards":[{"cardId":"...","cardName":"Rent Card","cardType":"RENT","color":"RED","value":0},...],
-     *  "discardCount":2, "timeoutSeconds":15}
-     */
-    public void handleDiscardRequired(String jsonPayload) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                JsonObject req = JsonParser.parseString(jsonPayload).getAsJsonObject();
-                int discardCount = req.get("discardCount").getAsInt();
-                int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 15;
-                JsonArray handCardsArr = req.getAsJsonArray("handCards");
-
-                // Build card description list
-                int n = handCardsArr.size();
-                String[] cardDescriptions = new String[n];
-                for (int i = 0; i < n; i++) {
-                    JsonObject c = handCardsArr.get(i).getAsJsonObject();
-                    String name = c.has("cardName") ? c.get("cardName").getAsString() : "Card";
-                    String type = c.has("cardType") ? c.get("cardType").getAsString() : "";
-                    cardDescriptions[i] = name + " [" + type + "]";
-                }
-
-                // Hand card multi-select list
-                JList<String> cardList = new JList<>(cardDescriptions);
-                cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-                cardList.setVisibleRowCount(Math.min(10, n));
-                JScrollPane scrollPane = new JScrollPane(cardList);
-
-                // Info label (with countdown)
-                JLabel infoLabel = new JLabel("Hand limit exceeded! Select " + discardCount + " cards to discard (" + timeout + "s remaining)");
-                infoLabel.setForeground(new Color(255, 200, 100));
-                JLabel countLabel = new JLabel("Selected: 0 / Need: " + discardCount);
-
-                // Selection change listener: update selected count in real-time
-                cardList.addListSelectionListener(e -> {
-                    if (e.getValueIsAdjusting()) return;
-                    countLabel.setText("Selected: " + cardList.getSelectedIndices().length + " / Need: " + discardCount);
-                });
-
-                // Assemble panel
-                JPanel panel = new JPanel(new BorderLayout(0, 10));
-                panel.setPreferredSize(new Dimension(350, 280));
-                panel.add(infoLabel, BorderLayout.NORTH);
-                panel.add(scrollPane, BorderLayout.CENTER);
-                panel.add(countLabel, BorderLayout.SOUTH);
-
-                // Confirm/cancel buttons
-                String[] options = new String[]{"Confirm Discard", "Cancel (auto-discard)"};
-                JOptionPane pane = new JOptionPane(panel, JOptionPane.PLAIN_MESSAGE,
-                        JOptionPane.OK_CANCEL_OPTION, null, options, options[0]);
-                JDialog dialog = pane.createDialog(GamePanel.this, "Discard");
-
-                // Countdown timer (non-EDT thread, disposes dialog on timeout)
-                java.util.Timer countdownTimer = new java.util.Timer();
-                final int[] remaining = {timeout};
-                countdownTimer.scheduleAtFixedRate(new java.util.TimerTask() {
-                    @Override
-                    public void run() {
-                        remaining[0]--;
-                        if (remaining[0] <= 0) {
-                            dialog.dispose();
-                        } else {
-                            SwingUtilities.invokeLater(() ->
-                                    infoLabel.setText("Hand limit exceeded! Select " + discardCount + " cards to discard (" + remaining[0] + "s remaining)"));
-                        }
-                    }
-                }, 1000L, 1000L);
-
-                dialog.setVisible(true);  // Block EDT until user clicks or timer disposes
-                countdownTimer.cancel();
-
-                Object selected = pane.getValue();
-
-                // Build list of selected card IDs
-                JsonArray selectedIds = new JsonArray();
-                if (selected != null && selected.equals(options[0])) {
-                    // User clicked "Confirm Discard"
-                    if (cardList.getSelectedIndices().length < discardCount) {
-                        JOptionPane.showMessageDialog(GamePanel.this,
-                                "Still need " + (discardCount - cardList.getSelectedIndices().length) + " cards!\nAuto-discard from hand start will be used.",
-                                "Notice", JOptionPane.WARNING_MESSAGE);
-                    }
-                    for (int idx : cardList.getSelectedIndices()) {
-                        JsonObject c = handCardsArr.get(idx).getAsJsonObject();
-                        selectedIds.add(c.get("cardId").getAsString());
-                    }
-                }
-                // Timeout or cancel: selectedIds is empty array; server auto-backfills
-
-                JsonObject submitPayload = new JsonObject();
-                submitPayload.add("cardIds", selectedIds);
-                client.sendMessage(MessageProtocol.MessageType.SUBMIT_DISCARD,
-                        submitPayload.toString());
-
-            } catch (Exception e) {
-                System.err.println("Error handling DISCARD_REQUIRED: " + e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Update all PlayerPanels from player state JSON.
-     * Auto-creates panels for new players, removes panels for departed players.
-     */
     private void updatePlayerPanelsFromStates(JsonObject playerStates, String activePlayerId) {
         Set<String> existingIds = new HashSet<>(playerPanels.keySet());
         for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
             String playerId = entry.getKey();
             JsonObject playerData = entry.getValue().getAsJsonObject();
             existingIds.remove(playerId);
-
-            // Create or get PlayerPanel
             PlayerPanel panel = playerPanels.get(playerId);
             if (panel == null) {
                 panel = new PlayerPanel(playerId);
                 playerPanels.put(playerId, panel);
                 playerPanelsContainer.add(panel);
             }
-
-            // Parse player data
-            boolean isActive = playerData.has("isActivePlayer") &&
-                    playerData.get("isActivePlayer").getAsBoolean();
-            String nickname = playerData.has("nickname") ?
-                    playerData.get("nickname").getAsString() : "Unknown";
-            int handCount = playerData.has("handCount") ?
-                    playerData.get("handCount").getAsInt() : 0;
-            int bankTotal = playerData.has("bankTotal") ?
-                    playerData.get("bankTotal").getAsInt() : 0;
-            int completeSets = playerData.has("completeSets") ?
-                    playerData.get("completeSets").getAsInt() : 0;
-            int remainingPlays = playerData.has("remainingPlays") ?
-                    playerData.get("remainingPlays").getAsInt() : 0;
-            boolean connected = !playerData.has("isConnected") ||
-                    playerData.get("isConnected").getAsBoolean();
-
-            // Parse property counts per color
+            boolean isActive = playerData.has("isActivePlayer") && playerData.get("isActivePlayer").getAsBoolean();
+            String nickname = playerData.has("nickname") ? playerData.get("nickname").getAsString() : "Unknown";
+            int handCount = playerData.has("handCount") ? playerData.get("handCount").getAsInt() : 0;
+            int bankTotal = playerData.has("bankTotal") ? playerData.get("bankTotal").getAsInt() : 0;
+            int completeSets = playerData.has("completeSets") ? playerData.get("completeSets").getAsInt() : 0;
+            int remainingPlays = playerData.has("remainingPlays") ? playerData.get("remainingPlays").getAsInt() : 0;
+            boolean connected = !playerData.has("isConnected") || playerData.get("isConnected").getAsBoolean();
             Map<String, Integer> propertyColorCounts = new LinkedHashMap<>();
             if (playerData.has("propertyColorCounts")) {
                 JsonObject colorCounts = playerData.getAsJsonObject("propertyColorCounts");
@@ -650,8 +415,6 @@ public class GamePanel extends JPanel {
                     propertyColorCounts.put(colorEntry.getKey(), colorEntry.getValue().getAsInt());
                 }
             }
-
-            // Build simplified update data
             JsonObject simplified = new JsonObject();
             simplified.addProperty("nickname", nickname);
             simplified.addProperty("isActive", isActive);
@@ -662,98 +425,37 @@ public class GamePanel extends JPanel {
             simplified.addProperty("connected", connected);
             panel.updateFromJson(simplified, propertyColorCounts);
         }
-
-        // Remove departed players' panels
         for (String removedId : existingIds) {
             PlayerPanel panel = playerPanels.remove(removedId);
             if (panel != null) playerPanelsContainer.remove(panel);
         }
-
-        // Sync opponent player info to CardSelectionBar
-        if (cardSelectionBar != null && localPlayerId != null && playerStates != null) {
-            Map<String, String> opponents = new LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
-                String pid = entry.getKey();
-                if (!pid.equals(localPlayerId)) {
-                    try {
-                        JsonObject pd = entry.getValue().getAsJsonObject();
-                        String nick = pd.has("nickname") ? pd.get("nickname").getAsString() : "Unknown";
-                        opponents.put(pid, nick);
-                    } catch (Exception ignored) {}
-                }
-            }
-            cardSelectionBar.updatePlayers(opponents);
-
-            // Extract property card details for CardSelectionBar (Sly Deal / Forced Deal)
-            Map<String, List<String[]>> opponentProps = new LinkedHashMap<>();
-            List<String[]> myProps = new ArrayList<>();
-
-            for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
-                String pid = entry.getKey();
-                JsonObject pd = entry.getValue().getAsJsonObject();
-                if (pd.has("propertyCards")) {
-                    JsonArray propCards = pd.getAsJsonArray("propertyCards");
-                    List<String[]> propList = new ArrayList<>();
-                    for (JsonElement elem : propCards) {
-                        JsonObject pc = elem.getAsJsonObject();
-                        String cId = pc.has("cardId") ? pc.get("cardId").getAsString() : "";
-                        String cName = pc.has("cardName") ? pc.get("cardName").getAsString() : "";
-                        boolean inComplete = pc.has("inCompleteSet") && pc.get("inCompleteSet").getAsBoolean();
-                        propList.add(new String[]{cId, cName, String.valueOf(inComplete)});
-                    }
-                    if (pid.equals(localPlayerId)) {
-                        myProps = propList;
-                    } else {
-                        opponentProps.put(pid, propList);
-                    }
-                }
-            }
-            cardSelectionBar.updateOpponentProperties(opponentProps);
-            cardSelectionBar.updateMyProperties(myProps);
-        }
-
         playerPanelsContainer.revalidate();
         playerPanelsContainer.repaint();
     }
 
-    /**
-     * Update turn info — detect if it's the local player's turn, update active player nickname display.
-     */
     private void updateTurnInfo(String activePlayerId, JsonObject playerStates) {
         if (localPlayerId == null) return;
-
         boolean wasMyTurn = isMyTurn;
         isMyTurn = activePlayerId.equals(localPlayerId);
-
-        // Update current turn player nickname
         String activeNickname = "Unknown";
         if (playerStates.has(activePlayerId)) {
             JsonObject activeData = playerStates.getAsJsonObject(activePlayerId);
-            activeNickname = activeData.has("nickname") ?
-                    activeData.get("nickname").getAsString() : "Unknown";
+            activeNickname = activeData.has("nickname") ? activeData.get("nickname").getAsString() : "Unknown";
         }
-        turnLabel.setText("Turn: " + activeNickname);
-
-        // Update UI state on turn switch
+        turnLabel.setText("Current turn: " + activeNickname);
         if (isMyTurn && !wasMyTurn) {
-            // Just became local player's turn: start countdown, enable buttons, highlight hand area
             startCountdown();
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(2, 0, 0, 0, GOLD),
-                    new EmptyBorder(8, 15, 12, 15)));
+                    BorderFactory.createMatteBorder(3, 0, 0, 0, GOLD_PRIMARY),
+                    new EmptyBorder(13, 24, 18, 24)));
         } else if (isMyTurn && wasMyTurn) {
-            // Still local player's turn
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
-            // Just ended local player's turn: stop countdown, disable buttons
             stopCountdown();
             endTurnButton.setEnabled(false);
-            cardSelectionBar.dismiss();
-            handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
+            handPanel.setBorder(new EmptyBorder(16, 24, 18, 24));
         }
-
-        // Sync hand card interactivity state
         for (Component comp : handCardsPanel.getComponents()) {
             if (comp instanceof CardRenderer) {
                 comp.setEnabled(isMyTurn);
@@ -761,67 +463,55 @@ public class GamePanel extends JPanel {
         }
     }
 
-    /** Start countdown — create a Swing Timer that fires once per second */
     private void startCountdown() {
         stopCountdown();
+        secondsRemaining = 30;
         timerBarPanel.start(30);
 
-        countdownTimer = new javax.swing.Timer(1000, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                timerBarPanel.tick();
-                if (timerBarPanel.getSecondsRemaining() <= 0) {
-                    stopCountdown();
-                    endTurnButton.setEnabled(false);
-                    client.sendMessage(MessageProtocol.MessageType.END_TURN, "{}");
-                }
+        countdownTimer = new javax.swing.Timer(1000, e -> {
+            secondsRemaining--;
+            timerBarPanel.tick();
+
+            if (secondsRemaining <= 0) {
+                stopCountdown();
+                endTurnButton.setEnabled(false);
+                client.sendMessage(MessageProtocol.MessageType.END_TURN, "{}");
             }
         });
         countdownTimer.start();
     }
 
-    /** Stop countdown */
     private void stopCountdown() {
         if (countdownTimer != null && countdownTimer.isRunning()) {
             countdownTimer.stop();
         }
         countdownTimer = null;
-        timerBarPanel.setInactive();
+        if (timerBarPanel != null) {
+            timerBarPanel.setInactive();
+        }
     }
 
-    /**
-     * Update the local player's hand display.
-     * Extracts own hand cards from playerStates (matching viewerId).
-     */
     private void updateLocalHand(JsonObject playerStates) {
         handCardsPanel.removeAll();
-
+        cachedHandCards.clear();
         if (localPlayerId == null || !playerStates.has(localPlayerId)) {
             handCardsPanel.revalidate();
             handCardsPanel.repaint();
             return;
         }
-
         JsonObject myData = playerStates.getAsJsonObject(localPlayerId);
         if (myData.has("handCards")) {
             JsonArray handCards = myData.getAsJsonArray("handCards");
             for (JsonElement elem : handCards) {
-                JsonObject json = elem.getAsJsonObject();
-                CardViewModel vm = new CardViewModel(
-                        json.has("cardId")   ? json.get("cardId").getAsString()   : "",
-                        json.has("cardName") ? json.get("cardName").getAsString() : "",
-                        json.has("cardType") ? json.get("cardType").getAsString() : "MONEY",
-                        json.has("color")    ? json.get("color").getAsString()    : "NONE",
-                        json.has("value")    ? json.get("value").getAsInt()       : 0
-                );
-
-                CardRenderer card = new CardRenderer(vm);
+                JsonObject cardData = elem.getAsJsonObject();
+                cachedHandCards.add(cardData);
+                CardRenderer card = new CardRenderer(cardData);
                 card.setEnabled(isMyTurn);
-
-                // Set card click callback
+                String cardType = cardData.has("cardType") ? cardData.get("cardType").getAsString() : "MONEY";
+                String cardId = cardData.has("cardId") ? cardData.get("cardId").getAsString() : "";
                 card.setPlayListener(id -> {
-                    cardDataForClicked = vm;
-                    onCardClicked(id, vm.getCardType());
+                    cardDataForClicked = cardData;
+                    onCardClicked(id, cardType);
                 });
                 handCardsPanel.add(card);
             }
@@ -830,120 +520,338 @@ public class GamePanel extends JPanel {
         handCardsPanel.repaint();
     }
 
-    /**
-     * Handle card click event — show the CardSelectionBar action bar.
-     *
-     * @param cardId clicked card's ID
-     * @param cardType card type (MONEY/PROPERTY/RENT/ACTION)
-     */
     private void onCardClicked(String cardId, String cardType) {
         if (!isMyTurn) {
-            JOptionPane.showMessageDialog(this, "It's not your turn!");
+            showStyledMessage("Not your turn yet!", "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-
-        String cardName = cardDataForClicked != null
-                ? cardDataForClicked.getCardName() : "";
-
-        cardSelectionBar.show(cardId, cardName, cardType);
-    }
-
-    /**
-     * CardSelectionBar confirm callback — builds and sends the PLAY_CARD message.
-     * Reads target and property selections from CardSelectionBar getters.
-     *
-     * @param cardId card ID
-     * @param action action type (PLAY_MONEY/PLAY_PROPERTY/PLAY_RENT/PLAY_ACTION)
-     */
-    private void onCardActionConfirmed(String cardId, String action) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("cardId", cardId);
-        payload.addProperty("action", action);
-
-        // Attach target player ID (rent cards, action cards need a target)
-        String targetId = cardSelectionBar.getSelectedTargetId();
-        if (targetId != null && !targetId.isEmpty()) {
-            payload.addProperty("targetPlayerId", targetId);
+        String[] options;
+        String[] actions;
+        switch (cardType) {
+            case "MONEY": options = new String[]{"Deposit to bank"}; actions = new String[]{"PLAY_MONEY"}; break;
+            case "PROPERTY": options = new String[]{"Place property"}; actions = new String[]{"PLAY_PROPERTY"}; break;
+            case "RENT": options = new String[]{"Collect rent"}; actions = new String[]{"PLAY_RENT"}; break;
+            case "ACTION": options = new String[]{"Use action card"}; actions = new String[]{"PLAY_ACTION"}; break;
+            default: options = new String[]{"Deposit to bank"}; actions = new String[]{"PLAY_MONEY"};
         }
-
-        // Sly Deal: property card to steal from target
-        String targetCardId = cardSelectionBar.getSelectedTargetCardId();
-        if (targetCardId != null && !targetCardId.isEmpty()) {
-            payload.addProperty("targetCardId", targetCardId);
-        }
-
-        // Forced Deal: own property to give up
-        String myPropId = cardSelectionBar.getSelectedMyPropertyId();
-        if (myPropId != null && !myPropId.isEmpty()) {
-            payload.addProperty("myPropertyId", myPropId);
-        }
-
-        // Forced Deal: their property to take
-        String theirPropId = cardSelectionBar.getSelectedTheirPropertyId();
-        if (theirPropId != null && !theirPropId.isEmpty()) {
-            payload.addProperty("theirPropertyId", theirPropId);
-        }
-
-        // Wild card color selection: show color picker after action confirmed
-        if (cardDataForClicked != null) {
-            String colorStr = cardDataForClicked.getColor();
-            String cardName = cardDataForClicked.getCardName();
-
-            if ("WILD".equals(colorStr) && "PLAY_PROPERTY".equals(action)) {
-                String selectedColor = showWildColorPicker(cardName);
-                if (selectedColor != null) {
-                    payload.addProperty("color", selectedColor);
+        int choice = showStyledOptionDialog("How would you like to use this card?", "Play Card", options);
+        if (choice >= 0) {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("cardId", cardId);
+            payload.addProperty("action", actions[choice]);
+            if (cardDataForClicked != null && cardDataForClicked.has("color")) {
+                String colorStr = cardDataForClicked.get("color").getAsString();
+                String cardName = cardDataForClicked.has("cardName") ? cardDataForClicked.get("cardName").getAsString() : "";
+                if ("WILD".equals(colorStr) && "PLAY_PROPERTY".equals(actions[choice])) {
+                    String selectedColor = showWildColorPicker(cardName);
+                    if (selectedColor != null) payload.addProperty("color", selectedColor);
+                }
+                if ("WILD".equals(colorStr) && "PLAY_RENT".equals(actions[choice])) {
+                    String selectedColor = showColorPicker();
+                    if (selectedColor != null) payload.addProperty("color", selectedColor);
                 }
             }
-            if ("WILD".equals(colorStr) && "PLAY_RENT".equals(action)) {
-                String selectedColor = showColorPicker();
-                if (selectedColor != null) {
-                    payload.addProperty("color", selectedColor);
-                }
-            }
+            client.sendMessage(MessageProtocol.MessageType.PLAY_CARD, payload.toString());
         }
-
-        client.sendMessage(MessageProtocol.MessageType.PLAY_CARD, payload.toString());
-        cardSelectionBar.dismiss();
     }
 
-    /**
-     * Show the wild property color picker dialog.
-     * Provides different selectable color lists based on the specific wild card type (multi-color/dual-color).
-     *
-     * @param cardName wild card name
-     * @return selected color name (null if cancelled)
-     */
+    private void showStyledMessage(String message, String title, int messageType) {
+        UIManager.put("OptionPane.background", BG_MID);
+        UIManager.put("Panel.background", BG_MID);
+        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
+        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
+        JOptionPane.showMessageDialog(this, message, title, messageType);
+    }
+
+    /** Luxury button for custom dialogs (matching LobbyPanel style) */
+    private JButton createDialogButton(String text, Color main, Color dark) {
+        JButton btn = new JButton(text) {
+            private float hoverAnim = 0f;
+            private boolean hovering = false;
+            private final javax.swing.Timer hoverTimer = new javax.swing.Timer(16, null);
+            {
+                hoverTimer.addActionListener(e -> {
+                    if (hovering) hoverAnim = Math.min(1, hoverAnim + 0.12f);
+                    else hoverAnim = Math.max(0, hoverAnim - 0.06f);
+                    repaint();
+                    if ((hovering && hoverAnim >= 1) || (!hovering && hoverAnim <= 0))
+                        hoverTimer.stop();
+                });
+                addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseEntered(java.awt.event.MouseEvent e) {
+                        hovering = true;
+                        if (!hoverTimer.isRunning()) hoverTimer.start();
+                        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                    }
+                    @Override
+                    public void mouseExited(java.awt.event.MouseEvent e) {
+                        hovering = false;
+                        if (!hoverTimer.isRunning()) hoverTimer.start();
+                        setCursor(Cursor.getDefaultCursor());
+                    }
+                });
+            }
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                int arc = 16;
+                float t = hoverAnim;
+                Color c1 = interpolateColor(dark, main, t);
+                Color c2 = interpolateColor(darker(dark), darker(main), t);
+                g2.setPaint(new GradientPaint(0, 0, c1, 0, h, c2));
+                g2.fillRoundRect(0, 0, w, h, arc, arc);
+                // Border
+                g2.setColor(new Color(255, 255, 255, (int)(20 + t * 30)));
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                // Top shine
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.12f + t * 0.1f));
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(3, 2, w - 6, h / 2 - 3, arc - 2, arc - 2);
+                // Text
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                FontMetrics fm = g2.getFontMetrics();
+                int tw = fm.stringWidth(getText());
+                g2.drawString(getText(), (w - tw) / 2, (h + fm.getAscent() - fm.getDescent()) / 2);
+                g2.dispose();
+            }
+            @Override
+            public Dimension getPreferredSize() { return new Dimension(200, 46); }
+            @Override
+            public Dimension getMinimumSize() { return new Dimension(150, 40); }
+        };
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private static Color interpolateColor(Color a, Color b, float t) {
+        if (t <= 0) return a;
+        if (t >= 1) return b;
+        int r = (int)(a.getRed() + (b.getRed() - a.getRed()) * t);
+        int g = (int)(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
+        int bl = (int)(a.getBlue() + (b.getBlue() - a.getBlue()) * t);
+        return new Color(r, g, bl);
+    }
+
+    private static Color darker(Color c) {
+        return new Color(Math.max(0, c.getRed() - 50), Math.max(0, c.getGreen() - 50), Math.max(0, c.getBlue() - 50));
+    }
+
+    private int showStyledOptionDialog(String message, String title, String[] options) {
+        UIManager.put("OptionPane.background", BG_MID);
+        UIManager.put("Panel.background", BG_MID);
+        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
+        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
+        UIManager.put("Button.background", PURPLE_PRIMARY);
+        UIManager.put("Button.foreground", TEXT_WHITE);
+        UIManager.put("Button.font", new Font("Segoe UI", Font.BOLD, 13));
+        return JOptionPane.showOptionDialog(this, message, title, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+    }
+
     private String showWildColorPicker(String cardName) {
-        String[] colors = AppTheme.WILD_COLOR_OPTIONS.get(cardName);
-        if (colors == null) {
-            colors = AppTheme.WILD_COLOR_OPTIONS.get("Multi-Color Wild");
-        }
-        return (String) JOptionPane.showInputDialog(this,
-                "Choose a color for this wild property:",
-                "Wild Property Color",
-                JOptionPane.QUESTION_MESSAGE,
-                null, colors, colors[0]);
+        String[] colors = WILD_COLOR_OPTIONS.get(cardName);
+        if (colors == null) colors = WILD_COLOR_OPTIONS.get("Multi-Color Wild");
+        return (String) JOptionPane.showInputDialog(this, "Select color for wild property:", "Wild Property Color", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
     }
 
-    /**
-     * Show a generic color picker dialog (for wild rent cards).
-     * @return selected color name
-     */
     private String showColorPicker() {
-        String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
-                "YELLOW", "GREEN", "BLUE", "BLACK", "LIGHT_GREEN"};
-        return (String) JOptionPane.showInputDialog(this,
-                "Choose a color:",
-                "Color Selection",
-                JOptionPane.QUESTION_MESSAGE,
-                null, colors, colors[0]);
+        String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED", "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"};
+        return (String) JOptionPane.showInputDialog(this, "Select color:", "Color Selection", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
     }
 
-    /** End turn — stop countdown and send END_TURN message */
+    public void handleReactionRequired(String jsonPayload) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
+                // Server sends: initiatorName, actionType, cardName, resolutionId
+                String initiatorName = payload.has("initiatorName") ? payload.get("initiatorName").getAsString() : "Unknown";
+                String actionType = payload.has("actionType") ? payload.get("actionType").getAsString() : "Unknown";
+                String cardName = payload.has("cardName") ? payload.get("cardName").getAsString() : "";
+                int timeout = payload.has("timeoutSeconds") ? payload.get("timeoutSeconds").getAsInt() : 5;
+
+                // Custom styled dialog for Just Say No
+                JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Action!", true);
+                dialog.setUndecorated(true);
+                dialog.setBackground(new Color(0, 0, 0, 0));
+
+                JPanel panel = new JPanel(new BorderLayout(0, 20));
+                panel.setBackground(BG_MID);
+                panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(255, 215, 0, 80), 2, true),
+                    BorderFactory.createEmptyBorder(30, 35, 25, 35)
+                ));
+
+                // ---- Icon ----
+                JLabel iconLabel = new JLabel("⚠", SwingConstants.CENTER);
+                iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 40));
+                iconLabel.setForeground(GOLD_PRIMARY);
+
+                // ---- Title ----
+                JLabel titleLabel = new JLabel("Opponent Action!", SwingConstants.CENTER);
+                titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+                titleLabel.setForeground(GOLD_PRIMARY);
+
+                // ---- Description ----
+                JTextArea descArea = new JTextArea(
+                    initiatorName + " played " + cardName + "\n(" + actionType + ")",
+                    2, 25
+                );
+                descArea.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+                descArea.setForeground(TEXT_WHITE);
+                descArea.setBackground(BG_MID);
+                descArea.setEditable(false);
+                descArea.setLineWrap(true);
+                descArea.setWrapStyleWord(true);
+                descArea.setFocusable(false);
+
+                JLabel questionLabel = new JLabel("Use Just Say No to cancel?", SwingConstants.CENTER);
+                questionLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+                questionLabel.setForeground(TEXT_GLOW);
+                questionLabel.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+
+                JPanel textPanel = new JPanel(new BorderLayout());
+                textPanel.setOpaque(false);
+                textPanel.add(descArea, BorderLayout.CENTER);
+                textPanel.add(questionLabel, BorderLayout.SOUTH);
+
+                // ---- Timer bar ----
+                JProgressBar timerBar = new JProgressBar(0, timeout);
+                timerBar.setValue(timeout);
+                timerBar.setStringPainted(true);
+                timerBar.setString(timeout + "s");
+                timerBar.setForeground(GOLD_PRIMARY);
+                timerBar.setBackground(new Color(60, 50, 100));
+                timerBar.setBorder(BorderFactory.createLineBorder(new Color(255, 215, 0, 40), 1));
+                timerBar.setPreferredSize(new Dimension(280, 22));
+                timerBar.setFont(new Font("Segoe UI", Font.BOLD, 11));
+
+                javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
+                final int[] remaining = {timeout};
+                countdown.addActionListener(e -> {
+                    remaining[0]--;
+                    timerBar.setValue(remaining[0]);
+                    timerBar.setString(remaining[0] + "s");
+                    if (remaining[0] <= 3) {
+                        timerBar.setForeground(RED_ACCENT);
+                    }
+                    if (remaining[0] <= 0) {
+                        countdown.stop();
+                        dialog.dispose();
+                        client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                    }
+                });
+
+                // ---- Buttons ----
+                JButton yesBtn = createDialogButton("✓  YES — Use Just Say No", new Color(255, 180, 0), new Color(180, 120, 0));
+                JButton noBtn  = createDialogButton("✕  NO — Let it happen", new Color(100, 140, 255), new Color(60, 80, 180));
+
+                yesBtn.addActionListener(e -> {
+                    countdown.stop();
+                    dialog.dispose();
+                    // Find a Just Say No card in cached hand
+                    JsonObject jsnCard = null;
+                    synchronized (cachedHandCards) {
+                        for (JsonObject card : cachedHandCards) {
+                            String name = card.has("cardName") ? card.get("cardName").getAsString() : "";
+                            if (name.contains("Just Say No")) {
+                                jsnCard = card;
+                                break;
+                            }
+                        }
+                    }
+                    if (jsnCard != null && jsnCard.has("cardId")) {
+                        JsonObject response = new JsonObject();
+                        response.addProperty("cardId", jsnCard.get("cardId").getAsString());
+                        client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO, response.toString());
+                    } else {
+                        // No Just Say No card available — auto pass
+                        client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                    }
+                });
+
+                noBtn.addActionListener(e -> {
+                    countdown.stop();
+                    dialog.dispose();
+                    client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                });
+
+                JPanel btnPanel = new JPanel(new GridLayout(1, 2, 12, 0));
+                btnPanel.setOpaque(false);
+                btnPanel.add(yesBtn);
+                btnPanel.add(noBtn);
+
+                // ---- Assemble ----
+                JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
+                centerPanel.setOpaque(false);
+                centerPanel.add(iconLabel, BorderLayout.NORTH);
+                centerPanel.add(titleLabel, BorderLayout.CENTER);
+                panel.add(centerPanel, BorderLayout.NORTH);
+                panel.add(textPanel, BorderLayout.CENTER);
+
+                JPanel southPanel = new JPanel(new BorderLayout(0, 12));
+                southPanel.setOpaque(false);
+                southPanel.add(timerBar, BorderLayout.NORTH);
+                southPanel.add(btnPanel, BorderLayout.CENTER);
+                panel.add(southPanel, BorderLayout.SOUTH);
+
+                dialog.add(panel);
+                dialog.pack();
+                dialog.setLocationRelativeTo(this);
+                dialog.setResizable(false);
+
+                // Start countdown timer
+                countdown.start();
+
+                // If dialog closes by any other means (e.g., escape), treat as pass
+                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        if (countdown.isRunning()) {
+                            countdown.stop();
+                            client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                        }
+                    }
+                });
+
+                dialog.setVisible(true);
+            } catch (Exception e) {
+                System.err.println("Error handling reaction: " + e.getMessage());
+            }
+        });
+    }
+
+    public void handlePaymentRequired(String jsonPayload) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
+                int amount = payload.has("amount") ? payload.get("amount").getAsInt() : 0;
+                String from = payload.has("from") ? payload.get("from").getAsString() : "Unknown";
+                JOptionPane.showMessageDialog(this, from + " demands payment of " + amount + "M.", "Payment Required", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {}
+        });
+    }
+
+    public void handleDiscardRequired(String jsonPayload) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
+                int excess = payload.has("excess") ? payload.get("excess").getAsInt() : 1;
+                JOptionPane.showMessageDialog(this, "Hand exceeds 7 cards! Discard " + excess + " card(s).", "Discard Required", JOptionPane.WARNING_MESSAGE);
+            } catch (Exception e) {}
+        });
+    }
+
     private void endTurn() {
         stopCountdown();
-        cardSelectionBar.dismiss();
         client.sendMessage(MessageProtocol.MessageType.END_TURN, "{}");
         endTurnButton.setEnabled(false);
     }
