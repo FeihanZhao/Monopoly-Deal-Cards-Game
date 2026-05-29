@@ -2,8 +2,6 @@ package com.monopolydeal.view;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.awt.geom.RoundRectangle2D;
 import com.monopolydeal.client.GameClient;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonObject;
@@ -47,10 +45,6 @@ public class MainFrame extends JFrame {
     public MainFrame(GameClient client) {
         this.client = client;
         this.localPlayerId = null;
-        // Set system look and feel for native window chrome
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception ignored) {}
         initializeUI();         // Build Swing UI
         setupMessageHandler();  // Register message handling callback
     }
@@ -65,22 +59,6 @@ public class MainFrame extends JFrame {
         setSize(1280, 800);
         setMinimumSize(new Dimension(1024, 768));
         setLocationRelativeTo(null);  // Center window on screen
-
-        // Programmatic app icon — render "MD" on a gold/dark card
-        BufferedImage iconImg = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D ig2 = iconImg.createGraphics();
-        ig2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        ig2.setColor(new Color(20, 22, 38));
-        ig2.fill(new RoundRectangle2D.Float(4, 4, 56, 56, 12, 12));
-        ig2.setColor(new Color(255, 215, 0));
-        ig2.setStroke(new BasicStroke(2f));
-        ig2.draw(new RoundRectangle2D.Float(4, 4, 56, 56, 12, 12));
-        ig2.setFont(new Font("Segoe UI", Font.BOLD, 26));
-        FontMetrics fm = ig2.getFontMetrics();
-        ig2.drawString("MD", (64 - fm.stringWidth("MD")) / 2,
-                (64 + fm.getAscent() - fm.getDescent()) / 2 - 2);
-        ig2.dispose();
-        setIconImage(iconImg);
 
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
@@ -157,73 +135,18 @@ public class MainFrame extends JFrame {
     }
 
     /**
-     * Handle game over message — show styled winner dialog and return to lobby.
+     * Handle game over message — show winner dialog and return to lobby.
      * @param payload GAME_OVER message JSON payload, contains winnerNickname etc.
      */
     private void handleGameOver(String payload) {
         try {
             JsonObject result = JsonParser.parseString(payload).getAsJsonObject();
             String winnerNickname = result.get("winnerNickname").getAsString();
-            String duration = result.has("gameDuration") ? result.get("gameDuration").getAsString() : "";
-            int sets = result.has("completeSets") ? result.get("completeSets").getAsInt() : 3;
-
-            JDialog dialog = new JDialog(this, "Game Over", true);
-            dialog.setUndecorated(true);
-            JPanel panel = new JPanel(new BorderLayout(0, 15));
-            panel.setBackground(new Color(14, 16, 28));
-            panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(255, 215, 0, 100), 2, true),
-                BorderFactory.createEmptyBorder(30, 40, 25, 40)
-            ));
-
-            JLabel trophy = new JLabel("🏆", SwingConstants.CENTER);
-            trophy.setFont(new Font("Segoe UI", Font.PLAIN, 48));
-
-            JLabel title = new JLabel("Game Over!", SwingConstants.CENTER);
-            title.setFont(new Font("Segoe UI", Font.BOLD, 24));
-            title.setForeground(new Color(255, 215, 0));
-
-            JLabel winner = new JLabel(winnerNickname + " Wins!", SwingConstants.CENTER);
-            winner.setFont(new Font("Segoe UI", Font.BOLD, 18));
-            winner.setForeground(new Color(100, 255, 100));
-
-            String infoText = "Complete Sets: " + sets + "/3";
-            if (!duration.isEmpty()) infoText += "  |  Duration: " + duration;
-            JLabel info = new JLabel(infoText, SwingConstants.CENTER);
-            info.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-            info.setForeground(new Color(180, 180, 180));
-
-            JButton okBtn = new JButton("Back to Lobby");
-            okBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-            okBtn.setForeground(Color.WHITE);
-            okBtn.setBackground(new Color(80, 60, 140));
-            okBtn.setFocusPainted(false);
-            okBtn.setBorder(BorderFactory.createLineBorder(new Color(140, 120, 200), 1));
-            okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            okBtn.addActionListener(e -> { dialog.dispose(); cardLayout.show(mainPanel, "LOBBY"); });
-
-            JPanel centerPanel = new JPanel(new BorderLayout(0, 8));
-            centerPanel.setOpaque(false);
-            centerPanel.add(title, BorderLayout.NORTH);
-            centerPanel.add(winner, BorderLayout.CENTER);
-            centerPanel.add(info, BorderLayout.SOUTH);
-
-            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            btnPanel.setOpaque(false);
-            btnPanel.add(okBtn);
-
-            panel.add(trophy, BorderLayout.NORTH);
-            panel.add(centerPanel, BorderLayout.CENTER);
-            panel.add(btnPanel, BorderLayout.SOUTH);
-
-            dialog.add(panel);
-            dialog.pack();
-            dialog.setLocationRelativeTo(this);
-            dialog.setVisible(true);
+            JOptionPane.showMessageDialog(this, "Game Over!\nWinner: " + winnerNickname);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Game Over!");
-            cardLayout.show(mainPanel, "LOBBY");
         }
+        cardLayout.show(mainPanel, "LOBBY");  // Return to lobby
     }
 
     /**

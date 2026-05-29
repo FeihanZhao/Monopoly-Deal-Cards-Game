@@ -147,8 +147,7 @@ public class PropertyZone {
         if (!getCompleteSets().contains(color)) return false;
         if (color == CardColor.BLACK || color == CardColor.LIGHT_GREEN) return false;
         if (hasHotel.getOrDefault(color, false)) return false;
-        // Official rule: max 1 House per completed property set
-        return houseCount.getOrDefault(color, 0) == 0;
+        return houseCount.getOrDefault(color, 0) < GameConstants.MAX_HOUSES_PER_SET;
     }
 
     /**
@@ -175,8 +174,9 @@ public class PropertyZone {
      */
     public boolean canPlaceHotel(CardColor color) {
         if (!getCompleteSets().contains(color)) return false;
-        // Official rule: needs a completed set (House not required), max 1 Hotel per set
-        return !hasHotel.getOrDefault(color, false);
+        if (color == CardColor.BLACK || color == CardColor.LIGHT_GREEN) return false;
+        if (hasHotel.getOrDefault(color, false)) return false;
+        return houseCount.getOrDefault(color, 0) >= GameConstants.MAX_HOUSES_PER_SET;
     }
 
     /**
@@ -188,7 +188,7 @@ public class PropertyZone {
         if (!canPlaceHotel(color)) {
             throw new IllegalStateException("Cannot build hotel on " + color.getName());
         }
-        // Official rule: Hotel stacks with House (+4M), House stays on the set (+3M)
+        houseCount.put(color, 0);  // Official rules: Hotel replaces House; House is discarded
         hasHotel.put(color, true);
     }
 
@@ -200,10 +200,9 @@ public class PropertyZone {
      * @return rent amount due (unit: M / millions)
      */
     public int getRentAmount(CardColor color) {
-        int baseRent = color.getRentAmount(getPropertyCount(color));
-        // Official rule: House = +3M, Hotel = +4M, they stack
-        int houseBonus = houseCount.getOrDefault(color, 0) * 3;
-        int hotelBonus = hasHotel.getOrDefault(color, false) ? 4 : 0;
+        int baseRent = color.getRentAmount(getPropertyCount(color));  // Base rent (based on property count)
+        int houseBonus = houseCount.getOrDefault(color, 0) * 3;       // +3M per house
+        int hotelBonus = hasHotel.getOrDefault(color, false) ? 4 : 0; // +4M for hotel
         return baseRent + houseBonus + hotelBonus;
     }
 

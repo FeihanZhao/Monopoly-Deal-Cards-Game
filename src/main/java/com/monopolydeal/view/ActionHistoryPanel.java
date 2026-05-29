@@ -3,266 +3,235 @@ package com.monopolydeal.view;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
-import javax.swing.text.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.List;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 /**
- * Action history panel - displays game action logs with colored player names
+ * Action history panel — displays the game action log as a color-coded list.
  *
- * Located in the right sidebar of the game panel, shows recent game actions as a text list.
- * Each player is assigned a consistent color so you can easily track who did what.
+ * Each record is shown as a single line containing:
+ * - Gray timestamp (HH:mm:ss)
+ * - Colored player nickname (each player gets a fixed color)
+ * - White action description
  *
- * Format: [HH:mm:ss] PlayerName: action description
- *                   ^^^^^^^^^^^ colored per-player
+ * Auto-scrolls to the latest record, but won't force-scroll when the user has manually
+ * scrolled up to review history.
  */
 public class ActionHistoryPanel extends JPanel {
-    /** Styled text pane for colored text */
-    private final JTextPane historyPane;
-    /** Styled document for managing text styles */
-    private final StyledDocument doc;
-    /** Player color cache (consistent color per playerId) */
-    private final Map<String, Color> playerColors;
-    /** Player name cache (latest nickname per playerId) */
-    private final Map<String, String> playerNames;
-    /** Color rotation array — vibrant, distinct colors on dark background */
-    private final Color[] colors = {
-            new Color(255, 140, 100),  // warm orange
-            new Color(100, 255, 140),  // emerald green
-            new Color(100, 200, 255),  // sky blue
-            new Color(255, 220, 80),   // bright yellow
-            new Color(255, 130, 255),  // magenta
-            new Color(80, 255, 255),   // cyan
-            new Color(255, 170, 130),  // peach
-            new Color(160, 255, 160),  // mint
-    };
-    /** Current color index for assigning colors to new players */
-    private int colorIndex;
-    /** Time formatter (HH:mm:ss) */
-    private final SimpleDateFormat timeFormat;
-    /** Base text color for description text */
-    private static final Color TEXT_DESCRIPTION = AppTheme.TEXT_PRIMARY;
-    /** Timestamp color (subtle) */
-    private static final Color COLOR_TIME = AppTheme.TEXT_DIM;
-    /** Ongoing action (e.g. DRAW) gets a slightly dimmer color variant */
-    private static final Color COLOR_DIM = new Color(160, 160, 170);
-    /** Background color for the panel */
-    private static final Color BG_PANEL = AppTheme.BG_DARK.darker();
-    /** Last action type seen (for detecting turn boundaries) */
-    private String lastActionType = "";
 
-    /**
-     * Constructor - creates dark theme styled text pane
-     */
+    /** List data model */
+    private final DefaultListModel<ActionEntry> listModel;
+    /** Action record list */
+    private final JList<ActionEntry> actionList;
+    /** Player color cache (assigns colors by player nickname) */
+    private final Map<String, Color> playerColors;
+    /** Color wheel */
+    private static final Color[] COLORS = {
+            new Color(255, 140, 100),
+            new Color(100, 255, 140),
+            new Color(100, 180, 255),
+            new Color(255, 215, 0),
+            new Color(255, 140, 255),
+            new Color(100, 255, 255),
+    };
+    private int colorIndex;
+
+    /** Time formatter */
+    private final SimpleDateFormat timeFormat;
+
+    // ==================== Inner data class ====================
+
+    /** A single action record */
+    private static class ActionEntry {
+        final String timeStr;
+        final String nickname;
+        final String actionDesc;
+
+        ActionEntry(String timeStr, String nickname, String actionDesc) {
+            this.timeStr   = timeStr;
+            this.nickname  = nickname;
+            this.actionDesc = actionDesc;
+        }
+    }
+
+    // ==================== Custom renderer ====================
+
+    /** Action record list item renderer — gray time + colored player name + white description */
+    private class ActionRenderer extends JPanel implements ListCellRenderer<ActionEntry> {
+        private final JLabel label;
+
+        ActionRenderer() {
+            setLayout(new BorderLayout());
+            setOpaque(false);
+            label = new JLabel();
+            label.setOpaque(false);
+            label.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            label.setBorder(new EmptyBorder(1, 4, 1, 4));
+            add(label, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(
+                JList<? extends ActionEntry> list, ActionEntry value, int index,
+                boolean isSelected, boolean cellHasFocus) {
+
+            if (value == null) {
+                label.setText("");
+                return this;
+            }
+
+            // Build color-coded text: time(gray) | nickname(colored) : action(white)
+            Color playerColor = getPlayerColor(value.nickname);
+            String html = String.format(
+                    "<html><span style='color:#999999'>[%s]</span> "
+                            + "<span style='color:rgb(%d,%d,%d)'>%s</span>"
+                            + "<span style='color:#CCCCCC'>: %s</span></html>",
+                    value.timeStr,
+                    playerColor.getRed(), playerColor.getGreen(), playerColor.getBlue(),
+                    escapeHtml(value.nickname),
+                    escapeHtml(value.actionDesc));
+
+            label.setText(html);
+            setBackground(isSelected ? new Color(60, 70, 90) : null);
+
+            return this;
+        }
+
+        /** Escape HTML special characters */
+        private String escapeHtml(String text) {
+            return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        }
+    }
+
+    // ==================== Constructor ====================
+
     public ActionHistoryPanel() {
         setLayout(new BorderLayout());
-        setBackground(BG_PANEL);
-
-        // Titled border
-        TitledBorder titledBorder = new TitledBorder(
+        setBackground(new Color(30, 35, 42));
+        setBorder(new TitledBorder(
                 BorderFactory.createLineBorder(new Color(60, 65, 75)),
                 "Action Log",
                 TitledBorder.LEFT,
                 TitledBorder.TOP,
-                new Font(AppTheme.FONT_MAIN, Font.BOLD, 12),
-                AppTheme.TEXT_PRIMARY
-        );
-        setBorder(titledBorder);
+                new Font("SansSerif", Font.BOLD, 12),
+                new Color(200, 200, 200)
+        ));
 
         playerColors = new HashMap<>();
-        playerNames = new HashMap<>();
-        colorIndex = 0;
-        timeFormat = new SimpleDateFormat("HH:mm:ss");
+        colorIndex   = 0;
+        timeFormat   = new SimpleDateFormat("HH:mm:ss");
 
-        // Styled text pane — supports per-character colors
-        historyPane = new JTextPane();
-        historyPane.setEditable(false);
-        historyPane.setBackground(BG_PANEL);
-        historyPane.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
-        historyPane.setMargin(new Insets(5, 5, 5, 5));
-        doc = historyPane.getStyledDocument();
+        listModel  = new DefaultListModel<>();
+        actionList = new JList<>(listModel);
+        actionList.setCellRenderer(new ActionRenderer());
+        actionList.setBackground(new Color(30, 35, 42));
+        actionList.setSelectionBackground(new Color(60, 70, 90));
+        actionList.setSelectionForeground(Color.WHITE);
+        actionList.setFixedCellHeight(18);
+        actionList.setVisibleRowCount(0);
 
-        // Default paragraph style
-        Style defaultStyle = StyleContext.getDefaultStyleContext()
-                .getStyle(StyleContext.DEFAULT_STYLE);
-        StyleConstants.setForeground(defaultStyle, TEXT_DESCRIPTION);
-        StyleConstants.setFontSize(defaultStyle, 11);
-        StyleConstants.setFontFamily(defaultStyle, "Segoe UI");
-
-        JScrollPane scrollPane = new JScrollPane(historyPane);
+        JScrollPane scrollPane = new JScrollPane(actionList);
         scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(BG_PANEL);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getViewport().setBackground(new Color(30, 35, 42));
 
         add(scrollPane, BorderLayout.CENTER);
     }
 
+    // ==================== Public API ====================
+
     /**
-     * Updates action history display with colored player names
-     *
+     * Update action history — called by GamePanel on every GAME_STATE_UPDATE.
      * @param actions action record JSON array
      */
     public void updateActions(JsonArray actions) {
-        try {
-            doc.remove(0, doc.getLength());
+        // Determine whether the user is currently viewing history (not at bottom = scrolled up)
+        boolean autoScroll = isScrolledToBottom();
 
-            for (int i = 0; i < actions.size(); i++) {
-                JsonObject action = actions.get(i).getAsJsonObject();
-                String playerId = action.has("playerId") ?
-                        action.get("playerId").getAsString() : "";
-                String nickname = action.has("playerNickname") ?
-                        action.get("playerNickname").getAsString() : "Unknown";
-                String actionType = action.has("actionType") ?
-                        action.get("actionType").getAsString() : "";
-                String target = action.has("targetPlayer") &&
-                        !action.get("targetPlayer").isJsonNull() ?
-                        action.get("targetPlayer").getAsString() : "";
-                int amount = action.has("amount") ? action.get("amount").getAsInt() : 0;
-                String details = action.has("details") && !action.get("details").isJsonNull() ?
-                        action.get("details").getAsString() : "";
-                long timestamp = action.has("timestamp") ?
-                        action.get("timestamp").getAsLong() : System.currentTimeMillis();
+        listModel.clear();
 
-                // Cache latest player nickname
-                if (!playerId.isEmpty()) {
-                    playerNames.put(playerId, nickname);
-                }
+        for (int i = 0; i < actions.size(); i++) {
+            JsonObject action = actions.get(i).getAsJsonObject();
+            String nickname = action.has("playerNickname")
+                    ? action.get("playerNickname").getAsString() : "Unknown";
+            String actionType = action.has("actionType")
+                    ? action.get("actionType").getAsString() : "";
+            String target = action.has("targetPlayer") && !action.get("targetPlayer").isJsonNull()
+                    ? action.get("targetPlayer").getAsString() : "";
+            int amount = action.has("amount") ? action.get("amount").getAsInt() : 0;
+            long timestamp = action.has("timestamp")
+                    ? action.get("timestamp").getAsLong() : System.currentTimeMillis();
 
-                // Add turn separator when END_TURN is followed by a new action
-                if ("END_TURN".equals(lastActionType) && !"END_TURN".equals(actionType)
-                        && !"DISCARD".equals(actionType) && !"DISCONNECT".equals(actionType)) {
-                    appendStyled("─ ─ ─ ─ ─ ─ ─ ─ ─\n",
-                            new Color(255, 215, 0, 40), false, false);
-                }
-                lastActionType = actionType;
+            String timeStr = timeFormat.format(new Date(timestamp));
+            String actionDesc = formatAction(actionType, target, amount);
 
-                // Assign color for this player
-                Color playerColor = getPlayerColor(playerId);
+            listModel.addElement(new ActionEntry(timeStr, nickname, actionDesc));
+        }
 
-                // Format time
-                String timeStr = timeFormat.format(new Date(timestamp));
-                // Use details if available, otherwise fall back to formatAction
-                String actionDesc = !details.isEmpty() ? details : formatAction(actionType, target, amount);
-
-                // Build colored line
-                // [time]
-                appendStyled(String.format("[%s] ", timeStr), COLOR_TIME, false, false);
-                // PlayerName
-                appendStyled(nickname, playerColor, true, false);
-                // : description
-                appendStyled(": " + actionDesc + "\n", TEXT_DESCRIPTION, false, isHighlightAction(actionType));
-            }
-
-            // Auto-scroll to bottom (newest last in visual order)
-            historyPane.setCaretPosition(doc.getLength());
-        } catch (BadLocationException e) {
-            // Should not happen since we control the document
-            historyPane.setText("Error updating action log");
+        // Auto-scroll to bottom (only if user was already at bottom)
+        if (autoScroll && listModel.getSize() > 0) {
+            actionList.ensureIndexIsVisible(listModel.getSize() - 1);
         }
     }
 
-    /** Append styled text to the document */
-    private void appendStyled(String text, Color color, boolean bold, boolean highlight) throws BadLocationException {
-        Style style = historyPane.addStyle("dynamic", null);
-        StyleConstants.setForeground(style, color);
-        StyleConstants.setFontFamily(style, AppTheme.FONT_MAIN);
-        StyleConstants.setFontSize(style, 11);
-        StyleConstants.setBold(style, bold);
-        if (highlight) {
-            StyleConstants.setBackground(style, new Color(255, 215, 0, 20));
+    /** Check whether the scrollbar is at the bottom */
+    private boolean isScrolledToBottom() {
+        JScrollPane sp = null;
+        Container parent = actionList.getParent();
+        while (parent != null) {
+            if (parent instanceof JScrollPane) { sp = (JScrollPane) parent; break; }
+            parent = parent.getParent();
         }
-        doc.insertString(doc.getLength(), text, style);
+        if (sp == null) return true;
+        JScrollBar bar = sp.getVerticalScrollBar();
+        int current = bar.getValue();
+        int extent  = bar.getVisibleAmount();
+        int max     = bar.getMaximum();
+        return current + extent >= max - extent;
     }
 
-    /** Whether this action type should have a subtle highlight */
-    private boolean isHighlightAction(String actionType) {
-        return "WINNER".equals(actionType) || "DEAL_BREAKER".equals(actionType)
-                || "FORCED_DEAL".equals(actionType) || "SLY_DEAL".equals(actionType);
-    }
+    // ==================== Player color assignment ====================
 
-    /**
-     * Get or assign a consistent color for a player
-     */
-    private Color getPlayerColor(String playerId) {
-        if (playerId == null || playerId.isEmpty()) return TEXT_DESCRIPTION;
-        return playerColors.computeIfAbsent(playerId, k -> {
-            Color c = colors[colorIndex % colors.length];
+    private Color getPlayerColor(String nickname) {
+        return playerColors.computeIfAbsent(nickname, k -> {
+            Color c = COLORS[colorIndex % COLORS.length];
             colorIndex++;
             return c;
         });
     }
 
-    /**
-     * Converts action type to readable English description
-     */
+    // ==================== Action description formatting ====================
+
     private String formatAction(String actionType, String target, int amount) {
         switch (actionType) {
-            case "DRAW":
-                return "Drew cards";
-            case "PLAY_MONEY":
-                return "Played money card";
-            case "PLAY_PROPERTY":
-                return "Played property";
-            case "PLAY_RENT":
-                return "Played rent card";
-            case "PLAY_ACTION":
-                return "Played action card";
-            case "RENT":
-                return "Collected " + amount + "M rent from " + (target.isEmpty() ? "" : target);
-            case "RENT_ALL":
-                return "Collected " + amount + "M rent from all";
-            case "DEBT_COLLECTOR":
-                return "Collected " + amount + "M from " + target;
-            case "BIRTHDAY":
-                return "Collected " + amount + "M birthday gift";
-            case "DEAL_BREAKER":
-                return "Stole set from " + target;
-            case "PASS_GO":
-                return "Drew 2 extra cards (Pass Go)";
-            case "DOUBLE_RENT":
-                return "Double Rent activated";
-            case "HOUSE":
-                return "Built a house";
-            case "HOTEL":
-                return "Built a hotel";
-            case "FORCED_DEAL":
-                return "Swapped property with " + target;
-            case "SLY_DEAL":
-                return "Stole property from " + target;
-            case "JUST_SAY_NO":
-                return "Used Just Say No!";
-            case "PAY":
-                return "Paid " + amount + "M to " + target;
-            case "PAYMENT_MADE":
-                return "Paid " + amount + "M to " + target;
-            case "PAYMENT_TIMEOUT":
-                return "Auto-paid " + amount + "M to " + target;
-            case "DISCARD":
-                return "Discarded a card";
-            case "END_TURN":
-                return "Ended turn";
-            case "DISCONNECT":
-                return "Disconnected";
-            case "RECONNECT":
-                return "Reconnected";
-            case "WINNER":
-                return "★ Won the game! ★";
-            case "DRAW_EXTRA":
-                return "Drew 2 extra cards";
-            case "FLIP_WILD":
-                return "Changed wild property color";
-            case "PASS_REACTION":
-                return "Passed on Just Say No";
-            case "ACTION_CANCELLED":
-                return "Action was cancelled";
-            case "ACTION_EXPIRED":
-                return "Action expired";
-            default:
-                return actionType;
+            case "DRAW":          return "drew cards";
+            case "PLAY_MONEY":    return "played money card";
+            case "PLAY_PROPERTY": return "played property card";
+            case "PLAY_RENT":     return "played rent card";
+            case "PLAY_ACTION":   return "played action card";
+            case "RENT":          return "charged " + (target.isEmpty() ? "" : target + " ") + amount + "M rent";
+            case "RENT_ALL":      return "charged all players " + amount + "M rent";
+            case "DEBT_COLLECTOR": return "collected " + amount + "M from " + target;
+            case "BIRTHDAY":       return "everyone pays " + amount + "M";
+            case "DEAL_BREAKER":   return "stole " + target + "'s complete property set";
+            case "PASS_GO":        return "drew 2 extra cards";
+            case "DOUBLE_RENT":    return "next rent is doubled";
+            case "HOUSE":          return "built a house";
+            case "HOTEL":          return "built a hotel";
+            case "FORCED_DEAL":    return "swapped property with " + target;
+            case "SLY_DEAL":       return "stole " + target + "'s property card";
+            case "JUST_SAY_NO":    return "used Just Say No";
+            case "PAY":            return "paid " + amount + "M to " + target;
+            case "PARTIAL_PAY":    return "paid " + amount + "M (partial) to " + target;
+            case "DISCARD":        return "discarded a card";
+            case "END_TURN":       return "ended turn";
+            case "DISCONNECT":     return "disconnected";
+            case "RECONNECT":      return "reconnected";
+            case "WINNER":         return "won the game!";
+            case "DRAW_EXTRA":     return "drew 2 extra cards";
+            default:               return actionType;
         }
     }
 }
