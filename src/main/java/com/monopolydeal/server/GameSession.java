@@ -581,14 +581,26 @@ public class GameSession {
                 }
             } else if (actionName.contains("Birthday")) {
                 // Need at least 1 other player
-                boolean hasOther = false;
+                java.util.List<String> allTargets = new java.util.ArrayList<>();
                 for (Player p : players) {
-                    if (!p.equals(activePlayer)) { hasOther = true; break; }
+                    if (!p.equals(activePlayer)) {
+                        allTargets.add(p.getId());
+                    }
                 }
-                if (!hasOther) {
+                if (allTargets.isEmpty()) {
                     sendError(activePlayer.getId(), "No other players to collect from");
                     return false;
                 }
+                // Birthday: collect all other players, first as responder, rest into _remainingTargets
+                targetId = allTargets.remove(0);
+                if (!allTargets.isEmpty()) {
+                    com.google.gson.JsonArray remaining = new com.google.gson.JsonArray();
+                    for (String id : allTargets) {
+                        remaining.add(id);
+                    }
+                    payload.add("_remainingTargets", remaining);
+                }
+                payload.addProperty("_amount", GameConstants.BIRTHDAY_AMOUNT);
             } else {
                 // Default: select first other player
                 for (Player p : players) {
