@@ -563,6 +563,89 @@ public class GamePanel extends JPanel {
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
 
+    /** Luxury button for custom dialogs (matching LobbyPanel style) */
+    private JButton createDialogButton(String text, Color main, Color dark) {
+        JButton btn = new JButton(text) {
+            private float hoverAnim = 0f;
+            private boolean hovering = false;
+            private final javax.swing.Timer hoverTimer = new javax.swing.Timer(16, null);
+            {
+                hoverTimer.addActionListener(e -> {
+                    if (hovering) hoverAnim = Math.min(1, hoverAnim + 0.12f);
+                    else hoverAnim = Math.max(0, hoverAnim - 0.06f);
+                    repaint();
+                    if ((hovering && hoverAnim >= 1) || (!hovering && hoverAnim <= 0))
+                        hoverTimer.stop();
+                });
+                addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseEntered(java.awt.event.MouseEvent e) {
+                        hovering = true;
+                        if (!hoverTimer.isRunning()) hoverTimer.start();
+                        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                    }
+                    @Override
+                    public void mouseExited(java.awt.event.MouseEvent e) {
+                        hovering = false;
+                        if (!hoverTimer.isRunning()) hoverTimer.start();
+                        setCursor(Cursor.getDefaultCursor());
+                    }
+                });
+            }
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                int arc = 16;
+                float t = hoverAnim;
+                Color c1 = interpolateColor(dark, main, t);
+                Color c2 = interpolateColor(darker(dark), darker(main), t);
+                g2.setPaint(new GradientPaint(0, 0, c1, 0, h, c2));
+                g2.fillRoundRect(0, 0, w, h, arc, arc);
+                // Border
+                g2.setColor(new Color(255, 255, 255, (int)(20 + t * 30)));
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                // Top shine
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.12f + t * 0.1f));
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(3, 2, w - 6, h / 2 - 3, arc - 2, arc - 2);
+                // Text
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                FontMetrics fm = g2.getFontMetrics();
+                int tw = fm.stringWidth(getText());
+                g2.drawString(getText(), (w - tw) / 2, (h + fm.getAscent() - fm.getDescent()) / 2);
+                g2.dispose();
+            }
+            @Override
+            public Dimension getPreferredSize() { return new Dimension(200, 46); }
+            @Override
+            public Dimension getMinimumSize() { return new Dimension(150, 40); }
+        };
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private static Color interpolateColor(Color a, Color b, float t) {
+        if (t <= 0) return a;
+        if (t >= 1) return b;
+        int r = (int)(a.getRed() + (b.getRed() - a.getRed()) * t);
+        int g = (int)(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
+        int bl = (int)(a.getBlue() + (b.getBlue() - a.getBlue()) * t);
+        return new Color(r, g, bl);
+    }
+
+    private static Color darker(Color c) {
+        return new Color(Math.max(0, c.getRed() - 50), Math.max(0, c.getGreen() - 50), Math.max(0, c.getBlue() - 50));
+    }
+
     private int showStyledOptionDialog(String message, String title, String[] options) {
         UIManager.put("OptionPane.background", BG_MID);
         UIManager.put("Panel.background", BG_MID);
@@ -593,12 +676,87 @@ public class GamePanel extends JPanel {
                 String initiatorName = payload.has("initiatorName") ? payload.get("initiatorName").getAsString() : "Unknown";
                 String actionType = payload.has("actionType") ? payload.get("actionType").getAsString() : "Unknown";
                 String cardName = payload.has("cardName") ? payload.get("cardName").getAsString() : "";
+                int timeout = payload.has("timeoutSeconds") ? payload.get("timeoutSeconds").getAsInt() : 5;
 
-                int choice = JOptionPane.showConfirmDialog(this,
-                        initiatorName + " used " + cardName + " (" + actionType + ").\nDo you want to use Just Say No to cancel?",
-                        "React to Action", JOptionPane.YES_NO_OPTION);
+                // Custom styled dialog for Just Say No
+                JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Action!", true);
+                dialog.setUndecorated(true);
+                dialog.setBackground(new Color(0, 0, 0, 0));
 
-                if (choice == JOptionPane.YES_OPTION) {
+                JPanel panel = new JPanel(new BorderLayout(0, 20));
+                panel.setBackground(BG_MID);
+                panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(255, 215, 0, 80), 2, true),
+                    BorderFactory.createEmptyBorder(30, 35, 25, 35)
+                ));
+
+                // ---- Icon ----
+                JLabel iconLabel = new JLabel("⚠", SwingConstants.CENTER);
+                iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 40));
+                iconLabel.setForeground(GOLD_PRIMARY);
+
+                // ---- Title ----
+                JLabel titleLabel = new JLabel("Opponent Action!", SwingConstants.CENTER);
+                titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+                titleLabel.setForeground(GOLD_PRIMARY);
+
+                // ---- Description ----
+                JTextArea descArea = new JTextArea(
+                    initiatorName + " played " + cardName + "\n(" + actionType + ")",
+                    2, 25
+                );
+                descArea.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+                descArea.setForeground(TEXT_WHITE);
+                descArea.setBackground(BG_MID);
+                descArea.setEditable(false);
+                descArea.setLineWrap(true);
+                descArea.setWrapStyleWord(true);
+                descArea.setFocusable(false);
+
+                JLabel questionLabel = new JLabel("Use Just Say No to cancel?", SwingConstants.CENTER);
+                questionLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+                questionLabel.setForeground(TEXT_GLOW);
+                questionLabel.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+
+                JPanel textPanel = new JPanel(new BorderLayout());
+                textPanel.setOpaque(false);
+                textPanel.add(descArea, BorderLayout.CENTER);
+                textPanel.add(questionLabel, BorderLayout.SOUTH);
+
+                // ---- Timer bar ----
+                JProgressBar timerBar = new JProgressBar(0, timeout);
+                timerBar.setValue(timeout);
+                timerBar.setStringPainted(true);
+                timerBar.setString(timeout + "s");
+                timerBar.setForeground(GOLD_PRIMARY);
+                timerBar.setBackground(new Color(60, 50, 100));
+                timerBar.setBorder(BorderFactory.createLineBorder(new Color(255, 215, 0, 40), 1));
+                timerBar.setPreferredSize(new Dimension(280, 22));
+                timerBar.setFont(new Font("Segoe UI", Font.BOLD, 11));
+
+                javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
+                final int[] remaining = {timeout};
+                countdown.addActionListener(e -> {
+                    remaining[0]--;
+                    timerBar.setValue(remaining[0]);
+                    timerBar.setString(remaining[0] + "s");
+                    if (remaining[0] <= 3) {
+                        timerBar.setForeground(RED_ACCENT);
+                    }
+                    if (remaining[0] <= 0) {
+                        countdown.stop();
+                        dialog.dispose();
+                        client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                    }
+                });
+
+                // ---- Buttons ----
+                JButton yesBtn = createDialogButton("✓  YES — Use Just Say No", new Color(255, 180, 0), new Color(180, 120, 0));
+                JButton noBtn  = createDialogButton("✕  NO — Let it happen", new Color(100, 140, 255), new Color(60, 80, 180));
+
+                yesBtn.addActionListener(e -> {
+                    countdown.stop();
+                    dialog.dispose();
                     // Find a Just Say No card in cached hand
                     JsonObject jsnCard = null;
                     synchronized (cachedHandCards) {
@@ -618,10 +776,53 @@ public class GamePanel extends JPanel {
                         // No Just Say No card available — auto pass
                         client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
                     }
-                } else {
-                    // Player chose not to use Just Say No
+                });
+
+                noBtn.addActionListener(e -> {
+                    countdown.stop();
+                    dialog.dispose();
                     client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
-                }
+                });
+
+                JPanel btnPanel = new JPanel(new GridLayout(1, 2, 12, 0));
+                btnPanel.setOpaque(false);
+                btnPanel.add(yesBtn);
+                btnPanel.add(noBtn);
+
+                // ---- Assemble ----
+                JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
+                centerPanel.setOpaque(false);
+                centerPanel.add(iconLabel, BorderLayout.NORTH);
+                centerPanel.add(titleLabel, BorderLayout.CENTER);
+                panel.add(centerPanel, BorderLayout.NORTH);
+                panel.add(textPanel, BorderLayout.CENTER);
+
+                JPanel southPanel = new JPanel(new BorderLayout(0, 12));
+                southPanel.setOpaque(false);
+                southPanel.add(timerBar, BorderLayout.NORTH);
+                southPanel.add(btnPanel, BorderLayout.CENTER);
+                panel.add(southPanel, BorderLayout.SOUTH);
+
+                dialog.add(panel);
+                dialog.pack();
+                dialog.setLocationRelativeTo(this);
+                dialog.setResizable(false);
+
+                // Start countdown timer
+                countdown.start();
+
+                // If dialog closes by any other means (e.g., escape), treat as pass
+                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        if (countdown.isRunning()) {
+                            countdown.stop();
+                            client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                        }
+                    }
+                });
+
+                dialog.setVisible(true);
             } catch (Exception e) {
                 System.err.println("Error handling reaction: " + e.getMessage());
             }
