@@ -79,7 +79,8 @@ public class PropertyZone {
     public boolean canPlaceHouse(CardColor color) {
         if (!getCompleteSets().contains(color)) return false;
         if (hasHotel.getOrDefault(color, false)) return false;
-        return houseCount.getOrDefault(color, 0) < 4;
+        // Official rule: max 1 House per completed property set
+        return houseCount.getOrDefault(color, 0) == 0;
     }
 
     public void addHouse(CardColor color) {
@@ -91,22 +92,23 @@ public class PropertyZone {
 
     public boolean canPlaceHotel(CardColor color) {
         if (!getCompleteSets().contains(color)) return false;
-        if (hasHotel.getOrDefault(color, false)) return false;
-        return houseCount.getOrDefault(color, 0) >= 4;
+        // Official rule: needs a completed set (House not required), max 1 Hotel per set
+        return !hasHotel.getOrDefault(color, false);
     }
 
     public void addHotel(CardColor color) {
         if (!canPlaceHotel(color)) {
             throw new IllegalStateException("Cannot place hotel on " + color.getName());
         }
-        houseCount.put(color, 0);  // Official rule: Hotel replaces House, Houses are discarded
+        // Official rule: Hotel stacks with House (+4M), House stays on the set (+3M)
         hasHotel.put(color, true);
     }
 
     public int getRentAmount(CardColor color) {
         int baseRent = color.getRentAmount(getPropertyCount(color));
-        int houseBonus = houseCount.getOrDefault(color, 0) * 1;
-        int hotelBonus = hasHotel.getOrDefault(color, false) ? 3 : 0;
+        // Official rule: House = +3M, Hotel = +4M, they stack
+        int houseBonus = houseCount.getOrDefault(color, 0) * 3;
+        int hotelBonus = hasHotel.getOrDefault(color, false) ? 4 : 0;
         return baseRent + houseBonus + hotelBonus;
     }
 

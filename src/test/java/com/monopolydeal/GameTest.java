@@ -224,13 +224,12 @@ public class GameTest {
         addProperties(player1, CardColor.BLUE, 2);
         assertTrue(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
         player1.getPropertyZone().addHouse(CardColor.BLUE);
-        assertFalse(player1.getPropertyZone().canPlaceHotel(CardColor.BLUE));
-        for (int i = 0; i < 3; i++) {
-            player1.getPropertyZone().addHouse(CardColor.BLUE);
-        }
+        // Official rule: max 1 house per set, placing Hotel doesn't require a House
+        assertFalse(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
         assertTrue(player1.getPropertyZone().canPlaceHotel(CardColor.BLUE));
         player1.getPropertyZone().addHotel(CardColor.BLUE);
         assertFalse(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
+        assertFalse(player1.getPropertyZone().canPlaceHotel(CardColor.BLUE));
     }
 
     @Test
@@ -240,7 +239,12 @@ public class GameTest {
         assertEquals(8, rent);
         player1.getPropertyZone().addHouse(CardColor.BLUE);
         int rentWithHouse = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
-        assertEquals(9, rentWithHouse);
+        // Official rule: House = +3M
+        assertEquals(11, rentWithHouse);
+        // Hotel on top of House: +3M + +4M = +7M total
+        player1.getPropertyZone().addHotel(CardColor.BLUE);
+        int rentWithBoth = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
+        assertEquals(15, rentWithBoth);
     }
 
     @Test
@@ -393,6 +397,10 @@ public class GameTest {
     void testCardColorRentValues() {
         assertEquals(1, CardColor.BROWN.getRentAmount(1));
         assertEquals(2, CardColor.BROWN.getRentAmount(2));
+        // Light Blue: 3 properties in set, rent 1/2/3
+        assertEquals(1, CardColor.LIGHT_BLUE.getRentAmount(1));
+        assertEquals(2, CardColor.LIGHT_BLUE.getRentAmount(2));
+        assertEquals(3, CardColor.LIGHT_BLUE.getRentAmount(3));
         assertEquals(3, CardColor.BLUE.getRentAmount(1));
         assertEquals(8, CardColor.BLUE.getRentAmount(2));
         assertEquals(2, CardColor.RED.getRentAmount(1));

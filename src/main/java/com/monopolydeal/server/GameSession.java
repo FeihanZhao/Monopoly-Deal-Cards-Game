@@ -409,6 +409,16 @@ public class GameSession {
 
         String actionName = card.getName();
 
+        // Just Say No cannot be played via PLAY_ACTION — it must be played through
+        // handlePlayJustSayNo() during WAITING_FOR_REACTION phase when targeted by an action.
+        // If sent through PLAY_ACTION, send an error and do not consume the card.
+        if (actionName.contains("Just Say No")) {
+            // Card is still in hand — reject without consuming
+            sendError(activePlayer.getId(),
+                    "Just Say No can only be used when an action card is played against you");
+            return false;
+        }
+
         // === Step 1: Remove from hand and discard (card is played regardless of cancellation) ===
         activePlayer.removeCardFromHand(card);
         deck.discard(card);
@@ -792,8 +802,11 @@ public class GameSession {
                                 findPlayer(resolved.getInitiatorId()).getNickname() : "",
                         "ACTION_CANCELLED", "",
                         0, cancelled.getActionType() + " was cancelled by Just Say No");
-                // Multi-target: JSN only cancels current player's obligation, continue to next target
-                if (continueMultiTargetResolution(cancelled)) return;
+                // Official rule: "Just Say No — Cancel the action."
+                // A Just Say No cancels the ENTIRE action card, not just the current target's obligation.
+                // Clear remaining multi-targets so the action doesn't continue to other players.
+                clearRemainingTargets(cancelled);
+                // Do NOT call continueMultiTargetResolution — the action is fully cancelled.
             }
         } else {
             // Original action not cancelled, execute deferred effect
@@ -862,6 +875,19 @@ public class GameSession {
                 resolvedItem.getSourceCard(),
                 payload);
         return true;
+    }
+
+    /**
+     * Clear remaining multi-targets when an action is fully cancelled by Just Say No.
+     * Official rule: "Just Say No — Cancel the action" means the ENTIRE action is cancelled,
+     * not just the current target's obligation. Remaining targets are cleared so the action
+     * does not continue after the JSN chain resolves.
+     */
+    private void clearRemainingTargets(ResolutionItem item) {
+        JsonObject payload = item.getActionPayload();
+        if (payload != null && payload.has("_remainingTargets")) {
+            payload.remove("_remainingTargets");
+        }
     }
 
     /**

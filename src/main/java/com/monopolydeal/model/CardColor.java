@@ -35,7 +35,12 @@ public enum CardColor {
     public int getSetSize() { return setSize; }
 
     public int getRentAmount(int propertiesInSet) {
-        if (this == BROWN || this == LIGHT_BLUE) {
+        if (this == BROWN) {
+            return propertiesInSet >= 2 ? 2 : 1;
+        }
+        if (this == LIGHT_BLUE) {
+            // Light Blue has 3 properties in a set: 1/1, 2/2, 3/3
+            if (propertiesInSet >= 3) return 3;
             return propertiesInSet >= 2 ? 2 : 1;
         }
         if (this == PINK || this == ORANGE) {
