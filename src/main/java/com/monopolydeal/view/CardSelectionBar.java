@@ -55,25 +55,25 @@ public class CardSelectionBar extends JPanel {
     /** Background color (dark semi-transparent) */
     private static final Color BG_COLOR        = new Color(25, 25, 35, 230);
     /** Border color (gold) */
-    private static final Color BORDER_COLOR    = new Color(255, 215, 0, 180);
+    private static final Color BORDER_COLOR    = AppTheme.GOLD;
     /** Confirm button color (green) */
     private static final Color BTN_CONFIRM     = new Color(34, 139, 34);
     /** Bank button color (blue) */
     private static final Color BTN_BANK        = new Color(30, 100, 180);
     /** Cancel button color (red) */
-    private static final Color BTN_CANCEL      = new Color(120, 40, 40);
+    private static final Color BTN_CANCEL      = AppTheme.RED_DARK;
     /** Target button default color */
-    private static final Color BTN_TARGET_IDLE = new Color(60, 60, 80);
+    private static final Color BTN_TARGET_IDLE = AppTheme.PURPLE_ACCENT.darker();
     /** Target button selected color (gold) */
     private static final Color BTN_TARGET_SEL  = new Color(180, 130, 0);
     /** Property button color */
-    private static final Color BTN_PROP_IDLE   = new Color(40, 80, 50);
+    private static final Color BTN_PROP_IDLE   = AppTheme.TABLE_GREEN;
     /** Property button selected color */
-    private static final Color BTN_PROP_SEL    = new Color(60, 180, 80);
+    private static final Color BTN_PROP_SEL    = AppTheme.GREEN_GLOW;
     /** Primary text color */
-    private static final Color TEXT_PRIMARY    = Color.WHITE;
+    private static final Color TEXT_PRIMARY    = AppTheme.TEXT_PRIMARY;
     /** Muted text color */
-    private static final Color TEXT_MUTED      = new Color(180, 180, 180);
+    private static final Color TEXT_MUTED      = AppTheme.TEXT_DIM;
 
     /** Card names that require a single target player */
     private static final java.util.Set<String> NEEDS_TARGET_NAMES =
@@ -270,11 +270,11 @@ public class CardSelectionBar extends JPanel {
 
         cardNameLabel = new JLabel("—");
         cardNameLabel.setForeground(TEXT_PRIMARY);
-        cardNameLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        cardNameLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 14));
 
         cardTypeLabel = new JLabel("—");
         cardTypeLabel.setForeground(TEXT_MUTED);
-        cardTypeLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        cardTypeLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
 
         infoPanel.add(cardNameLabel, BorderLayout.CENTER);
         infoPanel.add(cardTypeLabel, BorderLayout.SOUTH);
@@ -307,7 +307,7 @@ public class CardSelectionBar extends JPanel {
 
         JLabel targetLabel = new JLabel("Target: ");
         targetLabel.setForeground(TEXT_MUTED);
-        targetLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        targetLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
         targetRow.add(targetLabel);
 
         // My property selection row (Forced Deal: own card to give; Sly Deal: not used)
@@ -351,7 +351,7 @@ public class CardSelectionBar extends JPanel {
         };
         btn.setBackground(bg);
         btn.setForeground(Color.WHITE);
-        btn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btn.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 12));
         btn.setFocusPainted(false);
         btn.setBorderPainted(false);
         btn.setContentAreaFilled(false);
@@ -495,7 +495,7 @@ public class CardSelectionBar extends JPanel {
                         // Add label
                         JLabel lbl = new JLabel("Steal: ");
                         lbl.setForeground(TEXT_MUTED);
-                        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                        lbl.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
                         theirPropRow.add(lbl);
                         first = false;
                     }
@@ -510,7 +510,7 @@ public class CardSelectionBar extends JPanel {
             if (!hasProps) {
                 JLabel lbl = new JLabel("(no stealable properties)");
                 lbl.setForeground(new Color(255, 120, 120));
-                lbl.setFont(new Font("SansSerif", Font.ITALIC, 11));
+                lbl.setFont(new Font(AppTheme.FONT_MAIN, Font.ITALIC, 11));
                 theirPropRow.add(lbl);
             }
             theirPropRow.setVisible(true);
@@ -529,7 +529,7 @@ public class CardSelectionBar extends JPanel {
                     if (first) {
                         JLabel lbl = new JLabel("Their: ");
                         lbl.setForeground(TEXT_MUTED);
-                        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                        lbl.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
                         theirPropRow.add(lbl);
                         first = false;
                     }
@@ -555,7 +555,7 @@ public class CardSelectionBar extends JPanel {
             if (first) {
                 JLabel lbl = new JLabel("Yours: ");
                 lbl.setForeground(TEXT_MUTED);
-                lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                lbl.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
                 myPropRow.add(lbl);
                 first = false;
             }

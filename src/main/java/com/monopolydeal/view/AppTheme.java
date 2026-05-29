@@ -1,6 +1,7 @@
 package com.monopolydeal.view;
 
 import java.awt.Color;
+import java.awt.Font;
 import java.util.Map;
 
 /**
@@ -77,6 +78,40 @@ public final class AppTheme {
                     new String[]{"LIGHT_GREEN", "BLACK"})
     );
 
+    /**
+     * Text contrast colors for property buttons/dialogs.
+     * Returns a high-contrast text color for each property color background.
+     */
+    public static final Map<String, Color> TEXT_CONTRAST_COLORS = Map.ofEntries(
+            Map.entry("BROWN",       Color.WHITE),
+            Map.entry("LIGHT_BLUE",  new Color(0x1A1A1A)),
+            Map.entry("PINK",        Color.WHITE),
+            Map.entry("ORANGE",      Color.WHITE),
+            Map.entry("RED",         Color.WHITE),
+            Map.entry("YELLOW",      new Color(0x1A1A1A)),
+            Map.entry("GREEN",       Color.WHITE),
+            Map.entry("BLUE",        Color.WHITE),
+            Map.entry("BLACK",       Color.WHITE),
+            Map.entry("LIGHT_GREEN", new Color(0x1A1A1A))
+    );
+
+    /**
+     * Hover highlight colors for property buttons/dialogs.
+     * A lighter version of each property color used on hover state.
+     */
+    public static final Map<String, Color> HOVER_LIGHT_COLORS = Map.ofEntries(
+            Map.entry("BROWN",       new Color(0xA07050)),
+            Map.entry("LIGHT_BLUE",  new Color(0xA3DBF2)),
+            Map.entry("PINK",        new Color(0xFF8FC8)),
+            Map.entry("ORANGE",      new Color(0xFFA640)),
+            Map.entry("RED",         new Color(0xE05060)),
+            Map.entry("YELLOW",      new Color(0xFFE44D)),
+            Map.entry("GREEN",       new Color(0x3AA03A)),
+            Map.entry("BLUE",        new Color(0x3030A0)),
+            Map.entry("BLACK",       new Color(0x505050)),
+            Map.entry("LIGHT_GREEN", new Color(0xA8F0A8))
+    );
+
     // ==================== Brand colors ====================
 
     /** Gold — used for titles, highlighted borders, turn indicators, etc. */
@@ -108,4 +143,60 @@ public final class AppTheme {
 
     /** Red danger/warning — countdown alert, error states */
     public static final Color RED_DANGER = new Color(220, 50, 50);
+
+    /** Red glow — bright accent for hover/active states */
+    public static final Color RED_GLOW = new Color(255, 100, 100);
+
+    /** Red dark — pressed/disabled state */
+    public static final Color RED_DARK = new Color(140, 20, 20);
+
+    /** Green glow — success/complete states */
+    public static final Color GREEN_GLOW = new Color(40, 180, 100);
+
+    /** Purple accent — used for special borders and buttons */
+    public static final Color PURPLE_ACCENT = new Color(130, 50, 210);
+
+    /** Purple glow — lighter purple for glowing borders */
+    public static final Color PURPLE_GLOW = new Color(160, 80, 255);
+
+    /** Purple dark — darker shade for backgrounds */
+    public static final Color PURPLE_DARK = new Color(70, 20, 110);
+
+    // ==================== Shadow colors ====================
+
+    /** Standard shadow color (semi-transparent black) */
+    public static final Color SHADOW = new Color(0, 0, 0, 80);
+
+    /** Strong shadow for selected/raised elements */
+    public static final Color SHADOW_STRONG = new Color(0, 0, 0, 120);
+
+    // ==================== Font constants ====================
+
+    /** Primary UI font family name */
+    public static final String FONT_MAIN = "Segoe UI";
+
+    /** Monospace font family name */
+    public static final String FONT_MONO = "Consolas";
+
+    /** Emoji font family name (for card type icons) */
+    public static final String FONT_EMOJI = "Segoe UI Emoji";
+
+    /** Fallback font name when Segoe UI is unavailable */
+    public static final String FONT_FALLBACK = "SansSerif";
+
+    // ==================== Animation constants ====================
+
+    /** Frame interval in ms for 60fps animations */
+    public static final int ANIM_MS = 16;
+
+    /** Ease factor for animation interpolation (0.0=linear, 1.0=instant) */
+    public static final float ANIM_EASE = 0.25f;
+
+    /** Hover animation speed (0.0=slow, 1.0=fast) */
+    public static final float ANIM_HOVER_SPEED = 0.12f;
+
+    // ==================== Panel transparency ====================
+
+    /** Glass morphism background opacity (for floating panels) */
+    public static final float ALPHA_GLASS = 0.85f;
 }

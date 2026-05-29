@@ -48,17 +48,17 @@ public class TimerBarPanel extends JPanel {
     /** Safe time fill gradient color (lighter green) */
     private static final Color COLOR_SAFE2   = new Color(76, 175, 80);
     /** Urgent time (≤10s) fill color (red) */
-    private static final Color COLOR_URGENT  = new Color(198, 40, 40);
+    private static final Color COLOR_URGENT  = AppTheme.RED_DARK;
     /** Urgent time fill gradient color (lighter red) */
-    private static final Color COLOR_URGENT2 = new Color(239, 83, 80);
+    private static final Color COLOR_URGENT2 = AppTheme.RED_GLOW;
     /** Inactive state fill color (gray) */
     private static final Color COLOR_INACTIVE = new Color(80, 80, 80);
     /** Normal text color */
-    private static final Color TEXT_NORMAL   = Color.WHITE;
+    private static final Color TEXT_NORMAL   = AppTheme.TEXT_PRIMARY;
     /** Urgent text color (red) */
-    private static final Color TEXT_URGENT   = new Color(255, 100, 100);
+    private static final Color TEXT_URGENT   = AppTheme.RED_DANGER;
     /** Inactive text color (dimmed) */
-    private static final Color TEXT_INACTIVE = new Color(130, 130, 130);
+    private static final Color TEXT_INACTIVE = AppTheme.TEXT_DIM;
 
     // ==================== State fields ====================
 
@@ -68,6 +68,10 @@ public class TimerBarPanel extends JPanel {
     private int secondsRemaining;
     /** Whether active (local player's turn) */
     private boolean active;
+    /** Pulse animation phase for urgent mode */
+    private float pulsePhase = 0f;
+    /** Pulse animation timer */
+    private javax.swing.Timer pulseAnimator;
 
     // ==================== Constructor ====================
 
@@ -200,17 +204,22 @@ public class TimerBarPanel extends JPanel {
             // Inactive: show "--"
             label     = "- -";
             textColor = TEXT_INACTIVE;
-            textFont  = new Font("SansSerif", Font.BOLD, 13);
+            textFont  = new Font(AppTheme.FONT_MAIN, Font.BOLD, 13);
         } else if (secondsRemaining <= 10) {
-            // Urgent: large red text (pulse effect)
+            // Urgent: pulsing red text (actual pulse animation)
+            pulsePhase += 0.1f;
+            float pulse = (float)Math.sin(pulsePhase) * 0.3f + 0.7f;
+            int r = (int)(255 * pulse);
+            int gn = (int)(100 * pulse);
+            int bl = (int)(100 * pulse);
+            textColor = new Color(Math.min(255, r), Math.min(255, gn), Math.min(255, bl));
             label     = secondsRemaining + "s";
-            textColor = TEXT_URGENT;
-            textFont  = new Font("SansSerif", Font.BOLD, 15);
+            textFont  = new Font(AppTheme.FONT_MAIN, Font.BOLD, 15);
         } else {
             // Normal: white regular text
             label     = secondsRemaining + "s";
             textColor = TEXT_NORMAL;
-            textFont  = new Font("SansSerif", Font.BOLD, 13);
+            textFont  = new Font(AppTheme.FONT_MAIN, Font.BOLD, 13);
         }
 
         g2.setFont(textFont);

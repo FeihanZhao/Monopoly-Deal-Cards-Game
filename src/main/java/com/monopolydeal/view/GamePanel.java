@@ -42,25 +42,25 @@ public class GamePanel extends JPanel {
     // ==========================================================================
     // PREMIUM COLOR SYSTEM – NEON, GLOW, GRADIENT, DARK ELEGANCE
     // ==========================================================================
-    private static final Color BG_DEEP         = new Color(6, 8, 14);
-    private static final Color BG_MID          = new Color(14, 16, 28);
+    private static final Color BG_DEEP         = AppTheme.BG_DARK;
+    private static final Color BG_MID          = AppTheme.BG_DARKER;
     private static final Color BG_CARD         = new Color(20, 22, 38);
-    private static final Color GOLD_PRIMARY    = new Color(255, 215, 0);
+    private static final Color GOLD_PRIMARY    = AppTheme.GOLD;
     private static final Color GOLD_GLOW       = new Color(255, 235, 100);
     private static final Color GOLD_NEON       = new Color(255, 225, 80);
-    private static final Color RED_ACCENT      = new Color(255, 50, 50);
-    private static final Color RED_GLOW        = new Color(255, 100, 100);
-    private static final Color RED_DARK        = new Color(140, 20, 20);
-    private static final Color GREEN_FELT      = new Color(18, 52, 32);
-    private static final Color GREEN_GLOW     = new Color(40, 180, 100);
-    private static final Color GREEN_SHADOW    = new Color(10, 28, 16);
-    private static final Color PURPLE_PRIMARY  = new Color(130, 50, 210);
-    private static final Color PURPLE_GLOW     = new Color(160, 80, 255);
-    private static final Color PURPLE_DARK     = new Color(70, 20, 110);
+    private static final Color RED_ACCENT      = AppTheme.RED_DANGER;
+    private static final Color RED_GLOW        = AppTheme.RED_GLOW;
+    private static final Color RED_DARK        = AppTheme.RED_DARK;
+    private static final Color GREEN_FELT      = AppTheme.TABLE_GREEN;
+    private static final Color GREEN_GLOW     = AppTheme.GREEN_GLOW;
+    private static final Color GREEN_SHADOW    = AppTheme.TABLE_GREEN_DARK;
+    private static final Color PURPLE_PRIMARY  = AppTheme.PURPLE_ACCENT;
+    private static final Color PURPLE_GLOW     = AppTheme.PURPLE_GLOW;
+    private static final Color PURPLE_DARK     = AppTheme.PURPLE_DARK;
     private static final Color BLUE_STEEL      = new Color(36, 46, 70);
-    private static final Color TEXT_WHITE      = new Color(245, 245, 255);
+    private static final Color TEXT_WHITE      = AppTheme.TEXT_PRIMARY;
     private static final Color TEXT_GLOW       = new Color(220, 220, 255);
-    private static final Color TEXT_GRAY       = new Color(140, 140, 170);
+    private static final Color TEXT_GRAY       = AppTheme.TEXT_DIM;
     private static final Color BORDER_GLOW     = new Color(100, 80, 160);
     private static final Color BORDER_SUBTLE  = new Color(60, 55, 90);
 
@@ -175,6 +175,8 @@ public class GamePanel extends JPanel {
         timerBarPanel = new TimerBarPanel(30);
 
         endTurnButton = new JButton() {
+            private float pulsePhase = 0f;
+            private javax.swing.Timer pulseTimer;
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -194,6 +196,15 @@ public class GamePanel extends JPanel {
                 }
                 g2.fill(shape);
 
+                // Pulsing gold glow when enabled
+                if (isEnabled()) {
+                    pulsePhase += 0.05f;
+                    float pulse = (float)Math.sin(pulsePhase) * 0.3f + 0.7f;
+                    g2.setColor(new Color(255, 215, 0, (int)(30 * pulse)));
+                    g2.setStroke(new BasicStroke(2.5f));
+                    g2.draw(shape);
+                }
+
                 g2.setStroke(new BasicStroke(1.8f));
                 g2.setColor(new Color(255,255,255, isEnabled()?35:8));
                 g2.draw(shape);
@@ -211,13 +222,16 @@ public class GamePanel extends JPanel {
                 g2.dispose();
             }
         };
-        endTurnButton.setPreferredSize(new Dimension(140, 44));
+        endTurnButton.setPreferredSize(new Dimension(150, 48));
         endTurnButton.setBorderPainted(false);
         endTurnButton.setContentAreaFilled(false);
         endTurnButton.setFocusPainted(false);
         endTurnButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         endTurnButton.setEnabled(false);
         endTurnButton.addActionListener(e -> endTurn());
+        // Start pulse timer when button is shown
+        javax.swing.Timer pulseTimer = new javax.swing.Timer(50, e -> endTurnButton.repaint());
+        pulseTimer.start();
 
         rightPanel.add(drawPileLabel);
         rightPanel.add(timerBarPanel);
@@ -505,7 +519,14 @@ public class GamePanel extends JPanel {
             for (JsonElement elem : handCards) {
                 JsonObject cardData = elem.getAsJsonObject();
                 cachedHandCards.add(cardData);
-                CardRenderer card = new CardRenderer(cardData);
+                CardViewModel vm = new CardViewModel(
+                    cardData.get("cardId").getAsString(),
+                    cardData.get("cardName").getAsString(),
+                    cardData.has("cardType") ? cardData.get("cardType").getAsString() : "MONEY",
+                    cardData.has("color") ? cardData.get("color").getAsString() : "NONE",
+                    cardData.has("value") ? cardData.get("value").getAsInt() : 0
+                );
+                CardRenderer card = new CardRenderer(vm);
                 card.setEnabled(isMyTurn);
                 String cardType = cardData.has("cardType") ? cardData.get("cardType").getAsString() : "MONEY";
                 String cardId = cardData.has("cardId") ? cardData.get("cardId").getAsString() : "";
@@ -556,11 +577,34 @@ public class GamePanel extends JPanel {
     }
 
     private void showStyledMessage(String message, String title, int messageType) {
-        UIManager.put("OptionPane.background", BG_MID);
-        UIManager.put("Panel.background", BG_MID);
-        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
-        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
-        JOptionPane.showMessageDialog(this, message, title, messageType);
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), title, true);
+        dialog.setUndecorated(true);
+        JPanel panel = new JPanel(new BorderLayout(0, 15));
+        panel.setBackground(BG_MID);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 215, 0, 60), 2, true),
+            BorderFactory.createEmptyBorder(25, 30, 20, 30)
+        ));
+        JLabel msgLabel = new JLabel(message, SwingConstants.CENTER);
+        msgLabel.setForeground(TEXT_WHITE);
+        msgLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        JButton okBtn = new JButton("OK");
+        okBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBackground(new Color(80, 60, 140));
+        okBtn.setFocusPainted(false);
+        okBtn.setBorder(BorderFactory.createLineBorder(new Color(140, 120, 200), 1, true));
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        okBtn.addActionListener(e -> dialog.dispose());
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        btnPanel.setOpaque(false);
+        btnPanel.add(okBtn);
+        panel.add(msgLabel, BorderLayout.CENTER);
+        panel.add(btnPanel, BorderLayout.SOUTH);
+        dialog.add(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     /** Luxury button for custom dialogs (matching LobbyPanel style) */
@@ -647,14 +691,48 @@ public class GamePanel extends JPanel {
     }
 
     private int showStyledOptionDialog(String message, String title, String[] options) {
-        UIManager.put("OptionPane.background", BG_MID);
-        UIManager.put("Panel.background", BG_MID);
-        UIManager.put("OptionPane.messageForeground", TEXT_WHITE);
-        UIManager.put("OptionPane.messageFont", new Font("Segoe UI", Font.PLAIN, 14));
-        UIManager.put("Button.background", PURPLE_PRIMARY);
-        UIManager.put("Button.foreground", TEXT_WHITE);
-        UIManager.put("Button.font", new Font("Segoe UI", Font.BOLD, 13));
-        return JOptionPane.showOptionDialog(this, message, title, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        final int[] result = {-1};
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), title, true);
+        dialog.setUndecorated(true);
+        JPanel panel = new JPanel(new BorderLayout(0, 18));
+        panel.setBackground(BG_MID);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 215, 0, 70), 2, true),
+            BorderFactory.createEmptyBorder(25, 30, 20, 30)
+        ));
+        JLabel msgLabel = new JLabel(message, SwingConstants.CENTER);
+        msgLabel.setForeground(TEXT_WHITE);
+        msgLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
+        btnPanel.setOpaque(false);
+        for (int i = 0; i < options.length; i++) {
+            final int idx = i;
+            JButton btn = new JButton(options[i]);
+            btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            btn.setForeground(Color.WHITE);
+            btn.setBackground(PURPLE_PRIMARY);
+            btn.setFocusPainted(false);
+            btn.setBorder(BorderFactory.createLineBorder(new Color(160, 100, 230), 1));
+            btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            btn.addActionListener(e -> { result[0] = idx; dialog.dispose(); });
+            btnPanel.add(btn);
+        }
+        JButton cancelBtn = new JButton("Cancel");
+        cancelBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        cancelBtn.setForeground(TEXT_GRAY);
+        cancelBtn.setBackground(BG_MID);
+        cancelBtn.setFocusPainted(false);
+        cancelBtn.setBorder(BorderFactory.createLineBorder(new Color(100, 90, 140), 1));
+        cancelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        cancelBtn.addActionListener(e -> dialog.dispose());
+        btnPanel.add(cancelBtn);
+        panel.add(msgLabel, BorderLayout.CENTER);
+        panel.add(btnPanel, BorderLayout.SOUTH);
+        dialog.add(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+        return result[0];
     }
 
     private String showWildColorPicker(String cardName) {
@@ -949,7 +1027,37 @@ public class GamePanel extends JPanel {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 int amount = payload.has("amount") ? payload.get("amount").getAsInt() : 0;
                 String from = payload.has("from") ? payload.get("from").getAsString() : "Unknown";
-                JOptionPane.showMessageDialog(this, from + " demands payment of " + amount + "M.", "Payment Required", JOptionPane.INFORMATION_MESSAGE);
+                JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Payment", true);
+                dialog.setUndecorated(true);
+                JPanel panel = new JPanel(new BorderLayout(0, 15));
+                panel.setBackground(BG_MID);
+                panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(255, 215, 0, 70), 2, true),
+                    BorderFactory.createEmptyBorder(25, 30, 20, 30)
+                ));
+                JLabel iconLabel = new JLabel("💰", SwingConstants.CENTER);
+                iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 36));
+                JLabel msgLabel = new JLabel("<html><center>" + from + " demands payment of<br><b style='color:#FFD700;font-size:18px;'>" + amount + "M</b></center></html>", SwingConstants.CENTER);
+                msgLabel.setForeground(TEXT_WHITE);
+                msgLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                JButton okBtn = new JButton("Select Cards to Pay");
+                okBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                okBtn.setForeground(Color.WHITE);
+                okBtn.setBackground(new Color(30, 120, 60));
+                okBtn.setFocusPainted(false);
+                okBtn.setBorder(BorderFactory.createLineBorder(new Color(60, 180, 100), 1));
+                okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                okBtn.addActionListener(e -> dialog.dispose());
+                JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                btnPanel.setOpaque(false);
+                btnPanel.add(okBtn);
+                panel.add(iconLabel, BorderLayout.NORTH);
+                panel.add(msgLabel, BorderLayout.CENTER);
+                panel.add(btnPanel, BorderLayout.SOUTH);
+                dialog.add(panel);
+                dialog.pack();
+                dialog.setLocationRelativeTo(this);
+                dialog.setVisible(true);
             } catch (Exception e) {}
         });
     }
@@ -959,7 +1067,37 @@ public class GamePanel extends JPanel {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 int excess = payload.has("excess") ? payload.get("excess").getAsInt() : 1;
-                JOptionPane.showMessageDialog(this, "Hand exceeds 7 cards! Discard " + excess + " card(s).", "Discard Required", JOptionPane.WARNING_MESSAGE);
+                JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Discard", true);
+                dialog.setUndecorated(true);
+                JPanel panel = new JPanel(new BorderLayout(0, 15));
+                panel.setBackground(BG_MID);
+                panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(255, 215, 0, 70), 2, true),
+                    BorderFactory.createEmptyBorder(25, 30, 20, 30)
+                ));
+                JLabel iconLabel = new JLabel("🗑", SwingConstants.CENTER);
+                iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 36));
+                JLabel msgLabel = new JLabel("<html><center>Hand exceeds 7 cards!<br>Discard <b style='color:#FF6B6B;font-size:18px;'>" + excess + "</b> card(s)</center></html>", SwingConstants.CENTER);
+                msgLabel.setForeground(TEXT_WHITE);
+                msgLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                JButton okBtn = new JButton("Select Cards to Discard");
+                okBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                okBtn.setForeground(Color.WHITE);
+                okBtn.setBackground(new Color(180, 60, 40));
+                okBtn.setFocusPainted(false);
+                okBtn.setBorder(BorderFactory.createLineBorder(new Color(220, 100, 80), 1));
+                okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                okBtn.addActionListener(e -> dialog.dispose());
+                JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                btnPanel.setOpaque(false);
+                btnPanel.add(okBtn);
+                panel.add(iconLabel, BorderLayout.NORTH);
+                panel.add(msgLabel, BorderLayout.CENTER);
+                panel.add(btnPanel, BorderLayout.SOUTH);
+                dialog.add(panel);
+                dialog.pack();
+                dialog.setLocationRelativeTo(this);
+                dialog.setVisible(true);
             } catch (Exception e) {}
         });
     }

@@ -6,6 +6,7 @@ import com.monopolydeal.model.*;
 import com.monopolydeal.server.GameRoom;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.Gson;
 
@@ -1535,6 +1536,39 @@ public class GameSession {
         } catch (IllegalArgumentException e) {
             sendError(playerId, "Invalid color name: " + newColor);
         }
+    }
+
+    /**
+     * Handle client-submitted discard selection.
+     * Removes the selected cards from the player's hand and ends the turn.
+     * After discarding, schedules the next turn after a 1.5s delay.
+     */
+    public void handleSubmitDiscard(String playerId, JsonObject payload) {
+        if (!gameRunning || activePlayer == null) return;
+        if (!playerId.equals(activePlayer.getId())) return;
+        if (phase != GamePhase.DISCARD) return;
+
+        Player player = findPlayer(playerId);
+        if (player == null) return;
+
+        JsonArray cardIds = payload.getAsJsonArray("cardIds");
+        if (cardIds == null) return;
+
+        for (JsonElement elem : cardIds) {
+            String cardId = elem.getAsString();
+            Card card = player.removeCardFromHand(cardId);
+            if (card != null) {
+                deck.discard(card);
+                recordAction(playerId, player.getNickname(), "DISCARD", "", 0, "Discarded " + card.getName());
+            }
+        }
+
+        // End the turn after manual discard
+        activePlayer.setActivePlayer(false);
+        phase = GamePhase.END;
+        recordAction(activePlayer.getId(), activePlayer.getNickname(), "END_TURN", "", 0, "Turn ended");
+        broadcastGameState();
+        scheduler.schedule(this::startNextTurn, 1500, TimeUnit.MILLISECONDS);
     }
 
     /**

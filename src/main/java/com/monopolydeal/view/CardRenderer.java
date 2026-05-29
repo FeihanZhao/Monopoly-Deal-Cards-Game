@@ -30,11 +30,11 @@ import java.util.Map;
 public class CardRenderer extends JPanel {
 
     /** Card width (pixels) */
-    public static final int CARD_W = 90;
+    public static final int CARD_W = 100;
     /** Card height (pixels) */
-    public static final int CARD_H = 130;
+    public static final int CARD_H = 145;
     /** Card corner radius */
-    public static final int CORNER_RADIUS = 12;
+    public static final int CORNER_RADIUS = 10;
 
     /** Card lift distance on mouse hover */
     private static final int LIFT_HOVER    = 12;
@@ -117,10 +117,10 @@ public class CardRenderer extends JPanel {
     private static final Map<String, String> TYPE_ICONS = new HashMap<>();
 
     static {
-        TYPE_ICONS.put("MONEY",    "");   // Dollar icon
-        TYPE_ICONS.put("PROPERTY", "");  // House icon
-        TYPE_ICONS.put("ACTION",   "");   // Lightning icon
-        TYPE_ICONS.put("RENT",     "");   // Flying money icon
+        TYPE_ICONS.put("MONEY",    "💰");   // 💰 Dollar icon
+        TYPE_ICONS.put("PROPERTY", "🏠");  // 🏠 House icon
+        TYPE_ICONS.put("ACTION",   "⚡");         // ⚡ Lightning icon
+        TYPE_ICONS.put("RENT",     "💸");   // 💸 Flying money icon
     }
 
     /** Card unique identifier */
@@ -302,7 +302,9 @@ public class CardRenderer extends JPanel {
         // Paint layer by layer
         paintDropShadow(g2, cardTop);      // 1. Shadow
         paintCardBackground(g2, cardTop);   // 2. Background
-        if (selected) paintSelectionGlow(g2, cardTop);  // 3. Selection glow
+        paintShineOverlay(g2, cardTop);     // 3. Top shine (white gradient)
+        paintShineUnderlay(g2, cardTop);    // 4. Bottom fade (black gradient)
+        if (selected) paintSelectionGlow(g2, cardTop);  // 5. Selection glow
 
         // Disabled state: overlay semi-transparent black mask
         if (!isEnabled()) {
@@ -311,26 +313,28 @@ public class CardRenderer extends JPanel {
         }
 
         g2.setClip(null);  // Remove clip
-        paintTypeBadge(g2, cardTop);   // 4. Type badge
-        paintIcon(g2, cardTop);        // 5. Type icon
-        paintName(g2, cardTop);        // 6. Card name
-        if (value > 0) paintValueBadge(g2, cardTop);  // 7. Value badge
-        paintBorder(g2, cardTop);      // 8. Border
+        paintTypeBadge(g2, cardTop);   // 6. Type badge
+        paintIcon(g2, cardTop);        // 7. Type icon
+        paintName(g2, cardTop);        // 8. Card name
+        if (value > 0) paintValueBadge(g2, cardTop);  // 9. Value badge
+        paintBorder(g2, cardTop);      // 10. Border
 
         g2.dispose();
     }
 
-    /** Draw drop shadow (multi-layer semi-transparent black rounded rectangles) */
+    /** Draw drop shadow (softer radial gradient approach) */
     private void paintDropShadow(Graphics2D g2, int cardTop) {
-        int shadowOffset = selected ? 8 : (hovered ? 6 : 3);
-        int shadowAlpha  = selected ? 120 : (hovered ? 100 : 70);
-
+        int shadowOffset = selected ? 10 : (hovered ? 7 : 4);
         for (int i = shadowOffset; i > 0; i--) {
-            float alpha = shadowAlpha * ((float) (shadowOffset - i + 1) / shadowOffset);
-            g2.setColor(new Color(0, 0, 0, (int) alpha));
+            float alpha = selected ? (i * 12f) : (hovered ? (i * 10f) : (i * 8f));
+            g2.setColor(new Color(0, 0, 0, Math.min((int)alpha, 80)));
             g2.fill(new RoundRectangle2D.Float(i, cardTop + i, CARD_W, CARD_H,
                     CORNER_RADIUS, CORNER_RADIUS));
         }
+        // Add a deeper soft glow under the card
+        g2.setColor(new Color(0, 0, 0, selected ? 25 : (hovered ? 18 : 12)));
+        g2.fill(new RoundRectangle2D.Float(-2, cardTop + shadowOffset + 2,
+                CARD_W + 4, CARD_H + 2, CORNER_RADIUS + 4, CORNER_RADIUS + 4));
     }
 
     /** Draw card background (solid or gradient) */
@@ -364,6 +368,35 @@ public class CardRenderer extends JPanel {
         g2.fill(shape);
     }
 
+    /** Draw top shine overlay — white-to-transparent gradient on top 30% of card */
+    private void paintShineOverlay(Graphics2D g2, int cardTop) {
+        Shape clip = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
+                CORNER_RADIUS, CORNER_RADIUS);
+        g2.setClip(clip);
+        int shineH = (int)(CARD_H * 0.30f);
+        GradientPaint shine = new GradientPaint(
+                0, cardTop, new Color(255, 255, 255, 55),
+                0, cardTop + shineH, new Color(255, 255, 255, 0));
+        g2.setPaint(shine);
+        g2.fillRect(0, cardTop, CARD_W, shineH);
+        g2.setClip(null);
+    }
+
+    /** Draw bottom fade underlay — black-to-transparent on bottom 20% for readability */
+    private void paintShineUnderlay(Graphics2D g2, int cardTop) {
+        Shape clip = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
+                CORNER_RADIUS, CORNER_RADIUS);
+        g2.setClip(clip);
+        int fadeH = (int)(CARD_H * 0.20f);
+        int fadeStart = cardTop + CARD_H - fadeH;
+        GradientPaint fade = new GradientPaint(
+                0, fadeStart, new Color(0, 0, 0, 0),
+                0, cardTop + CARD_H, new Color(0, 0, 0, 80));
+        g2.setPaint(fade);
+        g2.fillRect(0, fadeStart, CARD_W, fadeH);
+        g2.setClip(null);
+    }
+
     /** Draw selection glow effect (gold radial gradient) */
     private void paintSelectionGlow(Graphics2D g2, int cardTop) {
         RadialGradientPaint glow = new RadialGradientPaint(
@@ -393,16 +426,27 @@ public class CardRenderer extends JPanel {
         g2.drawString(label, bx + 4, by + fm.getAscent() + 1);
     }
 
-    /** Draw the central type icon (emoji) */
+    /** Draw the central type icon (emoji with font fallback) */
     private void paintIcon(Graphics2D g2, int cardTop) {
-        String icon = TYPE_ICONS.getOrDefault(cardType, "");  // Default playing card icon
-        Font emojiFont = new Font("Segoe UI Emoji", Font.PLAIN, 28);
+        // Try emoji font, fall back to plain text symbols
+        String icon = TYPE_ICONS.getOrDefault(cardType, "");
+        Font emojiFont = new Font(AppTheme.FONT_EMOJI, Font.PLAIN, 28);
+        // If emoji font not available, use fallback with text symbols
+        if (!emojiFont.getFamily().equals(AppTheme.FONT_EMOJI) && !icon.isEmpty()) {
+            Map<String, String> fallback = new HashMap<>();
+            fallback.put("💰", "$");
+            fallback.put("🏠", "H");
+            fallback.put("⚡", "!");
+            fallback.put("💸", "~");
+            icon = fallback.getOrDefault(icon, icon);
+            emojiFont = new Font(AppTheme.FONT_FALLBACK, Font.PLAIN, 24);
+        }
         g2.setFont(emojiFont);
         FontMetrics fm = g2.getFontMetrics();
         int x = (CARD_W - fm.stringWidth(icon)) / 2;
-        int y = cardTop + 30 + fm.getAscent();
+        int y = cardTop + 32 + fm.getAscent();
         // Icon with shadow
-        g2.setColor(new Color(0, 0, 0, 80));
+        g2.setColor(AppTheme.SHADOW);
         g2.drawString(icon, x + 1, y + 2);
         g2.setColor(Color.WHITE);
         g2.drawString(icon, x, y);
@@ -448,7 +492,7 @@ public class CardRenderer extends JPanel {
         g2.drawString(label, bx + 7, by + fm.getAscent() + 2);
     }
 
-    /** Draw card border (selected=gold glow, default=dark border) */
+    /** Draw card border (selected=gold glow, default=dark border + inner highlight) */
     private void paintBorder(Graphics2D g2, int cardTop) {
         RoundRectangle2D.Float border = new RoundRectangle2D.Float(
                 0.5f, cardTop + 0.5f, CARD_W - 1f, CARD_H - 1f,
@@ -463,12 +507,23 @@ public class CardRenderer extends JPanel {
             }
             g2.setColor(new Color(0xFFD700));
             g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(border);
+            // Inner highlight
+            g2.setColor(new Color(255, 255, 255, 20));
+            g2.setStroke(new BasicStroke(0.8f));
+            g2.draw(new RoundRectangle2D.Float(2.5f, cardTop + 2.5f,
+                    CARD_W - 5f, CARD_H - 5f, CORNER_RADIUS - 2, CORNER_RADIUS - 2));
         } else {
             CardPalette palette = resolvePalette();
             g2.setColor(palette != null ? palette.border.darker() : Color.GRAY);
             g2.setStroke(new BasicStroke(1.5f));
+            g2.draw(border);
+            // Inner bevel highlight
+            g2.setColor(new Color(255, 255, 255, 18));
+            g2.setStroke(new BasicStroke(0.6f));
+            g2.draw(new RoundRectangle2D.Float(2f, cardTop + 2f,
+                    CARD_W - 4f, CARD_H - 4f, CORNER_RADIUS - 2, CORNER_RADIUS - 2));
         }
-        g2.draw(border);
     }
 
     /**

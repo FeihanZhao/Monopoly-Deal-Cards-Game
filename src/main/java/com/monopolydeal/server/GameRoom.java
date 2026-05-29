@@ -107,6 +107,10 @@ public class GameRoom {
     public void setPlayerReady(String clientId, boolean ready) {
         readyStates.put(clientId, ready);
         broadcastRoomUpdate();
+        // Auto-start if all players (>= MIN_PLAYERS) are ready
+        if (!gameStarted && allPlayersReady()) {
+            startGame();
+        }
     }
 
     /** Check whether all players are ready */

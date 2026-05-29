@@ -115,6 +115,15 @@ public class Player {
         return hand.remove(index);
     }
 
+    /** Remove a card from hand by its ID; returns null on failure */
+    public Card removeCardFromHand(String cardId) {
+        Card card = findCardById(cardId);
+        if (card != null && hand.remove(card)) {
+            return card;
+        }
+        return null;
+    }
+
     /** Check whether the hand contains a specific card (by object equality) */
     public boolean hasCard(Card card) {
         return hand.contains(card);

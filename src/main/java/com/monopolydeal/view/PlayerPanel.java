@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 import java.util.*;
 import java.util.Map;
 
@@ -42,6 +43,15 @@ public class PlayerPanel extends JPanel {
     private Map<String, JPanel> propertyGroupPanels;
     /** Current property card counts per color (cached) */
     private Map<String, Integer> currentPropertyCounts;
+    /** Set completion display panel */
+    private JPanel setBadgePanel;
+    /** Local player ID (for showing "Your Turn") */
+    private String localPlayerId;
+    /** Active player pulse animation */
+    private float activePulse;
+    private javax.swing.Timer pulseTimer;
+    /** Whether currently active */
+    private boolean isCurrentlyActive;
 
     /**
      * Constructor — create the player panel UI layout.
@@ -51,6 +61,8 @@ public class PlayerPanel extends JPanel {
         this.playerId = playerId;
         this.propertyGroupPanels = new LinkedHashMap<>();
         this.currentPropertyCounts = new LinkedHashMap<>();
+        this.activePulse = 0f;
+        this.isCurrentlyActive = false;
 
         setLayout(new BorderLayout(15, 0));
         setOpaque(false);
@@ -58,10 +70,15 @@ public class PlayerPanel extends JPanel {
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(60, 65, 75)),
                 new EmptyBorder(12, 15, 12, 15)));
-        setMaximumSize(new Dimension(Integer.MAX_VALUE, 160));
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
 
         createLeftInfo();      // Create left info area
         createPropertyArea();  // Create right property display area
+    }
+
+    /** Set local player ID for "Your Turn" badge */
+    public void setLocalPlayerId(String id) {
+        this.localPlayerId = id;
     }
 
     /** Create left info area — nickname, status, balance, sets, hand count */
@@ -71,38 +88,46 @@ public class PlayerPanel extends JPanel {
         leftPanel.setOpaque(false);
         leftPanel.setPreferredSize(new Dimension(180, 0));
 
-        // Nickname (white bold)
+        // Nickname (white bold, larger)
         nicknameLabel = new JLabel("Player");
-        nicknameLabel.setForeground(Color.WHITE);
-        nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
+        nicknameLabel.setForeground(AppTheme.TEXT_PRIMARY);
+        nicknameLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 16));
 
         // Status indicator (online/active/disconnected)
         statusLabel = new JLabel("");
-        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        statusLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 10));
 
         // Bank balance (gold)
         bankTotalLabel = new JLabel("Bank: 0M");
-        bankTotalLabel.setForeground(new Color(255, 215, 0));
-        bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        bankTotalLabel.setForeground(AppTheme.GOLD);
+        bankTotalLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 13));
 
-        // Complete sets (green)
+        // Complete sets badge row
+        JPanel setsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        setsRow.setOpaque(false);
+
         setsLabel = new JLabel("Sets: 0");
-        setsLabel.setForeground(new Color(100, 255, 100));
-        setsLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        setsLabel.setForeground(AppTheme.GREEN_GLOW);
+        setsLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 12));
+        setsRow.add(setsLabel);
+
+        setBadgePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        setBadgePanel.setOpaque(false);
+        setsRow.add(setBadgePanel);
 
         // Hand count (gray)
         handCountLabel = new JLabel("Hand: 0 cards");
-        handCountLabel.setForeground(new Color(180, 180, 180));
-        handCountLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        handCountLabel.setForeground(AppTheme.TEXT_DIM);
+        handCountLabel.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
 
         // Vertical layout with spacing
         leftPanel.add(nicknameLabel);
         leftPanel.add(Box.createVerticalStrut(2));
         leftPanel.add(statusLabel);
-        leftPanel.add(Box.createVerticalStrut(8));
+        leftPanel.add(Box.createVerticalStrut(6));
         leftPanel.add(bankTotalLabel);
         leftPanel.add(Box.createVerticalStrut(3));
-        leftPanel.add(setsLabel);
+        leftPanel.add(setsRow);
         leftPanel.add(Box.createVerticalStrut(3));
         leftPanel.add(handCountLabel);
 
@@ -137,24 +162,41 @@ public class PlayerPanel extends JPanel {
 
         // Status indicator
         if (!connected) {
-            statusLabel.setText("Disconnected");
-            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("✕ Disconnected");
+            statusLabel.setForeground(AppTheme.RED_DANGER);
         } else if (isActive) {
-            statusLabel.setText("Active");
-            statusLabel.setForeground(new Color(255, 215, 0));  // Gold
+            statusLabel.setText("▶ Active");
+            statusLabel.setForeground(AppTheme.GOLD);
         } else {
-            statusLabel.setText("Waiting");
-            statusLabel.setForeground(new Color(150, 150, 150));
+            statusLabel.setText("○ Waiting");
+            statusLabel.setForeground(AppTheme.TEXT_DIM);
         }
 
         bankTotalLabel.setText("Bank: " + bankTotal + "M");
         setsLabel.setText("Sets: " + completeSets + "/3");
         handCountLabel.setText("Hand: " + handCount + " cards");
 
-        // Active player gets a gold left-border highlight
+        // Animated active border with pulse
+        if (isActive != isCurrentlyActive) {
+            isCurrentlyActive = isActive;
+            if (isActive) {
+                pulseTimer = new javax.swing.Timer(50, e -> {
+                    activePulse += 0.08f;
+                    repaint();
+                });
+                pulseTimer.start();
+            } else if (pulseTimer != null) {
+                pulseTimer.stop();
+                activePulse = 0f;
+                repaint();
+            }
+        }
+
         if (isActive) {
+            float pulse = (float)Math.sin(activePulse) * 0.4f + 0.6f;
+            int alpha = (int)(255 * pulse);
             setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 3, 1, 0, new Color(255, 215, 0)),
+                    BorderFactory.createMatteBorder(0, 3, 1, 0, new Color(255, 215, 0, alpha)),
                     new EmptyBorder(12, 12, 12, 15)));
         } else {
             setBorder(BorderFactory.createCompoundBorder(
@@ -162,9 +204,34 @@ public class PlayerPanel extends JPanel {
                     new EmptyBorder(12, 15, 12, 15)));
         }
 
+        // Update set completion badges
+        updateSetBadges(propertyColorCounts);
+
         updatePropertyDisplay(propertyColorCounts);
         revalidate();
         repaint();
+    }
+
+    /** Update set completion badges — colored dots shown below the sets label */
+    private void updateSetBadges(Map<String, Integer> colorCounts) {
+        setBadgePanel.removeAll();
+        if (colorCounts == null) return;
+
+        // Determine which color groups are complete (count >= required)
+        // Display as small colored circles with checkmark for complete sets
+        for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
+            String colorName = entry.getKey();
+            int count = entry.getValue();
+            // Heuristic: a set is "complete" if count >= 2 for most colors, >=3 for some
+            // For display purposes, just show what they have
+            Color c = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
+            JLabel dot = new JLabel("●");
+            dot.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 10));
+            dot.setForeground(c);
+            dot.setToolTipText(colorName + ": " + count + " card(s)");
+            setBadgePanel.add(dot);
+        }
+        setBadgePanel.revalidate();
     }
 
     /**
@@ -199,43 +266,50 @@ public class PlayerPanel extends JPanel {
                             RenderingHints.VALUE_ANTIALIAS_ON);
 
                     // Draw cards from back to front (each offset by 3px for stack effect)
+                    int pw = 50, ph = 62;
                     for (int i = count - 1; i >= 0; i--) {
                         int offsetX = i * 3;
                         int offsetY = i * 3;
 
                         // Card shadow
-                        g2.setColor(new Color(0, 0, 0, 80));
-                        g2.fillRoundRect(offsetX + 1, offsetY + 1, 44, 56, 8, 8);
+                        g2.setColor(AppTheme.SHADOW);
+                        g2.fillRoundRect(offsetX + 1, offsetY + 1, pw, ph, 8, 8);
 
                         // Card body (corresponding color)
                         g2.setColor(color);
-                        g2.fillRoundRect(offsetX, offsetY, 44, 56, 8, 8);
+                        g2.fillRoundRect(offsetX, offsetY, pw, ph, 8, 8);
 
-                        // Card highlight (semi-transparent white bar at top)
-                        g2.setColor(new Color(255, 255, 255, 60));
-                        g2.fillRoundRect(offsetX + 3, offsetY + 3, 38, 20, 6, 6);
+                        // Gradient shine overlay on top
+                        g2.setPaint(new GradientPaint(
+                            0, offsetY, new Color(255, 255, 255, 50),
+                            0, offsetY + ph / 3, new Color(255, 255, 255, 0)));
+                        g2.fillRoundRect(offsetX, offsetY, pw, ph, 8, 8);
+
+                        // Card highlight strip (glass effect at top)
+                        g2.setColor(new Color(255, 255, 255, 40));
+                        g2.fillRoundRect(offsetX + 3, offsetY + 2, pw - 6, 15, 6, 6);
 
                         // Card border
                         g2.setColor(color.darker());
-                        g2.setStroke(new BasicStroke(1.2f));
-                        g2.drawRoundRect(offsetX, offsetY, 44, 56, 8, 8);
+                        g2.setStroke(new BasicStroke(1.0f));
+                        g2.drawRoundRect(offsetX, offsetY, pw, ph, 8, 8);
                     }
 
                     // Draw count text on top layer
                     if (count > 0) {
                         g2.setColor(Color.WHITE);
-                        g2.setFont(new Font("SansSerif", Font.BOLD, 9));
+                        g2.setFont(new Font(AppTheme.FONT_MAIN, Font.BOLD, 10));
                         FontMetrics fm = g2.getFontMetrics();
                         String text = count + "";
                         int maxOffset = (count - 1) * 3;
-                        g2.drawString(text, maxOffset + (44 - fm.stringWidth(text)) / 2,
-                                maxOffset + 35);
+                        g2.drawString(text, maxOffset + (pw - fm.stringWidth(text)) / 2,
+                                maxOffset + 38);
                     }
                     g2.dispose();
                 }
             };
             pilePanel.setOpaque(false);
-            pilePanel.setPreferredSize(new Dimension(50, 64));
+            pilePanel.setPreferredSize(new Dimension(56, 70));
             pilePanel.setToolTipText(colorName + ": " + count + " cards");
             propertyPanel.add(pilePanel);
         }

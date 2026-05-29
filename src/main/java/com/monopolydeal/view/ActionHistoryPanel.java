@@ -45,18 +45,22 @@ public class ActionHistoryPanel extends JPanel {
     /** Time formatter (HH:mm:ss) */
     private final SimpleDateFormat timeFormat;
     /** Base text color for description text */
-    private static final Color TEXT_DESCRIPTION = new Color(200, 200, 210);
+    private static final Color TEXT_DESCRIPTION = AppTheme.TEXT_PRIMARY;
     /** Timestamp color (subtle) */
-    private static final Color COLOR_TIME = new Color(130, 130, 150);
+    private static final Color COLOR_TIME = AppTheme.TEXT_DIM;
     /** Ongoing action (e.g. DRAW) gets a slightly dimmer color variant */
     private static final Color COLOR_DIM = new Color(160, 160, 170);
+    /** Background color for the panel */
+    private static final Color BG_PANEL = AppTheme.BG_DARK.darker();
+    /** Last action type seen (for detecting turn boundaries) */
+    private String lastActionType = "";
 
     /**
      * Constructor - creates dark theme styled text pane
      */
     public ActionHistoryPanel() {
         setLayout(new BorderLayout());
-        setBackground(new Color(30, 35, 42));
+        setBackground(BG_PANEL);
 
         // Titled border
         TitledBorder titledBorder = new TitledBorder(
@@ -64,8 +68,8 @@ public class ActionHistoryPanel extends JPanel {
                 "Action Log",
                 TitledBorder.LEFT,
                 TitledBorder.TOP,
-                new Font("Segoe UI", Font.BOLD, 12),
-                new Color(200, 200, 200)
+                new Font(AppTheme.FONT_MAIN, Font.BOLD, 12),
+                AppTheme.TEXT_PRIMARY
         );
         setBorder(titledBorder);
 
@@ -77,8 +81,8 @@ public class ActionHistoryPanel extends JPanel {
         // Styled text pane — supports per-character colors
         historyPane = new JTextPane();
         historyPane.setEditable(false);
-        historyPane.setBackground(new Color(30, 35, 42));
-        historyPane.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        historyPane.setBackground(BG_PANEL);
+        historyPane.setFont(new Font(AppTheme.FONT_MAIN, Font.PLAIN, 11));
         historyPane.setMargin(new Insets(5, 5, 5, 5));
         doc = historyPane.getStyledDocument();
 
@@ -91,7 +95,7 @@ public class ActionHistoryPanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(historyPane);
         scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(new Color(30, 35, 42));
+        scrollPane.getViewport().setBackground(BG_PANEL);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 
         add(scrollPane, BorderLayout.CENTER);
@@ -128,6 +132,14 @@ public class ActionHistoryPanel extends JPanel {
                     playerNames.put(playerId, nickname);
                 }
 
+                // Add turn separator when END_TURN is followed by a new action
+                if ("END_TURN".equals(lastActionType) && !"END_TURN".equals(actionType)
+                        && !"DISCARD".equals(actionType) && !"DISCONNECT".equals(actionType)) {
+                    appendStyled("─ ─ ─ ─ ─ ─ ─ ─ ─\n",
+                            new Color(255, 215, 0, 40), false, false);
+                }
+                lastActionType = actionType;
+
                 // Assign color for this player
                 Color playerColor = getPlayerColor(playerId);
 
@@ -145,8 +157,8 @@ public class ActionHistoryPanel extends JPanel {
                 appendStyled(": " + actionDesc + "\n", TEXT_DESCRIPTION, false, isHighlightAction(actionType));
             }
 
-            // Auto-scroll to top (newest first)
-            historyPane.setCaretPosition(0);
+            // Auto-scroll to bottom (newest last in visual order)
+            historyPane.setCaretPosition(doc.getLength());
         } catch (BadLocationException e) {
             // Should not happen since we control the document
             historyPane.setText("Error updating action log");
@@ -157,7 +169,7 @@ public class ActionHistoryPanel extends JPanel {
     private void appendStyled(String text, Color color, boolean bold, boolean highlight) throws BadLocationException {
         Style style = historyPane.addStyle("dynamic", null);
         StyleConstants.setForeground(style, color);
-        StyleConstants.setFontFamily(style, "Segoe UI");
+        StyleConstants.setFontFamily(style, AppTheme.FONT_MAIN);
         StyleConstants.setFontSize(style, 11);
         StyleConstants.setBold(style, bold);
         if (highlight) {
