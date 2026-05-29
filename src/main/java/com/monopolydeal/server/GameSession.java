@@ -10,41 +10,39 @@ import com.google.gson.JsonElement;
 import com.google.gson.Gson;
 
 /**
- * Game session — manages the complete lifecycle of a single game.
+ * Game session - manages the game logic for a complete game
  *
- * This is the core game engine, responsible for:
- * 1. Turn management: rotating active players through draw → play → end phases
- * 2. Timer: 30-second turn timeout with a 10-second warning
- * 3. Game rules: executing all card effects (money, property, rent, action)
- * 4. Payment system: handling money transfers between players with optimal payment calculation
- * 5. Victory detection: checking each turn whether a player has 3 complete property sets
- * 6. State broadcast: sending the latest GameState to all players after every action
+ * This is the core engine of the game, responsible for:
+ * 1. Turn management: cycle through active players, manage complete turn lifecycle (draw -> play -> end)
+ * 2. Timer: 30-second timeout per turn (warning 10 seconds before timeout)
+ * 3. Game rules: execute all card effects (money, property, rent, action cards)
+ * 4. Payment system: handle money transfers between players using optimal payment calculation
+ * 5. Win condition: check after each turn if any player has collected 3 complete property sets
+ * 6. State broadcast: broadcast the latest GameState to all players after each action
  *
  * Turn lifecycle:
- * 1. startNextTurn() — check win condition → advance to next online player → auto-draw → enter PLAY phase → start timer
- * 2. handlePlayCard() — player plays cards (max 3 non-action plays), check remaining plays after each
- * 3. endTurn() / forceEndTurn() — voluntary or forced end → auto-discard down to 7 cards → 1.5s delay → next turn
+ * 1. startNextTurn() - check win condition -> switch to next online player -> auto-draw -> enter PLAY phase -> start timer
+ * 2. handlePlayCard() - player plays cards (max 3 times), check remaining plays after each
+ * 3. endTurn() / forceEndTurn() - voluntary or forced turn end -> auto-discard to 7 card limit -> start next turn after 1.5s delay
  */
 public class GameSession {
-    /** Owning game room */
+    /** Associated game room */
     private final GameRoom room;
     /** Player list (in join order) */
     private final List<Player> players;
     /** Deck (draw pile + discard pile) */
     private final Deck deck;
-    /** Index of current player in the player list */
+    /** Current player index in list */
     private int currentPlayerIndex;
-    /** Currently active player (the one whose turn it is) */
+    /** Current active player (the one taking the turn) */
     private Player activePlayer;
     /** Current game phase */
     private GamePhase phase;
-    /** Timer thread pool for turn timeout control */
+    /** Timer thread pool (for turn timeout control) */
     private ScheduledExecutorService scheduler;
-    /** Current turn timer future handle (for cancellation) */
+    /** Current turn timer task handle (for cancelling timer) */
     private ScheduledFuture<?> turnTimer;
-    /** Second-stage timer handle (warning → timeout), must be independently cancelled */
-    private ScheduledFuture<?> turnTimerWarning;
-    /** Whether the game is currently running */
+    /** Whether game is running */
     private boolean gameRunning;
     /** Action history list (newest first) */
     private final List<ActionRecord> actionHistory;
@@ -54,31 +52,29 @@ public class GameSession {
     private String pendingPaymentCreditorId;
     /** Pending payment request: amount */
     private int pendingPaymentAmount;
-    /** Pending payment queue (FIFO for multi-debtor scenarios): [debtorId, creditorId, amount] */
+    /** Pending payment queue (FIFO order for multiple debtors): [debtorId, creditorId, amount] */
     private final Queue<String[]> pendingPaymentQueue = new LinkedList<>();
-    /** Payment timeout future handle (cancelled on manual submit to avoid races) */
+    /** Payment timeout timer handle (to cancel timeout when player manually submits payment) */
     private ScheduledFuture<?> paymentTimeoutTask;
-    /** Resolution stack — pending action / Just Say No chain; top is current responder */
+    /** Resolution stack - pending action/Just Say No chain, top is the element awaiting response */
     private final Deque<ResolutionItem> resolutionStack = new ArrayDeque<>();
-    /** Reaction timeout future handle (for cancellation) */
+    /** Reaction timeout timer handle (for cancellation) */
     private ScheduledFuture<?> reactionTimeoutTask;
-    /** Discard timeout future handle (for cancellation) */
-    private ScheduledFuture<?> discardTimeoutTask;
-    /** Pending multi-target resolution (next target processed after current payment completes) */
+    /** Pending multi-target resolution (continue processing next target after current payment completes) */
     private ResolutionItem pendingMultiTargetResolution;
-    /** Game start timestamp in milliseconds */
+    /** Game start timestamp (milliseconds) */
     private long gameStartTime;
-    /** Gson serializer instance */
+    /** Gson serializer */
     private final Gson gson;
 
     /**
-     * Constructor.
-     * @param room owning game room
+     * Constructor
+     * @param room associated game room
      * @param players player list
      */
     public GameSession(GameRoom room, List<Player> players) {
         this.room = room;
-        this.players = new CopyOnWriteArrayList<>(players);  // thread-safe list
+        this.players = new CopyOnWriteArrayList<>(players);  // Thread-safe list
         this.deck = new Deck();
         this.currentPlayerIndex = -1;
         this.phase = GamePhase.INIT;
@@ -90,42 +86,42 @@ public class GameSession {
     }
 
     /**
-     * Start the game.
+     * Start the game
      * 1. Deal initial hand (5 cards) to each player
      * 2. Broadcast initial game state
-     * 3. Begin the first turn
+     * 3. Start first turn
      */
-    public synchronized void start() {
+    public void start() {
         gameRunning = true;
         gameStartTime = System.currentTimeMillis();
-        // Deal initial hands
+        // Deal initial hand
         for (Player player : players) {
             List<Card> initialHand = deck.drawMultiple(GameConstants.INITIAL_HAND_SIZE);
             initialHand.forEach(player::addCardToHand);
         }
         broadcastGameState();
-        startNextTurn();  // Start the first turn
+        startNextTurn();  // Start first turn
     }
 
     /**
-     * Start the next turn.
+     * Start next turn
      * 1. Check win condition
-     * 2. Find the next online player
-     * 3. Auto-draw 2 cards (5 if hand is empty)
+     * 2. Find next online player
+     * 3. Auto-draw 3 cards
      * 4. Enter PLAY phase
      * 5. Start 30-second timeout timer
      */
-    private synchronized void startNextTurn() {
+    private void startNextTurn() {
         if (!gameRunning) return;
 
-        // Check if any player has won (3 complete property sets)
+        // Check if any player has won (collected 3 complete property sets)
         Optional<Player> winner = checkWinner();
         if (winner.isPresent()) {
             endGame(winner.get());
             return;
         }
 
-        // Find the next online player (skip disconnected)
+        // Find next online player (skip disconnected players)
         do {
             currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
             activePlayer = players.get(currentPlayerIndex);
@@ -133,21 +129,21 @@ public class GameSession {
 
         if (!gameRunning) return;
 
-        // Activate the player
+        // Set active player state
         activePlayer.setActivePlayer(true);
-        activePlayer.resetTurnState();  // Reset play count and double rent flag
+        activePlayer.resetTurnState();  // Reset play count and double rent status
         phase = GamePhase.DRAW;
 
-        // Auto-draw: 5 cards if hand was empty, otherwise 2 (official rules)
+        // Auto-draw phase: draw 5 cards if hand is empty (according to official rules)
         int baseDraw = activePlayer.getHandCount() == 0
                 ? GameConstants.EMPTY_HAND_DRAW_COUNT
                 : GameConstants.DRAW_COUNT;
         int drawCount = baseDraw;
-        // drawMultiple() internally triggers reshuffleDiscardPile() when draw pile is empty
+        // drawMultiple() will automatically trigger reshuffleDiscardPile() when draw pile is empty
         List<Card> drawnCards = deck.drawMultiple(drawCount);
         drawnCards.forEach(activePlayer::addCardToHand);
         recordAction(activePlayer.getId(), activePlayer.getNickname(), "DRAW", "", 0,
-                "drew " + drawnCards.size() + " cards");
+                "Drew " + drawnCards.size() + " cards");
 
         phase = GamePhase.PLAY;
         broadcastGameState();
@@ -155,16 +151,16 @@ public class GameSession {
     }
 
     /**
-     * Start the turn timeout timer.
-     * Sends a warning 10 seconds before timeout, then forces end of turn on expiry.
+     * Start turn timeout timer
+     * Warns 10 seconds before 30-second timeout, then auto-forces end turn after timeout
      */
     private void startTurnTimer() {
         cancelTimer();
-        // Warn at 20s, force-end 10s later
+        // Warn after 20 seconds, force end after another 10 seconds
         turnTimer = scheduler.schedule(() -> {
             room.sendToPlayer(activePlayer.getId(), MessageProtocol.MessageType.TURN_TIMEOUT,
                     "{\"secondsRemaining\":" + GameConstants.TIMEOUT_WARNING_SECONDS + "}");
-            turnTimerWarning = scheduler.schedule(() -> {
+            scheduler.schedule(() -> {
                 room.broadcast(MessageProtocol.MessageType.TURN_TIMEOUT,
                         "{\"playerId\":\"" + activePlayer.getId() + "\",\"reason\":\"Turn timeout\"}");
                 forceEndTurn();
@@ -172,46 +168,40 @@ public class GameSession {
         }, GameConstants.TURN_TIMEOUT_SECONDS - GameConstants.TIMEOUT_WARNING_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** Cancel the current turn timer (both stages) */
+    /** Cancel current turn timer */
     private void cancelTimer() {
         if (turnTimer != null && !turnTimer.isCancelled()) {
             turnTimer.cancel(false);
         }
-        if (turnTimerWarning != null && !turnTimerWarning.isCancelled()) {
-            turnTimerWarning.cancel(false);
-        }
     }
 
     /**
-     * Handle a play-card request — validate permissions then dispatch to the appropriate handler
-     * based on the action field.
+     * Handle play card request - validate permissions then dispatch to appropriate card handler
      *
      * Supported action types:
-     * - PLAY_MONEY: deposit a money card into the bank
-     * - PLAY_PROPERTY: place a property card into the property zone
-     * - PLAY_RENT: charge rent using a rent card
-     * - PLAY_ACTION: execute a special effect using an action card
+     * - PLAY_MONEY: Deposit money card to bank
+     * - PLAY_PROPERTY: Place property card in property zone
+     * - PLAY_RENT: Use rent card to collect money
+     * - PLAY_ACTION: Use action card to execute special effect
      *
-     * @param playerId ID of the requesting player
-     * @param payload JSON object containing cardId, action, and additional parameters
-     *                (e.g. color selection, target player, etc.)
+     * @param playerId ID of player making request
+     * @param payload JSON object containing cardId, action, and extra parameters (color selection, target player, etc.)
      */
-    public synchronized void handlePlayCard(String playerId, JsonObject payload) {
-        // Permission check: game must be running, must be active player, must be in PLAY phase
+    public void handlePlayCard(String playerId, JsonObject payload) {
+        // Permission validation: game must be running, must be active player, must be in PLAY phase
         if (!gameRunning || activePlayer == null) return;
         if (!playerId.equals(activePlayer.getId())) return;
         if (phase != GamePhase.PLAY) {
-            sendError(playerId, "Cannot play cards in the current phase");
+            sendError(playerId, "Cannot play cards in current phase");
             return;
         }
+        if (!activePlayer.canPlay()) {
+            sendError(playerId, "No plays remaining this turn");
+            return;
+        }
+
         String cardId = payload.get("cardId").getAsString();
         String action = payload.get("action").getAsString();
-
-        // Action cards don't count toward the 3-plays-per-turn limit
-        if (!"PLAY_ACTION".equals(action) && !activePlayer.canPlay()) {
-            sendError(playerId, "No remaining plays this turn");
-            return;
-        }
         Card card = activePlayer.findCardById(cardId);
 
         if (card == null) {
@@ -223,16 +213,16 @@ public class GameSession {
             boolean played = false;
             switch (action) {
                 case "PLAY_MONEY":
-                    played = playMoneyCard(card);       // deposit to bank
+                    played = playMoneyCard(card);       // Deposit to bank
                     break;
                 case "PLAY_PROPERTY":
-                    played = playPropertyCard(card, payload); // place property
+                    played = playPropertyCard(card, payload); // Place property
                     break;
                 case "PLAY_RENT":
-                    played = playRentCard(card, payload);    // charge rent
+                    played = playRentCard(card, payload);    // Collect rent
                     break;
                 case "PLAY_ACTION":
-                    played = playActionCard(card, payload);  // execute action
+                    played = playActionCard(card, payload);  // Execute action
                     break;
                 default:
                     sendError(playerId, "Unknown action: " + action);
@@ -240,15 +230,12 @@ public class GameSession {
             }
 
             if (played) {
-                // Action cards don't consume a play; money/property/rent cards do
-                if (!"PLAY_ACTION".equals(action)) {
-                    activePlayer.incrementPlaysUsed();
-                }
+                activePlayer.incrementPlaysUsed();  // Increment play count
                 recordAction(playerId, activePlayer.getNickname(), action, "", 0, card.getName());
                 broadcastGameState();
 
-                // Only auto-end turn if still in PLAY phase (if already in WAITING_FOR_PAYMENT or
-                // WAITING_FOR_REACTION, the respective completion callbacks handle it)
+                // Only auto-end turn if still in PLAY phase (if in WAITING_FOR_PAYMENT or
+                // WAITING_FOR_REACTION, let the completion callback handle it)
                 if (phase == GamePhase.PLAY && activePlayer.getRemainingPlays() <= 0) {
                     scheduler.schedule(this::forceEndTurn, 500, TimeUnit.MILLISECONDS);
                 }
@@ -259,11 +246,11 @@ public class GameSession {
     }
 
     /**
-     * Play a card as money — remove from hand and deposit into bank.
-     * Any card with canBeUsedAsMoney() true can be banked (including action/rent cards).
-     * Once banked, the card only counts as a monetary asset; original effects are lost.
+     * Play card as money - remove from hand and deposit to bank
+     * Any card with canBeUsedAsMoney() can be deposited (including action/rent cards),
+     * after deposit it only serves as money asset, losing original effect.
      * @param card card with value > 0
-     * @return true=success
+     * @return true on success
      */
     private boolean playMoneyCard(Card card) {
         if (!card.canBeUsedAsMoney()) return false;
@@ -273,19 +260,19 @@ public class GameSession {
     }
 
     /**
-     * Execute a property card effect — place a property card into the property zone.
-     * For wild property cards, supports player color selection.
-     * After placing, checks whether the win condition is met (3 complete sets).
+     * Execute property card effect - place property card in property zone
+     * For wild property cards, supports player color selection
+     * Checks win condition (3 complete property sets) after placement
      *
      * @param card property card
-     * @param payload may contain a color field (wild property color selection)
-     * @return true=success
+     * @param payload may contain color field (color selection for wild property)
+     * @return true on success
      */
     private boolean playPropertyCard(Card card, JsonObject payload) {
         if (!card.isPropertyCard()) return false;
         activePlayer.removeCardFromHand(card);
 
-        // Wild property: set player-chosen color
+        // Wild property card: set player-selected color
         if (card.isWildProperty() && payload.has("color")) {
             try {
                 String colorName = payload.get("color").getAsString();
@@ -303,22 +290,26 @@ public class GameSession {
     }
 
     /**
-     * Execute a rent card effect — charge rent from one or more players.
+     * Execute rent card effect - collect rent from one or more players
      *
      * Rent calculation logic:
-     * 1. Determine the rent color (standard rent cards have two fixed colors; wild rent requires color selection)
-     * 2. Calculate base rent = base rate based on how many properties of that color are held
-     * 3. If double rent is active, amount x2
-     * 4. Dual-color rent charges all players; wild rent charges a single specified target
+     * 1. Determine rent color (normal rent card has fixed dual colors, wild rent requires color selection)
+     * 2. Calculate base rent = base rate based on number held of that color
+     * 3. If double rent active, amount × 2
+     * 4. Dual-color rent collects from all players, wild rent collects from single specified target
      *
      * @param card rent card
      * @param payload may contain color and targetPlayerId fields
-     * @return true=executed successfully
+     * @return true on success
      */
     private boolean playRentCard(Card card, JsonObject payload) {
         if (!card.isRentCard()) return false;
 
-        // Step 1: determine rent color (validate first, don't remove card yet)
+        // Step 1: Remove from hand and discard
+        activePlayer.removeCardFromHand(card);
+        deck.discard(card);
+
+        // Step 2: Determine rent color
         CardColor rentColor = CardColor.WILD;
         if (payload.has("color")) {
             try {
@@ -330,44 +321,33 @@ public class GameSession {
 
         boolean isWildRent = card.getColor() == CardColor.WILD ||
                 card.getName().contains("Wild");
-
-        // Wild rent card client color validation: must be a valid property color
-        if (isWildRent && rentColor != CardColor.WILD && !rentColor.isPropertyColor()) {
-            rentColor = CardColor.WILD;
-        }
         payload.addProperty("isWildRent", isWildRent);
 
-        // Step 2: pre-calculate rent amount
+        // Step 3: Pre-calculate rent amount
         int baseRentAmount;
         if (isWildRent && rentColor == CardColor.WILD) {
-            // Wild rent with no color selected: default 2M
+            // Wild rent without color selected: default 2M
             baseRentAmount = 2;
         } else {
-            // Dual-color rent card: compute for both component colors, take the larger
+            // Dual-color rent card: calculate for both component colors, take the larger
             CardColor[] components = card.getColor().getComponentColors();
             if (components.length == 2) {
                 int rent1 = activePlayer.getPropertyZone().getRentAmount(components[0]);
                 int rent2 = activePlayer.getPropertyZone().getRentAmount(components[1]);
                 baseRentAmount = Math.max(rent1, rent2);
-                // Pick the higher-yield color as the formal rent color
+                // Choose the higher-yielding color as the official rent color
                 rentColor = (rent1 >= rent2) ? components[0] : components[1];
             } else {
                 baseRentAmount = activePlayer.getPropertyZone().getRentAmount(rentColor);
             }
-            // Reject if no matching property color to charge rent on
-            if (baseRentAmount == 0) {
-                sendError(activePlayer.getId(),
-                        "You don't have matching property color to charge rent");
-                return false;
-            }
+            if (baseRentAmount == 0) baseRentAmount = 2;
         }
         payload.addProperty("color", rentColor.name());
 
         int rentAmount = activePlayer.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
-        activePlayer.setDoubleRentActive(false);  // Consume immediately to prevent flag leak after JSN cancel
         payload.addProperty("_preCalculatedRent", rentAmount);
 
-        // Step 3: collect all target players
+        // Step 4: Collect all target player list
         java.util.List<String> allTargets = new java.util.ArrayList<>();
         if (isWildRent) {
             String targetId = extractTargetId(payload);
@@ -390,11 +370,7 @@ public class GameSession {
         }
         if (allTargets.isEmpty()) return false;
 
-        // Step 4: validation passed, remove from hand and discard
-        activePlayer.removeCardFromHand(card);
-        deck.discard(card);
-
-        // Step 5: first target is the current responder, store the rest in _remainingTargets
+        // Step 5: First target as current responder, remaining go into _remainingTargets
         String firstTarget = allTargets.remove(0);
         payload.addProperty("targetPlayerId", firstTarget);
         if (!allTargets.isEmpty()) {
@@ -410,41 +386,51 @@ public class GameSession {
     }
 
     /**
-     * Execute an action card effect — dispatch to the specific effect based on card name.
+     * Execute action card effect - dispatch to specific action effect based on card name
      *
      * Supported action card types:
-     * - Debt Collector: collect 5M from a specified player
-     * - Birthday: all players pay 2M each
-     * - Deal Breaker: steal a complete property set from a player
-     * - Pass Go: draw 2 extra cards
-     * - Double the Rent: next rent charge is doubled
-     * - House: build a house on a complete set (+1 rent/house, max 4)
-     * - Hotel: upgrade 4 houses to a hotel (+3 rent)
-     * - Forced Deal: swap a property card with another player
-     * - Sly Deal: steal a single property card from another player
-     * - Just Say No: cancel an action card targeting you
+     * - Debt Collector: Collect 5M from specified player
+     * - Birthday: Each other player pays 2M
+     * - Deal Breaker: Steal a complete property set from a player
+     * - Pass Go: Draw 2 extra cards
+     * - Double Rent: Double next rent collection
+     * - House: Build a house on complete set (+1 rent per house, max 4)
+     * - Hotel: Upgrade to hotel on 4 houses (+3 rent)
+     * - Forced Deal: Exchange property card with another player
+     * - Sly Deal: Steal a single property card from another player
+     * - Just Say No: Cancel an action card targeting you
      *
      * @param card action card
-     * @param payload may contain extra parameters like targetPlayerId, color, etc.
-     * @return true=executed successfully
+     * @param payload may contain targetPlayerId, color, etc.
+     * @return true on success
      */
     private boolean playActionCard(Card card, JsonObject payload) {
         if (!card.isActionCard()) return false;
 
         String actionName = card.getName();
 
-        // === Step 1: self-targeting actions — execute immediately (discard only after validation) ===
+        // Just Say No cannot be played via PLAY_ACTION — it must be played through
+        // handlePlayJustSayNo() during WAITING_FOR_REACTION phase when targeted by an action.
+        // If sent through PLAY_ACTION, send an error and do not consume the card.
+        if (actionName.contains("Just Say No")) {
+            // Card is still in hand — reject without consuming
+            sendError(activePlayer.getId(),
+                    "Just Say No can only be used when an action card is played against you");
+            return false;
+        }
+
+        // === Step 1: Remove from hand and discard (card is played regardless of cancellation) ===
+        activePlayer.removeCardFromHand(card);
+        deck.discard(card);
+
+        // === Step 2: No-target actions — execute immediately ===
         if (actionName.contains("Pass Go")) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
             List<Card> extraCards = deck.drawMultiple(2);
             extraCards.forEach(activePlayer::addCardToHand);
             return true;
         }
 
         if (actionName.contains("Double")) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
             activePlayer.setDoubleRentActive(true);
             return true;
         }
@@ -465,8 +451,6 @@ public class GameSession {
                 }
             }
             if (houseColor != null && activePlayer.getPropertyZone().canPlaceHouse(houseColor)) {
-                activePlayer.removeCardFromHand(card);
-                deck.discard(card);
                 activePlayer.getPropertyZone().addHouse(houseColor);
                 return true;
             }
@@ -489,19 +473,17 @@ public class GameSession {
                 }
             }
             if (hotelColor != null && activePlayer.getPropertyZone().canPlaceHotel(hotelColor)) {
-                activePlayer.removeCardFromHand(card);
-                deck.discard(card);
                 activePlayer.getPropertyZone().addHotel(hotelColor);
                 return true;
             }
             return false;
         }
 
-        // === Step 2: targeted actions — push to resolution stack, defer execution ===
+        // === Step 3: Target actions — push to resolution stack for deferred execution ===
         String actionType = mapActionNameToType(actionName);
         String targetId = extractTargetId(payload);
 
-        // Determine target player (auto-select if client didn't specify)
+        // Determine target player
         if (targetId.isEmpty()) {
             if (actionName.contains("Deal Breaker")) {
                 for (Player p : players) {
@@ -511,31 +493,50 @@ public class GameSession {
                     }
                 }
             } else if (actionName.contains("Forced Deal")) {
-                // Auto-select: first other player with properties
+                // Auto-select: first other player with property, and auto-select swap cards
+                Player target = null;
                 for (Player p : players) {
                     if (!p.equals(activePlayer) && !p.getPropertyZone().getAllPropertyGroups().isEmpty()) {
-                        targetId = p.getId();
+                        target = p;
                         break;
                     }
                 }
+                if (target != null) {
+                    targetId = target.getId();
+                    Card myProp = null;
+                    for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { myProp = group.get(0); break; }
+                    }
+                    Card theirProp = null;
+                    for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
+                        if (!group.isEmpty()) { theirProp = group.get(0); break; }
+                    }
+                    if (myProp != null) payload.addProperty("myPropertyId", myProp.getId());
+                    if (theirProp != null) payload.addProperty("theirPropertyId", theirProp.getId());
+                }
             } else if (actionName.contains("Sly Deal")) {
-                // Auto-select: first player with a stealable property
+                // Only steal property cards not in complete sets (per official rules)
+                Player victim = null;
+                Card toSteal = null;
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
-                        boolean found = false;
                         for (List<Card> group : p.getPropertyZone().getAllPropertyGroups().values()) {
                             if (!group.isEmpty() && !p.getPropertyZone().getCompleteSets()
                                     .contains(group.get(0).getEffectiveColor())) {
-                                targetId = p.getId();
-                                found = true;
+                                victim = p;
+                                toSteal = group.get(0);
                                 break;
                             }
                         }
-                        if (found) break;
+                        if (victim != null) break;
                     }
                 }
+                // No legal target (all other players' properties are in complete sets)
+                if (victim == null || toSteal == null) return false;
+                targetId = victim.getId();
+                payload.addProperty("targetCardId", toSteal.getId());
             } else if (actionName.contains("Birthday")) {
-                // Birthday: collect all other players, first as responder, rest stored in _remainingTargets
+                // Birthday: collect all other players, first as responder, rest into _remainingTargets
                 java.util.List<String> allTargets = new java.util.ArrayList<>();
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
@@ -553,7 +554,7 @@ public class GameSession {
                 }
                 payload.addProperty("_amount", GameConstants.BIRTHDAY_AMOUNT);
             } else {
-                // Default: pick the first other player
+                // Default: select first other player
                 for (Player p : players) {
                     if (!p.equals(activePlayer)) {
                         targetId = p.getId();
@@ -565,48 +566,10 @@ public class GameSession {
 
         if (targetId.isEmpty()) return false;
 
-        // Steal-type cards: fill in target property selection (must do this regardless of whether targetId came from client or server auto-select)
-        if (actionName.contains("Sly Deal") && !payload.has("targetCardId")) {
-            Player victim = findPlayer(targetId);
-            if (victim != null) {
-                Card toSteal = null;
-                for (List<Card> group : victim.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty() && !victim.getPropertyZone().getCompleteSets()
-                            .contains(group.get(0).getEffectiveColor())) {
-                        toSteal = group.get(0);
-                        break;
-                    }
-                }
-                if (toSteal == null) return false;
-                payload.addProperty("targetCardId", toSteal.getId());
-            }
-        }
-
-        if (actionName.contains("Forced Deal") && (!payload.has("myPropertyId") || !payload.has("theirPropertyId"))) {
-            Player target = findPlayer(targetId);
-            if (target != null) {
-                Card myProp = null;
-                for (List<Card> group : activePlayer.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty()) { myProp = group.get(0); break; }
-                }
-                Card theirProp = null;
-                for (List<Card> group : target.getPropertyZone().getAllPropertyGroups().values()) {
-                    if (!group.isEmpty()) { theirProp = group.get(0); break; }
-                }
-                if (myProp == null || theirProp == null) return false;
-                payload.addProperty("myPropertyId", myProp.getId());
-                payload.addProperty("theirPropertyId", theirProp.getId());
-            }
-        }
-
-        // Ensure targetPlayerId is present in payload
+        // Ensure payload contains targetPlayerId
         if (!payload.has("targetPlayerId")) {
             payload.addProperty("targetPlayerId", targetId);
         }
-
-        // Validation passed, remove from hand and discard
-        activePlayer.removeCardFromHand(card);
-        deck.discard(card);
 
         // Push to resolution stack
         pushResolution(actionType, activePlayer.getId(), targetId, card, payload);
@@ -615,11 +578,11 @@ public class GameSession {
     }
 
     /**
-     * Execute Forced Deal: swap specified property cards between two players.
+     * Execute forced deal: swap specified property cards between two players
      * @param player1 first player
      * @param player2 second player
-     * @param cardId1 property card ID that player1 is giving up
-     * @param cardId2 property card ID that player2 is giving up
+     * @param cardId1 property card ID to swap out from player1
+     * @param cardId2 property card ID to swap out from player2
      */
     private void executeForcedDeal(Player player1, Player player2, String cardId1, String cardId2) {
         Card card1 = findPropertyInZone(player1, cardId1);
@@ -630,7 +593,11 @@ public class GameSession {
         player1.getPropertyZone().removeProperty(card1);
         player2.getPropertyZone().removeProperty(card2);
 
-        // Swap into each other's property zones
+        // Reset wild property colors
+        if (card1.isWildProperty()) card1.setWildColor(null);
+        if (card2.isWildProperty()) card2.setWildColor(null);
+
+        // Swap into opponent's property zone
         player1.getPropertyZone().addProperty(card2);
         player2.getPropertyZone().addProperty(card1);
 
@@ -639,10 +606,10 @@ public class GameSession {
     }
 
     /**
-     * Execute Sly Deal: steal a specified property card from another player.
+     * Execute sly deal: steal a specified property card from a player
      * @param thief stealing player
-     * @param victim target player
-     * @param cardId ID of the property card to steal
+     * @param victim victim player
+     * @param cardId property card ID to steal
      */
     private void executeSlyDeal(Player thief, Player victim, String cardId) {
         Card stolenCard = findPropertyInZone(victim, cardId);
@@ -653,10 +620,10 @@ public class GameSession {
         thief.getPropertyZone().addProperty(stolenCard);
 
         recordAction(thief.getId(), thief.getNickname(), "SLY_DEAL",
-                victim.getNickname(), 0, "stole " + stolenCard.getName());
+                victim.getNickname(), 0, "Stole " + stolenCard.getName());
     }
 
-    /** Find a property card by ID in a player's property zone */
+    /** Find property card in player's property zone by ID */
     private Card findPropertyInZone(Player player, String cardId) {
         for (List<Card> properties : player.getPropertyZone().getAllPropertyGroups().values()) {
             for (Card card : properties) {
@@ -666,16 +633,16 @@ public class GameSession {
         return null;
     }
 
-    // ==================== Resolution stack core methods ====================
+    // ==================== Resolution Stack Core Methods ====================
 
     /**
-     * Push an action onto the resolution stack and enter WAITING_FOR_REACTION phase.
+     * Push action to resolution stack, enter WAITING_FOR_REACTION phase
      *
      * @param actionType   action type
-     * @param initiatorId  initiator player ID
-     * @param responderId  responder player ID
-     * @param sourceCard   the card that was played
-     * @param actionPayload original request payload
+     * @param initiatorId  initiator ID
+     * @param responderId  responder ID
+     * @param sourceCard   card played
+     * @param actionPayload original request data
      */
     private void pushResolution(String actionType, String initiatorId,
                                 String responderId, Card sourceCard,
@@ -685,18 +652,18 @@ public class GameSession {
                 initiatorId, responderId, sourceCard, actionPayload);
         resolutionStack.push(item);
 
-        // Enter waiting-for-reaction phase, pause the turn
+        // Enter waiting for reaction phase, pause turn
         phase = GamePhase.WAITING_FOR_REACTION;
         cancelTimer();
 
-        // Notify the responder
+        // Notify responder
         sendReactionRequired(responderId, item);
 
         // Start 5-second reaction timeout
         startReactionTimeout(responderId);
     }
 
-    /** Send REACTION_REQUIRED message to the responder */
+    /** Send REACTION_REQUIRED message to responder */
     private void sendReactionRequired(String responderId, ResolutionItem item) {
         Player responder = findPlayer(responderId);
         Player initiator = findPlayer(item.getInitiatorId());
@@ -714,7 +681,7 @@ public class GameSession {
                 req.toString());
     }
 
-    /** Start the reaction timeout timer */
+    /** Start reaction timeout timer */
     private void startReactionTimeout(String responderId) {
         cancelReactionTimeout();
         reactionTimeoutTask = scheduler.schedule(
@@ -722,46 +689,46 @@ public class GameSession {
                 GameConstants.JUST_SAY_NO_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** Cancel the reaction timeout timer */
+    /** Cancel reaction timeout timer */
     private void cancelReactionTimeout() {
         if (reactionTimeoutTask != null && !reactionTimeoutTask.isCancelled()) {
             reactionTimeoutTask.cancel(false);
         }
     }
 
-    /** Reaction timeout — treated as pass, auto-resolve top */
-    private synchronized void handleReactionTimeout(String responderId) {
+    /** Reaction timeout — treat as pass, auto resolveTop */
+    private void handleReactionTimeout(String responderId) {
         if (resolutionStack.isEmpty()) return;
         ResolutionItem top = resolutionStack.peek();
         if (top == null || !top.getResponderId().equals(responderId)) return;
 
-        // Timeout is treated as pass
+        // Timeout treated as pass
         recordAction(responderId, findPlayer(responderId) != null ?
                         findPlayer(responderId).getNickname() : "",
-                "PASS_REACTION", "", 0, "reaction timeout");
+                "PASS_REACTION", "", 0, "Timeout - no response");
 
         resolveTopResolution();
     }
 
-    /** Handle a player playing Just Say No */
-    public synchronized void handlePlayJustSayNo(String playerId, JsonObject payload) {
+    /** Handle player playing Just Say No */
+    public void handlePlayJustSayNo(String playerId, JsonObject payload) {
         if (phase != GamePhase.WAITING_FOR_REACTION) {
-            sendError(playerId, "Cannot play Just Say No in the current phase");
+            sendError(playerId, "Cannot play Just Say No in current phase");
             return;
         }
         if (resolutionStack.isEmpty()) {
-            sendError(playerId, "No pending action to react to");
+            sendError(playerId, "No pending action to respond to");
             return;
         }
 
         ResolutionItem currentTop = resolutionStack.peek();
-        // Validate: must be the current responder
+        // Validate: must be the current responder taking action
         if (!playerId.equals(currentTop.getResponderId())) {
-            sendError(playerId, "You are not the current responder");
+            sendError(playerId, "Your response is not required at this time");
             return;
         }
 
-        // Find the Just Say No card in hand
+        // Find Just Say No card in hand
         String cardId = payload.get("cardId").getAsString();
         Player responder = findPlayer(playerId);
         if (responder == null) return;
@@ -777,7 +744,7 @@ public class GameSession {
         deck.discard(jsnCard);
         cancelReactionTimeout();
 
-        // Push Just Say No onto stack top, responder becomes the original initiator
+        // Push Just Say No to stack, responder becomes original initiator
         String newResponderId = currentTop.getInitiatorId();
         JsonObject jsnPayload = new JsonObject();
         jsnPayload.addProperty("counteredResolutionId", currentTop.getResolutionId());
@@ -787,39 +754,39 @@ public class GameSession {
         recordAction(playerId, responder.getNickname(), "JUST_SAY_NO",
                 findPlayer(newResponderId) != null ?
                         findPlayer(newResponderId).getNickname() : "",
-                0, "played Just Say No to counter " + currentTop.getActionType());
+                0, "Played Just Say No to cancel " + currentTop.getActionType());
         broadcastGameState();
     }
 
-    /** Handle a player passing on their reaction (declining to play Just Say No) */
-    public synchronized void handlePassReaction(String playerId) {
+    /** Handle player passing reaction (not playing Just Say No) */
+    public void handlePassReaction(String playerId) {
         if (resolutionStack.isEmpty()) {
-            sendError(playerId, "No pending action to react to");
+            sendError(playerId, "No pending action to respond to");
             return;
         }
 
         ResolutionItem top = resolutionStack.peek();
         if (!playerId.equals(top.getResponderId())) {
-            sendError(playerId, "You are not the current responder");
+            sendError(playerId, "Your response is not required at this time");
             return;
         }
 
         cancelReactionTimeout();
         recordAction(playerId, findPlayer(playerId) != null ?
                         findPlayer(playerId).getNickname() : "",
-                "PASS_REACTION", "", 0, "passed on " + top.getActionType());
+                "PASS_REACTION", "", 0, "Passed response to " + top.getActionType());
 
         resolveTopResolution();
     }
 
     /**
-     * Pop the top resolution from the stack and process it.
+     * Pop top resolution and process
      *
      * Pop rules:
      * - If top is JUST_SAY_NO → it succeeded → pop the element below it (cancelled)
-     * - If top is an original action → it was not cancelled → execute deferred effect
-     * - After processing, if stack is non-empty → continue waiting for next responder
-     * - If stack is empty → return to PLAY or enter WAITING_FOR_PAYMENT
+     * - If top is original action → not cancelled → execute deferred effect
+     * - If stack not empty after processing → continue waiting for next responder
+     * - If stack empty → return to PLAY or enter WAITING_FOR_PAYMENT
      */
     private void resolveTopResolution() {
         if (resolutionStack.isEmpty()) return;
@@ -827,27 +794,30 @@ public class GameSession {
         ResolutionItem resolved = resolutionStack.pop();
 
         if (resolved.isJustSayNo()) {
-            // Just Say No succeeded → cancel the resolution it was stacked on top of
+            // Just Say No succeeded → cancel the resolution it blocked
             if (!resolutionStack.isEmpty()) {
                 ResolutionItem cancelled = resolutionStack.pop();
                 recordAction(resolved.getInitiatorId(),
                         findPlayer(resolved.getInitiatorId()) != null ?
                                 findPlayer(resolved.getInitiatorId()).getNickname() : "",
                         "ACTION_CANCELLED", "",
-                        0, cancelled.getActionType() + " cancelled by Just Say No");
-                // Multi-target: JSN only cancels the current player's obligation, continue to next target
-                if (continueMultiTargetResolution(cancelled)) return;
+                        0, cancelled.getActionType() + " was cancelled by Just Say No");
+                // Official rule: "Just Say No — Cancel the action."
+                // A Just Say No cancels the ENTIRE action card, not just the current target's obligation.
+                // Clear remaining multi-targets so the action doesn't continue to other players.
+                clearRemainingTargets(cancelled);
+                // Do NOT call continueMultiTargetResolution — the action is fully cancelled.
             }
         } else {
-            // Original action was not cancelled, execute deferred effect
+            // Original action not cancelled, execute deferred effect
             executeDeferredAction(resolved);
-            // Multi-target: stash resolution, advance after current payment completes
+            // Multi-target: temporarily store resolution, wait for current target payment to complete before proceeding
             if (hasRemainingTargets(resolved)) {
                 pendingMultiTargetResolution = resolved;
             }
         }
 
-        // Stack non-empty → continue waiting for next responder
+        // Stack not empty → continue waiting for next responder
         if (!resolutionStack.isEmpty()) {
             ResolutionItem nextTop = resolutionStack.peek();
             sendReactionRequired(nextTop.getResponderId(), nextTop);
@@ -855,23 +825,13 @@ public class GameSession {
             return;
         }
 
-        // Stack empty → resolution phase fully complete
+        // Stack empty → resolution phase complete
         if (pendingPaymentDebtorId != null) {
             broadcastGameState();
             return;
         }
 
-        // If a pending multi-target resolution remains (e.g. previous target had zero balance, skip payment), advance to next
-        if (pendingMultiTargetResolution != null) {
-            ResolutionItem saved = pendingMultiTargetResolution;
-            pendingMultiTargetResolution = null;
-            if (continueMultiTargetResolution(saved)) {
-                broadcastGameState();
-                return;
-            }
-        }
-
-        // No pending payment and no pending multi-target → directly resume play phase
+        // No pending payment → return to play phase, resume turn timer
         phase = GamePhase.PLAY;
         startTurnTimer();
         broadcastGameState();
@@ -881,7 +841,7 @@ public class GameSession {
         }
     }
 
-    /** Check whether there are remaining multi-targets to process */
+    /** Check if there are remaining multi-targets to process */
     private boolean hasRemainingTargets(ResolutionItem item) {
         JsonObject payload = item.getActionPayload();
         if (!payload.has("_remainingTargets")) return false;
@@ -890,8 +850,8 @@ public class GameSession {
     }
 
     /**
-     * Multi-target action helper — pop the next target from the unprocessed list and push to resolution stack.
-     * Does nothing if _remainingTargets is absent or empty.
+     * Multi-target action helper method — take next target from unprocessed list and push to resolution stack
+     * If _remainingTargets doesn't exist or is empty, do nothing
      */
     private boolean continueMultiTargetResolution(ResolutionItem resolvedItem) {
         JsonObject payload = resolvedItem.getActionPayload();
@@ -900,16 +860,16 @@ public class GameSession {
         com.google.gson.JsonArray remaining = payload.getAsJsonArray("_remainingTargets");
         if (remaining == null || remaining.size() == 0) return false;
 
-        // Pop the next target player ID
+        // Get next target player ID
         String nextTarget = remaining.remove(0).getAsString();
         payload.addProperty("targetPlayerId", nextTarget);
 
-        // Remove the marker field if no remaining targets
+        // Remove marker field if no remaining targets
         if (remaining.size() == 0) {
             payload.remove("_remainingTargets");
         }
 
-        // Push new resolution; next target becomes the new responder
+        // Push new resolution, next target becomes new responder
         pushResolution(resolvedItem.getActionType(),
                 resolvedItem.getInitiatorId(),
                 nextTarget,
@@ -919,7 +879,20 @@ public class GameSession {
     }
 
     /**
-     * Execute a deferred action effect (called after resolution passes).
+     * Clear remaining multi-targets when an action is fully cancelled by Just Say No.
+     * Official rule: "Just Say No — Cancel the action" means the ENTIRE action is cancelled,
+     * not just the current target's obligation. Remaining targets are cleared so the action
+     * does not continue after the JSN chain resolves.
+     */
+    private void clearRemainingTargets(ResolutionItem item) {
+        JsonObject payload = item.getActionPayload();
+        if (payload != null && payload.has("_remainingTargets")) {
+            payload.remove("_remainingTargets");
+        }
+    }
+
+    /**
+     * Execute deferred action effect (called after resolution passes)
      */
     private void executeDeferredAction(ResolutionItem item) {
         String actionType = item.getActionType();
@@ -952,7 +925,7 @@ public class GameSession {
         }
     }
 
-    // ==================== Deferred action effect execution ====================
+    // ==================== Deferred Action Execution ====================
 
     private void executeDebtCollector(Player initiator, JsonObject payload) {
         String targetId = payload.has("targetPlayerId") ?
@@ -968,7 +941,7 @@ public class GameSession {
             recordAction(initiator.getId(), initiator.getNickname(),
                     "DEBT_COLLECTOR", target.getNickname(),
                     GameConstants.DEBT_COLLECTOR_AMOUNT,
-                    "collecting " + GameConstants.DEBT_COLLECTOR_AMOUNT + "M");
+                    "Collected " + GameConstants.DEBT_COLLECTOR_AMOUNT + "M");
         }
     }
 
@@ -982,17 +955,17 @@ public class GameSession {
             requirePayment(target, initiator, amount);
             recordAction(initiator.getId(), initiator.getNickname(),
                     "BIRTHDAY", target.getNickname(), amount,
-                    target.getNickname() + " pays " + amount + "M");
+                    target.getNickname() + " paid " + amount + "M");
         }
     }
 
     private void executeRent(Player initiator, JsonObject payload) {
-        // Use pre-calculated rent amount from playRentCard (compute fallback if missing)
+        // Use pre-calculated rent amount from playRentCard (calculate on the fly if missing)
         int rentAmount;
         if (payload.has("_preCalculatedRent")) {
             rentAmount = payload.get("_preCalculatedRent").getAsInt();
         } else {
-            // Fallback calculation (consistent with playRentCard logic)
+            // Fallback calculation (same logic as playRentCard)
             CardColor rentColor = CardColor.WILD;
             if (payload.has("color")) {
                 try {
@@ -1005,7 +978,7 @@ public class GameSession {
             if (rentColor == CardColor.WILD) {
                 baseRentAmount = 2;
             } else {
-                // Dual-color rent card: take max of the two component colors
+                // Dual-color rent card: take max of both component colors
                 CardColor[] components = rentColor.getComponentColors();
                 if (components.length == 2) {
                     int rent1 = initiator.getPropertyZone().getRentAmount(components[0]);
@@ -1018,8 +991,9 @@ public class GameSession {
             }
             rentAmount = initiator.isDoubleRentActive() ? baseRentAmount * 2 : baseRentAmount;
         }
+        initiator.setDoubleRentActive(false);
 
-        // Single-target charge (in multi-target scenarios, each player is handled by their own resolution item)
+        // Single target collection (multi-target scenario each player handled by separate resolution element)
         String targetPlayerId = payload.has("targetPlayerId")
                 ? payload.get("targetPlayerId").getAsString() : "";
         Player targetPlayer = findPlayer(targetPlayerId);
@@ -1027,7 +1001,7 @@ public class GameSession {
             requirePayment(targetPlayer, initiator, rentAmount);
             recordAction(initiator.getId(), initiator.getNickname(), "RENT",
                     targetPlayer.getNickname(), rentAmount,
-                    "charged " + targetPlayer.getNickname() + " rent " + rentAmount + "M");
+                    "Collected rent of " + rentAmount + "M from " + targetPlayer.getNickname());
         }
     }
 
@@ -1048,7 +1022,7 @@ public class GameSession {
         }
     }
 
-    /** Steal a complete property set (Deal Breaker effect) */
+    /** Steal complete property set (Deal Breaker effect) */
     private void stealCompleteSet(Player initiator, Player target) {
         List<CardColor> completeSets = target.getPropertyZone().getCompleteSets();
         if (completeSets.isEmpty()) return;
@@ -1063,14 +1037,14 @@ public class GameSession {
         }
         recordAction(initiator.getId(), initiator.getNickname(),
                 "DEAL_BREAKER", target.getNickname(), 0,
-                "stole complete set: " + setToSteal.getName());
-        // Check if this triggers a win
+                "Stole complete set: " + setToSteal.getName());
+        // Check if this wins the game
         if (initiator.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
             endGame(initiator);
         }
     }
 
-    /** Steal a single property card (Sly Deal effect — deferred execution version) */
+    /** Steal single property card (Sly Deal effect - deferred execution version) */
     private void executeSlyDeal(Player initiator, JsonObject payload) {
         if (!payload.has("targetPlayerId") || !payload.has("targetCardId")) return;
         String targetPlayerId = payload.get("targetPlayerId").getAsString();
@@ -1079,17 +1053,18 @@ public class GameSession {
         if (target != null && targetCardId != null) {
             Card stolenCard = findPropertyInZone(target, targetCardId);
             if (stolenCard == null) return;
-            // Cannot steal a property from a complete set
+            // Cannot steal property cards from complete sets
             if (target.getPropertyZone().getCompleteSets()
                     .contains(stolenCard.getEffectiveColor())) return;
             target.getPropertyZone().removeProperty(stolenCard);
+            if (stolenCard.isWildProperty()) stolenCard.setWildColor(null);
             initiator.getPropertyZone().addProperty(stolenCard);
             recordAction(initiator.getId(), initiator.getNickname(), "SLY_DEAL",
-                    target.getNickname(), 0, "stole " + stolenCard.getName());
+                    target.getNickname(), 0, "Stole " + stolenCard.getName());
         }
     }
 
-    /** Forced Deal (deferred execution version) */
+    /** Forced exchange (Forced Deal effect - deferred execution version) */
     private void executeForcedDeal(Player initiator, JsonObject payload) {
         if (!payload.has("targetPlayerId") || !payload.has("myPropertyId")
                 || !payload.has("theirPropertyId")) return;
@@ -1101,9 +1076,9 @@ public class GameSession {
         executeForcedDeal(initiator, otherPlayer, myPropId, theirPropId);
     }
 
-    // ==================== Helper methods ====================
+    // ==================== Helper Methods ====================
 
-    /** Map a card name to the standard action type string */
+    /** Map card name to standard action type string */
     private String mapActionNameToType(String actionName) {
         if (actionName.contains("Debt Collector")) return "DEBT_COLLECTOR";
         if (actionName.contains("Birthday")) return "BIRTHDAY";
@@ -1111,11 +1086,11 @@ public class GameSession {
         if (actionName.contains("Sly Deal")) return "SLY_DEAL";
         if (actionName.contains("Forced Deal")) return "FORCED_DEAL";
         if (actionName.contains("Rent") || actionName.contains("rent")) return "RENT";
-        System.err.println("Warning: unrecognized action card name '" + actionName + "', treating as UNKNOWN");
+        System.err.println("Warning: Unrecognized action card name '" + actionName + "', treating as UNKNOWN");
         return "UNKNOWN";
     }
 
-    /** Extract the target player ID from payload */
+    /** Extract target player ID from payload */
     private String extractTargetId(JsonObject payload) {
         if (payload.has("targetPlayerId")) {
             String id = payload.get("targetPlayerId").getAsString();
@@ -1124,26 +1099,21 @@ public class GameSession {
         return "";
     }
 
-    // ==================== Payment system ====================
+    // ==================== Payment System ====================
 
     /**
-     * Initiate an async payment request — send PAYMENT_REQUIRED to the debtor client.
+     * Initiate asynchronous payment request — send PAYMENT_REQUIRED to debtor client
      *
-     * Payment is no longer synchronous. The debtor receives the message, selects cards
-     * in the client, and submits the selection via SUBMIT_PAYMENT; handleSubmitPayment
-     * executes the transfer. Multiple debtors are processed sequentially via a FIFO queue.
+     * Payment is no longer synchronous. Debtor selects cards on client side after receiving message,
+     * submits selection via SUBMIT_PAYMENT, and handleSubmitPayment executes the transfer.
+     * Multiple debtors are processed via FIFO queue.
      *
      * @param debtor   paying player
      * @param creditor receiving player
      * @param amount   payment amount
      */
     private void requirePayment(Player debtor, Player creditor, int amount) {
-        if (debtor.getBank().getTotal() == 0) {
-            recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_SKIPPED",
-                    creditor.getNickname(), amount, "zero balance, no payment needed");
-            broadcastGameState();
-            return;
-        }
+        if (debtor.getBank().getTotal() == 0) return;
 
         int actualAmount = Math.min(amount, debtor.getBank().getTotal());
 
@@ -1156,7 +1126,7 @@ public class GameSession {
         sendPaymentRequest(debtor, creditor, actualAmount);
     }
 
-    /** Send a payment request message to the specified debtor */
+    /** Send payment request message to specified debtor */
     private void sendPaymentRequest(Player debtor, Player creditor, int amount) {
         this.pendingPaymentDebtorId = debtor.getId();
         this.pendingPaymentCreditorId = creditor.getId();
@@ -1187,8 +1157,8 @@ public class GameSession {
                 30, TimeUnit.SECONDS);
     }
 
-    /** Payment timeout fallback — auto-select cards using greedy algorithm */
-    private synchronized void handlePaymentTimeout(Player debtor, Player creditor, int expectedAmount) {
+    /** Payment timeout fallback — automatically select cards for payment using greedy algorithm */
+    private void handlePaymentTimeout(Player debtor, Player creditor, int expectedAmount) {
         if (pendingPaymentDebtorId == null
                 || !pendingPaymentDebtorId.equals(debtor.getId())
                 || pendingPaymentAmount != expectedAmount) {
@@ -1200,11 +1170,11 @@ public class GameSession {
             int actualPaid = 0;
             for (Card moneyCard : payment) {
                 actualPaid += moneyCard.getValue();
-                creditor.getBank().deposit(moneyCard.transferCopy());
+                creditor.getBank().deposit(moneyCard.clone());
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                     creditor.getNickname(), actualPaid,
-                    "auto-paid on timeout " + actualPaid + "M");
+                    "Auto-paid " + actualPaid + "M due to timeout");
         } catch (Bank.InsufficientFundsException ignored) {}
 
         clearPendingPayment();
@@ -1212,14 +1182,10 @@ public class GameSession {
     }
 
     /**
-     * Handle a player's submitted payment selection — routed by ClientHandler.
-     * Called after the debtor selects cards to pay; validates and executes the transfer.
+     * Handle player-submitted payment selection — routed by ClientHandler
+     * Debtor selects cards to pay, then validation and transfer are executed
      */
-    public synchronized void handleSubmitPayment(String playerId, JsonObject payload) {
-        if (phase != GamePhase.WAITING_FOR_PAYMENT) {
-            sendError(playerId, "Cannot pay in the current phase");
-            return;
-        }
+    public void handleSubmitPayment(String playerId, JsonObject payload) {
         if (!playerId.equals(pendingPaymentDebtorId)) {
             sendError(playerId, "No pending payment request");
             return;
@@ -1242,11 +1208,11 @@ public class GameSession {
             int totalPaid = 0;
             for (Card moneyCard : payment) {
                 totalPaid += moneyCard.getValue();
-                creditor.getBank().deposit(moneyCard.transferCopy());
+                creditor.getBank().deposit(moneyCard.clone());
             }
             recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_MADE",
                     creditor.getNickname(), totalPaid,
-                    "paid " + totalPaid + "M (required " + pendingPaymentAmount + "M)");
+                    "Paid " + totalPaid + "M (required " + pendingPaymentAmount + "M)");
         } catch (IllegalArgumentException e) {
             sendError(playerId, e.getMessage());
             return;
@@ -1259,14 +1225,14 @@ public class GameSession {
         broadcastGameState();
     }
 
-    /** Clear current pending payment state and dequeue the next payment request */
+    /** Clear current pending payment state and dequeue next payment request */
     private void clearPendingPayment() {
         pendingPaymentDebtorId = null;
         pendingPaymentCreditorId = null;
         pendingPaymentAmount = 0;
 
         if (!pendingPaymentQueue.isEmpty()) {
-            // Process next payment in queue (stay in WAITING_FOR_PAYMENT phase)
+            // Process next payment in queue (keep WAITING_FOR_PAYMENT phase unchanged)
             String[] next = pendingPaymentQueue.poll();
             Player nextDebtor = findPlayer(next[0]);
             Player nextCreditor = findPlayer(next[1]);
@@ -1274,43 +1240,40 @@ public class GameSession {
             if (nextDebtor != null && nextCreditor != null) {
                 sendPaymentRequest(nextDebtor, nextCreditor, nextAmount);
             } else {
-                // Next payment invalid (player disconnected, etc.), skip and continue
+                // Next payment invalid (player disconnected, etc.), recursively clean and continue
                 clearPendingPayment();
             }
-            return;  // Still have pending payments, don't restore PLAY phase
+            return;  // Still have pending payment, do not restore PLAY phase
         }
 
-        // All payments complete
-        // If a pending multi-target resolution remains, advance to next target
+        // All payments completed
+        // If there is a pending multi-target resolution, advance to next target
         if (pendingMultiTargetResolution != null) {
             ResolutionItem saved = pendingMultiTargetResolution;
             pendingMultiTargetResolution = null;
             if (continueMultiTargetResolution(saved)) {
-                return; // Pushed next target, waiting for JSN response
+                return; // Next target pushed, waiting for JSN response
             }
         }
 
-        // All targets processed, restore play phase
+        // All targets processed, return to play phase, resume turn timer
         phase = GamePhase.PLAY;
         startTurnTimer();
         broadcastGameState();
 
-        // Auto-end turn if active player has no remaining plays
+        // If active player has no plays remaining, automatically end turn
         if (activePlayer != null && activePlayer.getRemainingPlays() <= 0) {
             scheduler.schedule(this::forceEndTurn, 500, TimeUnit.MILLISECONDS);
         }
     }
 
-    /** Handle player voluntarily ending their turn */
-    public synchronized void endTurn(String playerId) {
+    /** Handle player voluntarily ending turn */
+    public void endTurn(String playerId) {
         if (activePlayer == null || !playerId.equals(activePlayer.getId())) return;
 
+        // Cannot end turn while waiting for payment or reaction
         if (phase == GamePhase.WAITING_FOR_PAYMENT || phase == GamePhase.WAITING_FOR_REACTION) {
-            sendError(playerId, "Please wait for current action to finish before ending turn");
-            return;
-        }
-        if (phase == GamePhase.DISCARD) {
-            sendError(playerId, "Please wait for discard to complete, turn will end automatically");
+            sendError(playerId, "Please wait for current operation to complete before ending turn");
             return;
         }
 
@@ -1318,14 +1281,10 @@ public class GameSession {
     }
 
     /**
-     * Force-settle all pending payments (called on turn timeout / player disconnect).
-     * Auto-settles both the current pending payment and all queued payments using greedy fallback.
+     * Force settle all pending payments (called on turn timeout/player disconnect)
+     * Use fallback greedy algorithm to auto-settle current and queued payments
      */
     private void forceSettleAllPendingPayments() {
-        // Cancel payment timeout timer to prevent race conditions
-        if (paymentTimeoutTask != null && !paymentTimeoutTask.isCancelled()) {
-            paymentTimeoutTask.cancel(false);
-        }
         // Settle current pending payment first
         if (pendingPaymentDebtorId != null) {
             Player debtor = findPlayer(pendingPaymentDebtorId);
@@ -1335,17 +1294,17 @@ public class GameSession {
                     int actualAmount = Math.min(pendingPaymentAmount, debtor.getBank().getTotal());
                     List<Card> payment = debtor.getBank().removeCardsFallback(actualAmount);
                     for (Card c : payment) {
-                        creditor.getBank().deposit(c.transferCopy());
+                        creditor.getBank().deposit(c.clone());
                     }
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
                             payment.stream().mapToInt(Card::getValue).sum(),
-                            "auto-paid at end of turn " + actualAmount + "M");
+                            "Auto-paid " + actualAmount + "M at turn end");
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
 
-        // Settle all remaining queued payments
+        // Settle all remaining payments in queue
         while (!pendingPaymentQueue.isEmpty()) {
             String[] next = pendingPaymentQueue.poll();
             Player debtor = findPlayer(next[0]);
@@ -1356,12 +1315,12 @@ public class GameSession {
                     int actualAmount = Math.min(amount, debtor.getBank().getTotal());
                     List<Card> payment = debtor.getBank().removeCardsFallback(actualAmount);
                     for (Card c : payment) {
-                        creditor.getBank().deposit(c.transferCopy());
+                        creditor.getBank().deposit(c.clone());
                     }
                     recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
                             creditor.getNickname(),
                             payment.stream().mapToInt(Card::getValue).sum(),
-                            "auto-paid at end of turn " + actualAmount + "M");
+                            "Auto-paid " + actualAmount + "M at turn end");
                 } catch (Bank.InsufficientFundsException ignored) {}
             }
         }
@@ -1374,174 +1333,67 @@ public class GameSession {
     }
 
     /**
-     * Force-end the current turn.
-     * 1. Cancel timers
-     * 2. Auto-discard down to hand limit (7 cards)
+     * Force end current turn
+     * 1. Cancel timer
+     * 2. Auto-discard to hand limit (7 cards)
      * 3. Clear active player state
      * 4. Broadcast game state
-     * 5. Delay 1.5 seconds then start next turn
+     * 5. Start next turn after 1.5 second delay
      */
-    private synchronized void forceEndTurn() {
+    private void forceEndTurn() {
         cancelTimer();
         cancelReactionTimeout();
 
-        // Clear resolution stack (turn ended, all unresponded resolutions treated as abandoned by target)
-        pendingMultiTargetResolution = null;
+        // Clear resolution stack (turn ends, all unresolved resolutions are considered abandoned by target)
         while (!resolutionStack.isEmpty()) {
             ResolutionItem item = resolutionStack.pop();
             if (!item.isJustSayNo()) {
-                // Original action abandoned — deferred effect is lost at end of turn (penalty for letting it expire)
+                // Original action abandoned, do not execute deferred effect at turn end (action effect lost as penalty)
                 recordAction(item.getInitiatorId(),
                         findPlayer(item.getInitiatorId()) != null ?
                                 findPlayer(item.getInitiatorId()).getNickname() : "",
                         "ACTION_EXPIRED", "", 0,
-                        item.getActionType() + " expired (turn ended)");
+                        item.getActionType() + " expired due to turn end");
             }
         }
 
-        // If there are pending payments, force-settle all using fallback
+        // If there are pending payments, use fallback to force settle all payments
         if (phase == GamePhase.WAITING_FOR_PAYMENT) {
             forceSettleAllPendingPayments();
         }
 
-        if (activePlayer != null && activePlayer.needsToDiscard()) {
-            // Enter discard phase: notify client to select cards to discard
-            startDiscardPhase();
-            return;
-        }
-        finalizeEndTurn();
-    }
-
-    /**
-     * Start the discard phase.
-     * Notify the client to select cards to discard and start a 15-second timeout timer.
-     */
-    private void startDiscardPhase() {
-        phase = GamePhase.DISCARD;
-
-        // Build hand card list JSON
-        com.google.gson.JsonArray handCardsArr = new com.google.gson.JsonArray();
-        for (Card card : activePlayer.getHand()) {
-            JsonObject cardObj = new JsonObject();
-            cardObj.addProperty("cardId", card.getId());
-            cardObj.addProperty("cardName", card.getName());
-            cardObj.addProperty("cardType", card.getType().name());
-            cardObj.addProperty("color", card.getColor().name());
-            cardObj.addProperty("value", card.getValue());
-            handCardsArr.add(cardObj);
-        }
-
-        int discardCount = activePlayer.getHand().size() - GameConstants.MAX_HAND_SIZE;
-
-        JsonObject payload = new JsonObject();
-        payload.add("handCards", handCardsArr);
-        payload.addProperty("discardCount", discardCount);
-        payload.addProperty("timeoutSeconds", GameConstants.DISCARD_TIMEOUT_SECONDS);
-
-        room.sendToPlayer(activePlayer.getId(), MessageProtocol.MessageType.DISCARD_REQUIRED,
-                payload.toString());
-
-        broadcastGameState();
-
-        // Start discard timeout: auto-discard from front of hand on expiry
-        discardTimeoutTask = scheduler.schedule(() -> {
-            synchronized (GameSession.this) {
-                if (phase == GamePhase.DISCARD && activePlayer != null) {
-                    int needToDiscard = activePlayer.getHand().size() - GameConstants.MAX_HAND_SIZE;
-                    for (int i = 0; i < needToDiscard && !activePlayer.getHand().isEmpty(); i++) {
-                        Card discarded = activePlayer.removeCardFromHand(0);
-                        deck.discard(discarded);
-                        recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                                "DISCARD_TIMEOUT", "", 0, "auto-discarded on timeout " + discarded.getName());
-                    }
-                    finalizeEndTurn();
-                }
-            }
-        }, GameConstants.DISCARD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    }
-
-    /**
-     * Handle a client's discard selection submission.
-     * Removes the user-selected cards; auto-fills from front of hand if not enough were selected.
-     */
-    public synchronized void handleSubmitDiscard(String playerId, JsonObject payload) {
-        if (activePlayer == null || !playerId.equals(activePlayer.getId())) {
-            sendError(playerId, "Not your turn");
-            return;
-        }
-        if (phase != GamePhase.DISCARD) {
-            sendError(playerId, "Not in discard phase");
-            return;
-        }
-
-        // Cancel timeout timer
-        if (discardTimeoutTask != null && !discardTimeoutTask.isCancelled()) {
-            discardTimeoutTask.cancel(false);
-        }
-
-        // Remove user-selected cards
-        com.google.gson.JsonArray cardIdsArr = payload.getAsJsonArray("cardIds");
-        java.util.Set<String> selectedIds = new java.util.HashSet<>();
-        for (com.google.gson.JsonElement elem : cardIdsArr) {
-            selectedIds.add(elem.getAsString());
-        }
-
-        java.util.List<Card> toRemove = new java.util.ArrayList<>();
-        for (Card card : activePlayer.getHand()) {
-            if (selectedIds.contains(card.getId())) {
-                toRemove.add(card);
-            }
-        }
-        for (Card card : toRemove) {
-            activePlayer.removeCardFromHand(card);
-            deck.discard(card);
-            recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "discarded " + card.getName());
-        }
-
-        // Fallback: if not enough, auto-discard from front of hand (prevents client cheating by under-selecting)
-        while (activePlayer.needsToDiscard() && !activePlayer.getHand().isEmpty()) {
-            Card discarded = activePlayer.removeCardFromHand(0);
-            deck.discard(discarded);
-            recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "DISCARD", "", 0, "discarded " + discarded.getName());
-        }
-
-        finalizeEndTurn();
-    }
-
-    /**
-     * Finalize the end-of-turn steps.
-     * Cancel timers, clear active player, broadcast state, schedule next turn.
-     */
-    private void finalizeEndTurn() {
-        if (discardTimeoutTask != null && !discardTimeoutTask.isCancelled()) {
-            discardTimeoutTask.cancel(false);
-        }
-
         if (activePlayer != null) {
+            if (activePlayer.needsToDiscard()) {
+                phase = GamePhase.DISCARD;
+            }
+            // Auto-discard: discard from start of hand until hand size <= 7
+            while (activePlayer.needsToDiscard() && !activePlayer.getHand().isEmpty()) {
+                Card discarded = activePlayer.removeCardFromHand(0);
+                deck.discard(discarded);
+                recordAction(activePlayer.getId(), activePlayer.getNickname(),
+                        "DISCARD", "", 0, "Discarded " + discarded.getName());
+            }
             activePlayer.setActivePlayer(false);
             recordAction(activePlayer.getId(), activePlayer.getNickname(),
-                    "END_TURN", "", 0, "turn ended");
+                    "END_TURN", "", 0, "Turn ended");
         }
         phase = GamePhase.END;
         broadcastGameState();
-        // Delay 1.5 seconds before starting next turn (gives players time to see last turn's results)
+        // Delay 1.5 seconds before starting next turn (give players time to see results of previous turn)
         scheduler.schedule(this::startNextTurn, 1500, TimeUnit.MILLISECONDS);
     }
 
-    /** Check if any player has met the win condition (3 complete property sets) */
+    /** Check if any player meets win condition (collected 3 complete property sets) */
     private Optional<Player> checkWinner() {
         return players.stream()
                 .filter(p -> p.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS)
                 .findFirst();
     }
 
-    /** End the game — broadcast GAME_OVER message */
+    /** End game - broadcast GAME_OVER message */
     private void endGame(Player winner) {
         gameRunning = false;
         cancelTimer();
-        cancelReactionTimeout();
         phase = GamePhase.GAME_OVER;
 
         JsonObject result = new JsonObject();
@@ -1550,17 +1402,27 @@ public class GameSession {
         result.addProperty("gameDuration", getGameDuration());
         result.addProperty("completeSets", winner.getCompleteSetsCount());
 
-        recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "won the game!");
+        com.google.gson.JsonArray playersArr = new com.google.gson.JsonArray();
+        for (Player p : players) {
+            JsonObject pJson = new JsonObject();
+            pJson.addProperty("nickname", p.getNickname());
+            pJson.addProperty("completeSets", p.getCompleteSetsCount());
+            pJson.addProperty("bankTotal", p.getBank().getTotal());
+            playersArr.add(pJson);
+        }
+        result.add("players", playersArr);
+
+        recordAction(winner.getId(), winner.getNickname(), "WINNER", "", 0, "Won the game!");
         broadcastGameState();
         room.broadcast(MessageProtocol.MessageType.GAME_OVER, result.toString());
     }
 
     /**
-     * Flip wild property card color — free color-change entry point for wild cards.
-     * Validates: must be active player, in PLAY phase, card must be in property zone.
-     * Core rule: does NOT consume a play (does not call incrementPlaysUsed).
+     * Flip wild property card color — wild card free color change entry point
+     * Validation: must be active player, in PLAY phase, card must be in property zone
+     * Core rule: does not consume play count (does not call incrementPlaysUsed)
      */
-    public synchronized void handleFlipWildCard(String playerId, String cardId, String newColor) {
+    public void handleFlipWildCard(String playerId, String cardId, String newColor) {
         if (!gameRunning || activePlayer == null) return;
         if (!playerId.equals(activePlayer.getId())) return;
         if (phase != GamePhase.PLAY) return;
@@ -1578,13 +1440,13 @@ public class GameSession {
             boolean ok = player.getPropertyZone().changeWildCardColor(cardId, color);
             if (!ok) {
                 sendError(playerId,
-                        "Color change failed: card not found, color not supported,"
-                                + " or set has house/hotel");
+                        "Color change failed: wild card not found, card does not support this color, "
+                                + "or existing property set has houses/hotels that cannot be removed");
                 return;
             }
 
             recordAction(playerId, player.getNickname(), "FLIP_WILD", "", 0,
-                    "flipped wild property to " + color.getName());
+                    "Changed wild property to " + color.getName());
             broadcastGameState();
 
             if (player.getCompleteSetsCount() >= GameConstants.WINNING_COMPLETE_SETS) {
@@ -1596,11 +1458,11 @@ public class GameSession {
     }
 
     /**
-     * Handle a player disconnecting.
-     * If fewer than 2 players remain online, the game ends in a draw.
-     * If the disconnecting player is the active player, force-end their turn.
+     * Handle player disconnect
+     * If remaining online players are less than 2, game ends in draw.
+     * If disconnected player is the active player, automatically end their turn.
      */
-    public synchronized void handlePlayerDisconnect(String clientId) {
+    public void handlePlayerDisconnect(String clientId) {
         Player disconnected = findPlayer(clientId);
         if (disconnected == null) return;
 
@@ -1615,21 +1477,17 @@ public class GameSession {
             // Insufficient online players, game ends (draw)
             gameRunning = false;
             cancelTimer();
-            cancelReactionTimeout();
-            if (paymentTimeoutTask != null && !paymentTimeoutTask.isCancelled()) {
-                paymentTimeoutTask.cancel(false);
-            }
             JsonObject drawResult = new JsonObject();
             drawResult.addProperty("reason", "Insufficient online players");
             drawResult.addProperty("connectedPlayers", connectedPlayers);
             room.broadcast(MessageProtocol.MessageType.GAME_DRAW, drawResult.toString());
         } else if (activePlayer != null && clientId.equals(activePlayer.getId())) {
-            // Disconnecting player is the active player, force-end their turn
+            // Disconnected player is current active player, force end their turn
             forceEndTurn();
         }
     }
 
-    /** Find a player object by player ID */
+    /** Find player object by player ID */
     private Player findPlayer(String playerId) {
         if (playerId == null || playerId.isEmpty()) return null;
         return players.stream()
@@ -1639,23 +1497,23 @@ public class GameSession {
     }
 
     /**
-     * Record an action history entry.
-     * New records are inserted at the head (newest first), capped at 100 entries.
+     * Record an action in history
+     * New records inserted at head of list (newest first), keep up to 100 records
      */
     private void recordAction(String playerId, String nickname, String action,
                               String targetPlayer, int amount, String details) {
         ActionRecord record = new ActionRecord(
                 actionHistory.size() + 1, playerId, nickname, action,
                 targetPlayer, amount, details, System.currentTimeMillis());
-        actionHistory.add(0, record);  // Head-insert: newest first
+        actionHistory.add(0, record);  // Insert at head, newest first
         if (actionHistory.size() > 100) {
-            actionHistory.remove(actionHistory.size() - 1);  // Remove oldest entry
+            actionHistory.remove(actionHistory.size() - 1);  // Remove oldest record
         }
     }
 
     /**
-     * Broadcast game state to all players.
-     * Each player receives a customized GameState (their own hand cards visible, others see only counts).
+     * Broadcast game state to all players
+     * Each player receives a customized GameState (their own hand cards visible, others only see count)
      */
     private void broadcastGameState() {
         for (Player viewer : players) {
@@ -1666,11 +1524,10 @@ public class GameSession {
     }
 
     /**
-     * Create a GameState snapshot for the specified viewer.
-     * Privacy protection: only the viewer's own hand card details (handCards) are populated;
-     * other players only see hand counts.
+     * Create GameState snapshot for specified viewer
+     * Privacy protection: only viewer's own hand card details (handCards) are populated, others only see hand count
      *
-     * @param viewerId viewer's player ID
+     * @param viewerId viewer ID
      * @return customized GameState
      */
     private GameState createGameState(String viewerId) {
@@ -1710,7 +1567,7 @@ public class GameSession {
             }
             playerState.setBankDenominations(denominations);
 
-            // Property counts per color
+            // Property count by color
             Map<String, Integer> colorCounts = new HashMap<>();
             for (Map.Entry<CardColor, List<Card>> entry :
                     player.getPropertyZone().getAllPropertyGroups().entrySet()) {
@@ -1719,19 +1576,7 @@ public class GameSession {
             }
             playerState.setPropertyColorCounts(colorCounts);
 
-            // Property zone details — public info, all players see these
-            List<CardColor> completeSetColors = player.getPropertyZone().getCompleteSets();
-            List<GameState.CardInfo> propertyCards = new ArrayList<>();
-            for (List<Card> group : player.getPropertyZone().getAllPropertyGroups().values()) {
-                for (Card card : group) {
-                    GameState.CardInfo ci = new GameState.CardInfo(card);
-                    ci.setInCompleteSet(completeSetColors.contains(card.getEffectiveColor()));
-                    propertyCards.add(ci);
-                }
-            }
-            playerState.setPropertyCards(propertyCards);
-
-            // Privacy: only the viewer sees their own hand card details
+            // Privacy protection: only viewer can see their own hand cards
             if (player.getId().equals(viewerId)) {
                 List<GameState.CardInfo> handCards = new ArrayList<>();
                 for (Card card : player.getHand()) {
@@ -1742,7 +1587,7 @@ public class GameSession {
             state.addPlayerState(player.getId(), playerState);
         }
 
-        // Populate recent action history (capped at 20 entries)
+        // Populate recent action history (up to 20 records)
         List<GameState.ActionRecord> recentActions = new ArrayList<>();
         int limit = Math.min(20, actionHistory.size());
         for (int i = 0; i < limit; i++) {
@@ -1758,7 +1603,7 @@ public class GameSession {
         return state;
     }
 
-    /** Send an error message to the specified player */
+    /** Send error message to specified player */
     private void sendError(String playerId, String message) {
         JsonObject error = new JsonObject();
         error.addProperty("message", message);
@@ -1783,13 +1628,13 @@ public class GameSession {
     public Deck getDeck() { return deck; }
 
     /**
-     * Inner class: action history record (for internal storage within GameSession).
-     * Separate from GameState.ActionRecord to avoid package dependency confusion.
+     * Inner class: Action history record (for internal storage in GameSession)
+     * Separate from GameState.ActionRecord to avoid package dependency confusion
      */
     static class ActionRecord {
         int index;              // Action sequence number
-        String playerId;        // Actor's player ID
-        String playerNickname;  // Actor's nickname
+        String playerId;        // Executor ID
+        String playerNickname;  // Executor nickname
         String action;          // Action type
         String targetPlayer;    // Target player
         int amount;             // Amount involved
