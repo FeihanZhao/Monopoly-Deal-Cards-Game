@@ -16,78 +16,78 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
 
 /**
- * 游戏面板 - 游戏进行时的主界面
+ * Game panel — the main game interface during gameplay.
  *
- * 布局结构（自上而下）：
- * 1. 顶栏（topBarPanel）- 阶段标签、当前回合、倒计时、抽牌堆数量、结束回合按钮
- * 2. 主游戏区（mainGamePanel）- 绿色桌面背景，显示所有玩家的PlayerPanel
- * 3. 手牌区（handPanel）- 底部的玩家手牌展示区，可横向滚动
- * 4. 侧边栏（sidePanel）- 右侧的行动历史记录面板
+ * Layout structure (top to bottom):
+ * 1. Top bar (topBarPanel) — phase label, current turn, countdown, draw pile count, end turn button
+ * 2. Main game area (mainGamePanel) — green table background, displays all players' PlayerPanels
+ * 3. Hand area (handPanel) — bottom player hand card display, horizontally scrollable
+ * 4. Sidebar (sidePanel) — right-side action history panel
  *
- * 核心工作流程：
- * - 每次收到GAME_STATE_UPDATE消息时，调用updateGameState()重建整个界面
- * - 从JSON中解析所有玩家状态、手牌信息（仅自己可见）、行动历史
- * - 当轮到本地玩家时，激活手牌交互和倒计时
+ * Core workflow:
+ * - On every GAME_STATE_UPDATE message, updateGameState() rebuilds the entire interface
+ * - Parses all player states, hand info (only own cards visible), and action history from JSON
+ * - Activates hand interaction and countdown when it becomes the local player's turn
  *
- * 玩家交互流程：
- * 1. 点击手牌 → 弹出操作选项对话框（打出/存入银行）
- * 2. 万能地产卡 → 弹出颜色选择对话框
- * 3. 万能租金卡 → 弹出颜色选择对话框
+ * Player interaction flow:
+ * 1. Click hand card → show action option bar (play/bank)
+ * 2. Wild property card → show color picker dialog
+ * 3. Wild rent card → show color picker dialog
  */
 public class GamePanel extends JPanel {
-    /** 游戏客户端连接 */
+    /** Game client connection */
     private final GameClient client;
-    /** 顶栏面板 */
+    /** Top bar panel */
     private JPanel topBarPanel;
-    /** 主游戏区域面板 */
+    /** Main game area panel */
     private JPanel mainGamePanel;
-    /** 手牌区域面板 */
+    /** Hand area panel */
     private JPanel handPanel;
-    /** 侧边栏面板 */
+    /** Sidebar panel */
     private JPanel sidePanel;
-    /** 阶段标签（显示当前游戏阶段：DRAW/PLAY/END等） */
+    /** Phase label (displays current game phase: DRAW/PLAY/END, etc.) */
     private JLabel phaseLabel;
-    /** 当前回合标签（显示正在操作的玩家昵称） */
+    /** Current turn label (displays the active player's nickname) */
     private JLabel turnLabel;
-    /** 倒计时进度条面板 */
+    /** Countdown progress bar panel */
     private TimerBarPanel timerBarPanel;
-    /** 抽牌堆剩余数量标签 */
+    /** Draw pile remaining count label */
     private JLabel drawPileLabel;
-    /** 结束回合按钮 */
+    /** End turn button */
     private JButton endTurnButton;
-    /** 玩家面板容器（竖向排列所有PlayerPanel） */
+    /** Player panel container (vertical list of all PlayerPanels) */
     private JPanel playerPanelsContainer;
-    /** 玩家面板映射表 key=playerId, value=PlayerPanel */
+    /** Player panel map key=playerId, value=PlayerPanel */
     private Map<String, PlayerPanel> playerPanels;
-    /** 手牌卡牌面板（横向排列CardRenderer组件） */
+    /** Hand card panel (horizontal arrangement of CardRenderer components) */
     private JPanel handCardsPanel;
-    /** 行动历史记录面板 */
+    /** Action history panel */
     private ActionHistoryPanel actionHistoryPanel;
-    /** 卡牌选择操作栏（浮动在手牌区上方） */
+    /** Card selection action bar (floating above hand area) */
     private CardSelectionBar cardSelectionBar;
-    /** 本地玩家ID */
+    /** Local player ID */
     private String localPlayerId;
-    /** 是否轮到本地玩家操作 */
+    /** Whether it is the local player's turn */
     private boolean isMyTurn;
-    /** 倒计时定时器（每秒触发一次） */
+    /** Countdown timer (fires once per second) */
     private javax.swing.Timer countdownTimer;
-    /** 被点击的卡牌的视图模型（用于后续操作对话框） */
+    /** View model of the clicked card (for use by the action dialog) */
     private CardViewModel cardDataForClicked;
 
-    // ==================== UI颜色常量 ====================
+    // ==================== UI color constants ====================
 
-    private static final Color DARK_BG = new Color(18, 22, 28);         // 主背景深色
-    private static final Color DARKER_BG = new Color(14, 17, 22);       // 更深背景
-    private static final Color GOLD = new Color(255, 215, 0);           // 金色（高亮元素）
-    private static final Color RED_GLOW = new Color(220, 50, 50);       // 红色发光
-    private static final Color GREEN_TABLE = new Color(25, 70, 40);     // 绿桌面色
-    private static final Color GREEN_DARK = new Color(15, 50, 28);      // 深绿桌面
-    private static final Color TEXT_LIGHT = new Color(220, 220, 220);   // 浅色文字
-    private static final Color TEXT_DIM = new Color(150, 150, 150);     // 暗淡文字
+    private static final Color DARK_BG = new Color(18, 22, 28);         // Main dark background
+    private static final Color DARKER_BG = new Color(14, 17, 22);       // Darker background
+    private static final Color GOLD = new Color(255, 215, 0);           // Gold (highlight elements)
+    private static final Color RED_GLOW = new Color(220, 50, 50);       // Red glow
+    private static final Color GREEN_TABLE = new Color(25, 70, 40);     // Green table color
+    private static final Color GREEN_DARK = new Color(15, 50, 28);      // Dark green table
+    private static final Color TEXT_LIGHT = new Color(220, 220, 220);   // Light text
+    private static final Color TEXT_DIM = new Color(150, 150, 150);     // Dimmed text
 
     /**
-     * 构造函数 - 创建游戏界面的四个主要区域
-     * @param client 已连接的GameClient实例
+     * Constructor — create the four main areas of the game interface.
+     * @param client connected GameClient instance
      */
     public GamePanel(GameClient client) {
         this.client = client;
@@ -97,31 +97,31 @@ public class GamePanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(DARK_BG);
 
-        createTopBar();        // 创建顶栏
-        createMainGameArea();  // 创建主游戏区
-        createHandPanel();     // 创建手牌区
-        createSidePanel();     // 创建侧边栏
+        createTopBar();        // Create top bar
+        createMainGameArea();  // Create main game area
+        createHandPanel();     // Create hand area
+        createSidePanel();     // Create sidebar
 
-        // 创建 CardSelectionBar 并设置回调
+        // Create CardSelectionBar and set callback
         cardSelectionBar = new CardSelectionBar();
-        cardSelectionBar.setPlayCallback((cardId, action, targetId) -> {
-            onCardActionConfirmed(cardId, action, targetId);
+        cardSelectionBar.setPlayCallback((cardId, action) -> {
+            onCardActionConfirmed(cardId, action);
         });
 
-        // 将 CardSelectionBar 和 handPanel 包装在 southWrapper 中
+        // Wrap CardSelectionBar and handPanel in a south wrapper
         JPanel southWrapper = new JPanel(new BorderLayout());
         southWrapper.setOpaque(false);
         southWrapper.add(cardSelectionBar, BorderLayout.NORTH);
         southWrapper.add(handPanel, BorderLayout.CENTER);
 
-        // 组装四个区域
+        // Assemble the four areas
         add(topBarPanel, BorderLayout.NORTH);
         add(mainGamePanel, BorderLayout.CENTER);
         add(southWrapper, BorderLayout.SOUTH);
         add(sidePanel, BorderLayout.EAST);
     }
 
-    /** 创建顶栏 - 包含阶段信息、当前回合、倒计时、结束回合按钮 */
+    /** Create the top bar — phase info, current turn, countdown, end turn button */
     private void createTopBar() {
         topBarPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -129,12 +129,12 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 从上到下的暗色渐变背景
+                // Top-to-bottom dark gradient background
                 GradientPaint gp = new GradientPaint(0, 0, new Color(25, 30, 40),
                         0, getHeight(), new Color(18, 22, 28));
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // 底部分隔线（微妙的金色）
+                // Bottom separator line (subtle gold)
                 g2.setColor(new Color(255, 215, 0, 40));
                 g2.fillRect(0, getHeight() - 2, getWidth(), 2);
                 g2.dispose();
@@ -144,16 +144,16 @@ public class GamePanel extends JPanel {
         topBarPanel.setBorder(new EmptyBorder(12, 25, 12, 25));
         topBarPanel.setPreferredSize(new Dimension(0, 60));
 
-        // ===== 左侧信息区 =====
+        // ===== Left info area =====
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 25, 0));
         leftPanel.setOpaque(false);
 
-        // 游戏阶段标签（金色）
+        // Game phase label (gold)
         phaseLabel = new JLabel("Phase: Waiting");
         phaseLabel.setForeground(GOLD);
         phaseLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
-        // 当前回合标签（白色）
+        // Current turn label (white)
         turnLabel = new JLabel("Turn: -");
         turnLabel.setForeground(Color.WHITE);
         turnLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
@@ -161,24 +161,24 @@ public class GamePanel extends JPanel {
         leftPanel.add(phaseLabel);
         leftPanel.add(turnLabel);
 
-        // ===== 右侧操作区 =====
+        // ===== Right action area =====
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
         rightPanel.setOpaque(false);
 
-        // 抽牌堆数量标签
+        // Draw pile count label
         drawPileLabel = new JLabel("Deck: 0");
         drawPileLabel.setForeground(TEXT_LIGHT);
         drawPileLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
         timerBarPanel = new TimerBarPanel(30);
 
-        // 结束回合按钮（红色圆角，带按压和悬停效果）
+        // End turn button (red rounded, with press and hover effects)
         endTurnButton = new JButton("End Turn") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 根据状态选择背景色：按下>悬停>正常>禁用
+                // Choose background color based on state: pressed > hover > normal > disabled
                 if (getModel().isPressed()) {
                     g2.setColor(new Color(140, 20, 20));
                 } else if (getModel().isRollover() && isEnabled()) {
@@ -187,7 +187,7 @@ public class GamePanel extends JPanel {
                     g2.setColor(isEnabled() ? RED_GLOW : new Color(80, 80, 80));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
-                // 绘制白色文字
+                // Draw white text
                 g2.setColor(new Color(255, 255, 255, 200));
                 g2.setFont(new Font("SansSerif", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
@@ -201,7 +201,7 @@ public class GamePanel extends JPanel {
         endTurnButton.setContentAreaFilled(false);
         endTurnButton.setFocusPainted(false);
         endTurnButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        endTurnButton.setEnabled(false);  // 初始禁用
+        endTurnButton.setEnabled(false);  // Initially disabled
         endTurnButton.addActionListener(e -> endTurn());
 
         rightPanel.add(drawPileLabel);
@@ -212,7 +212,7 @@ public class GamePanel extends JPanel {
         topBarPanel.add(rightPanel, BorderLayout.EAST);
     }
 
-    /** 创建主游戏区 - 绿色毛毡桌面背景 + 玩家面板容器 */
+    /** Create the main game area — green felt table background + player panel container */
     private void createMainGameArea() {
         mainGamePanel = new JPanel(new BorderLayout()) {
             @Override
@@ -220,12 +220,12 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 从深绿到浅绿的渐变桌面
+                // Green gradient table from dark to light
                 GradientPaint gp = new GradientPaint(0, 0, GREEN_DARK,
                         getWidth(), getHeight(), GREEN_TABLE);
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // 装饰性椭圆形纹理（扑克桌风格）
+                // Decorative oval texture (poker table style)
                 g2.setColor(new Color(255, 255, 255, 3));
                 for (int x = 0; x < getWidth(); x += 60) {
                     for (int y = 0; y < getHeight(); y += 60) {
@@ -237,7 +237,7 @@ public class GamePanel extends JPanel {
         };
         mainGamePanel.setOpaque(false);
 
-        // 玩家面板垂直排列容器
+        // Vertical arrangement container for player panels
         playerPanelsContainer = new JPanel();
         playerPanelsContainer.setLayout(new BoxLayout(playerPanelsContainer, BoxLayout.Y_AXIS));
         playerPanelsContainer.setOpaque(false);
@@ -252,7 +252,7 @@ public class GamePanel extends JPanel {
         mainGamePanel.add(scrollPane, BorderLayout.CENTER);
     }
 
-    /** 创建手牌区 - 底部横向滚动的卡牌展示区 */
+    /** Create the hand area — bottom horizontally-scrollable card display area */
     private void createHandPanel() {
         handPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -260,12 +260,12 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 暗色渐变背景
+                // Dark gradient background
                 GradientPaint gp = new GradientPaint(0, 0, new Color(22, 26, 32),
                         0, getHeight(), new Color(16, 19, 24));
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // 顶部分隔线（金色微光）
+                // Top separator line (subtle gold glow)
                 g2.setColor(new Color(GOLD.getRed(), GOLD.getGreen(), GOLD.getBlue(), 60));
                 g2.fillRect(0, 0, getWidth(), 2);
                 g2.dispose();
@@ -275,13 +275,13 @@ public class GamePanel extends JPanel {
         handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
         handPanel.setPreferredSize(new Dimension(0, 210));
 
-        // "你的手牌"标签
+        // "Your Hand" label
         JLabel handLabel = new JLabel("Your Hand");
         handLabel.setForeground(GOLD);
         handLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         handPanel.add(handLabel, BorderLayout.NORTH);
 
-        // 卡牌面板（自动换行布局，宽度不足时折行显示）
+        // Card panel (wrap layout, cards wrap to next row when width is insufficient)
         handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 10, 8));
         handCardsPanel.setOpaque(false);
 
@@ -296,7 +296,7 @@ public class GamePanel extends JPanel {
         handPanel.add(handScrollPane, BorderLayout.CENTER);
     }
 
-    /** 创建侧边栏 - 右侧的行动历史记录面板 */
+    /** Create the sidebar — right-side action history panel */
     private void createSidePanel() {
         sidePanel = new JPanel(new BorderLayout());
         sidePanel.setBackground(DARKER_BG);
@@ -307,17 +307,17 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 更新游戏状态 - 收到GAME_STATE_UPDATE消息时调用
-     * 解析完整的游戏状态JSON，更新所有UI组件
+     * Update game state — called on every GAME_STATE_UPDATE message.
+     * Parses the complete game state JSON and updates all UI components.
      *
-     * @param jsonPayload GAME_STATE_UPDATE消息的JSON负载
+     * @param jsonPayload GAME_STATE_UPDATE message JSON payload
      */
     public void updateGameState(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
                 JsonObject gameState = JsonParser.parseString(jsonPayload).getAsJsonObject();
 
-                // 更新本地玩家ID（服务器分配的viewerId）
+                // Update local player ID (viewerId assigned by server)
                 if (gameState.has("viewerId")) {
                     String myId = gameState.get("viewerId").getAsString();
                     if (!myId.equals(localPlayerId)) {
@@ -325,7 +325,7 @@ public class GamePanel extends JPanel {
                     }
                 }
 
-                // 更新阶段和牌堆信息
+                // Update phase and deck info
                 String phase = gameState.has("phase") ? gameState.get("phase").getAsString() : "Unknown";
                 phaseLabel.setText("Phase: " + phase.toUpperCase());
 
@@ -335,7 +335,7 @@ public class GamePanel extends JPanel {
                         gameState.get("drawPileSize").getAsInt() : 0;
                 drawPileLabel.setText("Deck: " + drawPileSize);
 
-                // 更新所有玩家面板
+                // Update all player panels
                 JsonObject playerStates = gameState.has("playerStates") ?
                         gameState.getAsJsonObject("playerStates") : null;
                 if (playerStates != null) {
@@ -344,23 +344,23 @@ public class GamePanel extends JPanel {
                     updateLocalHand(playerStates);
                 }
 
-                // 更新行动历史
+                // Update action history
                 JsonArray actions = gameState.has("actionHistory") ?
                         gameState.getAsJsonArray("actionHistory") : null;
                 if (actions != null) {
                     actionHistoryPanel.updateActions(actions);
                 }
             } catch (Exception e) {
-                System.err.println("更新游戏状态时出错：" + e.getMessage());
+                System.err.println("Error updating game state: " + e.getMessage());
             }
         });
     }
 
     /**
-     * 处理 Just Say No 响应请求
-     * 服务器 payload 格式:
+     * Handle Just Say No reaction request.
+     * Server payload format:
      * {"resolutionId":"...","actionType":"RENT|DEBT_COLLECTOR|...",
-     *  "initiatorName":"玩家名","initiatorId":"...","cardName":"...","timeoutSeconds":5}
+     *  "initiatorName":"PlayerName","initiatorId":"...","cardName":"...","timeoutSeconds":5}
      */
     public void handleReactionRequired(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
@@ -372,12 +372,19 @@ public class GamePanel extends JPanel {
                 String cardName = req.has("cardName") ? req.get("cardName").getAsString() : "";
                 int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 5;
 
+                // If no Just Say No card in hand, auto-pass without showing the dialog
+                String jsnCardId = findJustSayNoCardInHand();
+                if (jsnCardId == null) {
+                    client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
+                    return;
+                }
+
                 String msg = initiatorName + " used " + cardName + " (" + actionType + ") on you!\nPlay Just Say No?";
                 String[] options = new String[]{"Play Just Say No", "Pass"};
 
-                // 模态对话框 + 独立线程超时定时器
-                // 关键：保持模态（不调用 setModal(false)），setVisible 会阻塞 EDT 等待用户操作
-                // 使用 java.util.Timer（非 EDT 线程）在超时时 dispose 对话框解除阻塞
+                // Modal dialog + independent thread timeout timer
+                // Key: keep modal (don't call setModal(false)); setVisible blocks EDT waiting for user input
+                // Use java.util.Timer (non-EDT thread) to dispose the dialog on timeout
                 JOptionPane pane = new JOptionPane(msg, JOptionPane.QUESTION_MESSAGE,
                         JOptionPane.YES_NO_OPTION, null, options, options[1]);
                 JDialog dialog = pane.createDialog(GamePanel.this, "React");
@@ -386,41 +393,34 @@ public class GamePanel extends JPanel {
                 timeoutTimer.schedule(new java.util.TimerTask() {
                     @Override
                     public void run() {
-                        dialog.dispose();   // Window.dispose() 是线程安全的
+                        dialog.dispose();   // Window.dispose() is thread-safe
                     }
                 }, timeout * 1000L);
 
-                dialog.setVisible(true);    // 阻塞 EDT，直到用户点击 或 定时器 dispose
-                timeoutTimer.cancel();      // 清除定时器
+                dialog.setVisible(true);    // Block EDT until user clicks or timer disposes
+                timeoutTimer.cancel();      // Clear timer
 
                 Object selected = pane.getValue();
-                // selected == null → 超时（对话框被 Timer dispose）
-                // selected == 1 → 用户点击"放弃"
-                // selected == 0 → 用户点击"打出 Just Say No"
+                // selected == null → timeout (dialog disposed by timer)
+                // selected == 1 → user clicked "Pass"
+                // selected == 0 → user clicked "Play Just Say No"
                 if (selected == null || Integer.valueOf(1).equals(selected)) {
                     client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
                 } else if (Integer.valueOf(0).equals(selected)) {
-                    String jsnCardId = findJustSayNoCardInHand();
-                    if (jsnCardId != null) {
-                        JsonObject jsnPayload = new JsonObject();
-                        jsnPayload.addProperty("resolutionId", resolutionId);
-                        jsnPayload.addProperty("cardId", jsnCardId);
-                        client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO,
-                                jsnPayload.toString());
-                    } else {
-                        JOptionPane.showMessageDialog(GamePanel.this,
-                                "You don't have a Just Say No card!", "Notice", JOptionPane.WARNING_MESSAGE);
-                        client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
-                    }
+                    JsonObject jsnPayload = new JsonObject();
+                    jsnPayload.addProperty("resolutionId", resolutionId);
+                    jsnPayload.addProperty("cardId", jsnCardId);
+                    client.sendMessage(MessageProtocol.MessageType.PLAY_JUST_SAY_NO,
+                            jsnPayload.toString());
                 }
             } catch (Exception e) {
-                System.err.println("处理 REACTION_REQUIRED 时出错：" + e.getMessage());
+                System.err.println("Error handling REACTION_REQUIRED: " + e.getMessage());
             }
         });
     }
 
     /**
-     * 在手牌中找到第一张 Just Say No 卡牌
+     * Find the first Just Say No card in the hand.
      */
     private String findJustSayNoCardInHand() {
         for (Component comp : handCardsPanel.getComponents()) {
@@ -436,9 +436,9 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 处理支付请求
-     * 服务器 payload 格式:
-     * {"creditorName":"收款方","creditorId":"...","amount":5,"totalBank":10,
+     * Handle payment request.
+     * Server payload format:
+     * {"creditorName":"Receiver","creditorId":"...","amount":5,"totalBank":10,
      *  "bankCards":[{"cardId":"...","cardName":"...","value":5,...},...]}
      */
     public void handlePaymentRequired(String jsonPayload) {
@@ -449,7 +449,7 @@ public class GamePanel extends JPanel {
                 int amount = req.get("amount").getAsInt();
                 JsonArray bankCardsArr = req.getAsJsonArray("bankCards");
 
-                // 构建选项列表
+                // Build option list
                 int n = bankCardsArr.size();
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
@@ -459,7 +459,7 @@ public class GamePanel extends JPanel {
                     cardDescriptions[i] = name + " (" + value + "M)";
                 }
 
-                // 复选列表让玩家选择要支付的卡牌
+                // Multi-select list for player to choose cards to pay
                 JList<String> cardList = new JList<>(cardDescriptions);
                 cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
                 cardList.setVisibleRowCount(Math.min(8, n));
@@ -472,7 +472,7 @@ public class GamePanel extends JPanel {
                 JLabel totalLabel = new JLabel("Selected: 0 M / Required: " + amount + " M");
                 panel.add(totalLabel, BorderLayout.SOUTH);
 
-                // 监听选择变化，实时显示已选总额
+                // Listen for selection changes, show real-time selected total
                 cardList.addListSelectionListener(e -> {
                     if (e.getValueIsAdjusting()) return;
                     int total = 0;
@@ -497,18 +497,18 @@ public class GamePanel extends JPanel {
                     client.sendMessage(MessageProtocol.MessageType.SUBMIT_PAYMENT,
                             submitPayload.toString());
                 }
-                // 取消则让服务器超时自动处理
+                // Cancel: let server handle via timeout
 
             } catch (Exception e) {
-                System.err.println("处理 PAYMENT_REQUIRED 时出错：" + e.getMessage());
+                System.err.println("Error handling PAYMENT_REQUIRED: " + e.getMessage());
             }
         });
     }
 
     /**
-     * 处理弃牌请求（回合结束时手牌超上限）
-     * 服务器 payload 格式:
-     * {"handCards":[{"cardId":"...","cardName":"租金卡","cardType":"RENT","color":"RED","value":0},...],
+     * Handle discard request (hand exceeds limit at end of turn).
+     * Server payload format:
+     * {"handCards":[{"cardId":"...","cardName":"Rent Card","cardType":"RENT","color":"RED","value":0},...],
      *  "discardCount":2, "timeoutSeconds":15}
      */
     public void handleDiscardRequired(String jsonPayload) {
@@ -519,7 +519,7 @@ public class GamePanel extends JPanel {
                 int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 15;
                 JsonArray handCardsArr = req.getAsJsonArray("handCards");
 
-                // 构建卡牌描述列表
+                // Build card description list
                 int n = handCardsArr.size();
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
@@ -529,37 +529,37 @@ public class GamePanel extends JPanel {
                     cardDescriptions[i] = name + " [" + type + "]";
                 }
 
-                // 手牌多选列表
+                // Hand card multi-select list
                 JList<String> cardList = new JList<>(cardDescriptions);
                 cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
                 cardList.setVisibleRowCount(Math.min(10, n));
                 JScrollPane scrollPane = new JScrollPane(cardList);
 
-                // 信息标签（含倒计时）
+                // Info label (with countdown)
                 JLabel infoLabel = new JLabel("Hand limit exceeded! Select " + discardCount + " cards to discard (" + timeout + "s remaining)");
                 infoLabel.setForeground(new Color(255, 200, 100));
                 JLabel countLabel = new JLabel("Selected: 0 / Need: " + discardCount);
 
-                // 选择变化监听：实时更新已选数量
+                // Selection change listener: update selected count in real-time
                 cardList.addListSelectionListener(e -> {
                     if (e.getValueIsAdjusting()) return;
                     countLabel.setText("Selected: " + cardList.getSelectedIndices().length + " / Need: " + discardCount);
                 });
 
-                // 组装面板
+                // Assemble panel
                 JPanel panel = new JPanel(new BorderLayout(0, 10));
                 panel.setPreferredSize(new Dimension(350, 280));
                 panel.add(infoLabel, BorderLayout.NORTH);
                 panel.add(scrollPane, BorderLayout.CENTER);
                 panel.add(countLabel, BorderLayout.SOUTH);
 
-                // 确认/取消按钮
+                // Confirm/cancel buttons
                 String[] options = new String[]{"Confirm Discard", "Cancel (auto-discard)"};
                 JOptionPane pane = new JOptionPane(panel, JOptionPane.PLAIN_MESSAGE,
                         JOptionPane.OK_CANCEL_OPTION, null, options, options[0]);
                 JDialog dialog = pane.createDialog(GamePanel.this, "Discard");
 
-                // 倒计时定时器（非EDT线程，超时时 dispose 对话框）
+                // Countdown timer (non-EDT thread, disposes dialog on timeout)
                 java.util.Timer countdownTimer = new java.util.Timer();
                 final int[] remaining = {timeout};
                 countdownTimer.scheduleAtFixedRate(new java.util.TimerTask() {
@@ -575,15 +575,15 @@ public class GamePanel extends JPanel {
                     }
                 }, 1000L, 1000L);
 
-                dialog.setVisible(true);  // 阻塞 EDT，直到用户点击 或 定时器 dispose
+                dialog.setVisible(true);  // Block EDT until user clicks or timer disposes
                 countdownTimer.cancel();
 
                 Object selected = pane.getValue();
 
-                // 构建提交的卡牌ID列表
+                // Build list of selected card IDs
                 JsonArray selectedIds = new JsonArray();
                 if (selected != null && selected.equals(options[0])) {
-                    // 用户点击"确认弃牌"
+                    // User clicked "Confirm Discard"
                     if (cardList.getSelectedIndices().length < discardCount) {
                         JOptionPane.showMessageDialog(GamePanel.this,
                                 "Still need " + (discardCount - cardList.getSelectedIndices().length) + " cards!\nAuto-discard from hand start will be used.",
@@ -594,7 +594,7 @@ public class GamePanel extends JPanel {
                         selectedIds.add(c.get("cardId").getAsString());
                     }
                 }
-                // 超时或取消时 selectedIds 为空数组，服务端自动兜底
+                // Timeout or cancel: selectedIds is empty array; server auto-backfills
 
                 JsonObject submitPayload = new JsonObject();
                 submitPayload.add("cardIds", selectedIds);
@@ -602,14 +602,14 @@ public class GamePanel extends JPanel {
                         submitPayload.toString());
 
             } catch (Exception e) {
-                System.err.println("处理 DISCARD_REQUIRED 时出错：" + e.getMessage());
+                System.err.println("Error handling DISCARD_REQUIRED: " + e.getMessage());
             }
         });
     }
 
     /**
-     * 根据玩家状态JSON更新所有PlayerPanel
-     * 自动创建新玩家的面板，移除已离开玩家的面板
+     * Update all PlayerPanels from player state JSON.
+     * Auto-creates panels for new players, removes panels for departed players.
      */
     private void updatePlayerPanelsFromStates(JsonObject playerStates, String activePlayerId) {
         Set<String> existingIds = new HashSet<>(playerPanels.keySet());
@@ -618,7 +618,7 @@ public class GamePanel extends JPanel {
             JsonObject playerData = entry.getValue().getAsJsonObject();
             existingIds.remove(playerId);
 
-            // 创建或获取PlayerPanel
+            // Create or get PlayerPanel
             PlayerPanel panel = playerPanels.get(playerId);
             if (panel == null) {
                 panel = new PlayerPanel(playerId);
@@ -626,7 +626,7 @@ public class GamePanel extends JPanel {
                 playerPanelsContainer.add(panel);
             }
 
-            // 解析玩家数据
+            // Parse player data
             boolean isActive = playerData.has("isActivePlayer") &&
                     playerData.get("isActivePlayer").getAsBoolean();
             String nickname = playerData.has("nickname") ?
@@ -642,7 +642,7 @@ public class GamePanel extends JPanel {
             boolean connected = !playerData.has("isConnected") ||
                     playerData.get("isConnected").getAsBoolean();
 
-            // 解析各颜色地产数量
+            // Parse property counts per color
             Map<String, Integer> propertyColorCounts = new LinkedHashMap<>();
             if (playerData.has("propertyColorCounts")) {
                 JsonObject colorCounts = playerData.getAsJsonObject("propertyColorCounts");
@@ -651,7 +651,7 @@ public class GamePanel extends JPanel {
                 }
             }
 
-            // 构建简化的更新数据
+            // Build simplified update data
             JsonObject simplified = new JsonObject();
             simplified.addProperty("nickname", nickname);
             simplified.addProperty("isActive", isActive);
@@ -663,13 +663,13 @@ public class GamePanel extends JPanel {
             panel.updateFromJson(simplified, propertyColorCounts);
         }
 
-        // 移除已离开的玩家面板
+        // Remove departed players' panels
         for (String removedId : existingIds) {
             PlayerPanel panel = playerPanels.remove(removedId);
             if (panel != null) playerPanelsContainer.remove(panel);
         }
 
-        // 同步对手玩家信息到 CardSelectionBar
+        // Sync opponent player info to CardSelectionBar
         if (cardSelectionBar != null && localPlayerId != null && playerStates != null) {
             Map<String, String> opponents = new LinkedHashMap<>();
             for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
@@ -683,6 +683,33 @@ public class GamePanel extends JPanel {
                 }
             }
             cardSelectionBar.updatePlayers(opponents);
+
+            // Extract property card details for CardSelectionBar (Sly Deal / Forced Deal)
+            Map<String, List<String[]>> opponentProps = new LinkedHashMap<>();
+            List<String[]> myProps = new ArrayList<>();
+
+            for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
+                String pid = entry.getKey();
+                JsonObject pd = entry.getValue().getAsJsonObject();
+                if (pd.has("propertyCards")) {
+                    JsonArray propCards = pd.getAsJsonArray("propertyCards");
+                    List<String[]> propList = new ArrayList<>();
+                    for (JsonElement elem : propCards) {
+                        JsonObject pc = elem.getAsJsonObject();
+                        String cId = pc.has("cardId") ? pc.get("cardId").getAsString() : "";
+                        String cName = pc.has("cardName") ? pc.get("cardName").getAsString() : "";
+                        boolean inComplete = pc.has("inCompleteSet") && pc.get("inCompleteSet").getAsBoolean();
+                        propList.add(new String[]{cId, cName, String.valueOf(inComplete)});
+                    }
+                    if (pid.equals(localPlayerId)) {
+                        myProps = propList;
+                    } else {
+                        opponentProps.put(pid, propList);
+                    }
+                }
+            }
+            cardSelectionBar.updateOpponentProperties(opponentProps);
+            cardSelectionBar.updateMyProperties(myProps);
         }
 
         playerPanelsContainer.revalidate();
@@ -690,7 +717,7 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 更新回合信息 - 检测是否轮到本地玩家、更新活跃玩家昵称显示
+     * Update turn info — detect if it's the local player's turn, update active player nickname display.
      */
     private void updateTurnInfo(String activePlayerId, JsonObject playerStates) {
         if (localPlayerId == null) return;
@@ -698,7 +725,7 @@ public class GamePanel extends JPanel {
         boolean wasMyTurn = isMyTurn;
         isMyTurn = activePlayerId.equals(localPlayerId);
 
-        // 更新当前回合玩家昵称
+        // Update current turn player nickname
         String activeNickname = "Unknown";
         if (playerStates.has(activePlayerId)) {
             JsonObject activeData = playerStates.getAsJsonObject(activePlayerId);
@@ -707,26 +734,26 @@ public class GamePanel extends JPanel {
         }
         turnLabel.setText("Turn: " + activeNickname);
 
-        // 回合切换时更新UI状态
+        // Update UI state on turn switch
         if (isMyTurn && !wasMyTurn) {
-            // 刚轮到本地玩家：启动倒计时、启用按钮、高亮手牌区
+            // Just became local player's turn: start countdown, enable buttons, highlight hand area
             startCountdown();
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(2, 0, 0, 0, GOLD),
                     new EmptyBorder(8, 15, 12, 15)));
         } else if (isMyTurn && wasMyTurn) {
-            // 仍然是本地玩家的回合
+            // Still local player's turn
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
-            // 刚结束本地玩家的回合：停止倒计时、禁用按钮
+            // Just ended local player's turn: stop countdown, disable buttons
             stopCountdown();
             endTurnButton.setEnabled(false);
             cardSelectionBar.dismiss();
             handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
         }
 
-        // 同步手牌卡片的可交互状态
+        // Sync hand card interactivity state
         for (Component comp : handCardsPanel.getComponents()) {
             if (comp instanceof CardRenderer) {
                 comp.setEnabled(isMyTurn);
@@ -734,7 +761,7 @@ public class GamePanel extends JPanel {
         }
     }
 
-    /** 启动倒计时 - 创建每秒触发的Swing Timer */
+    /** Start countdown — create a Swing Timer that fires once per second */
     private void startCountdown() {
         stopCountdown();
         timerBarPanel.start(30);
@@ -753,7 +780,7 @@ public class GamePanel extends JPanel {
         countdownTimer.start();
     }
 
-    /** 停止倒计时 */
+    /** Stop countdown */
     private void stopCountdown() {
         if (countdownTimer != null && countdownTimer.isRunning()) {
             countdownTimer.stop();
@@ -763,8 +790,8 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 更新本地玩家的手牌显示
-     * 从playerStates中提取自己（viewerId匹配）的手牌数组
+     * Update the local player's hand display.
+     * Extracts own hand cards from playerStates (matching viewerId).
      */
     private void updateLocalHand(JsonObject playerStates) {
         handCardsPanel.removeAll();
@@ -791,7 +818,7 @@ public class GamePanel extends JPanel {
                 CardRenderer card = new CardRenderer(vm);
                 card.setEnabled(isMyTurn);
 
-                // 设置卡牌点击回调
+                // Set card click callback
                 card.setPlayListener(id -> {
                     cardDataForClicked = vm;
                     onCardClicked(id, vm.getCardType());
@@ -804,10 +831,10 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 处理卡牌点击事件 — 显示 CardSelectionBar 操作栏
+     * Handle card click event — show the CardSelectionBar action bar.
      *
-     * @param cardId 被点击的卡牌ID
-     * @param cardType 卡牌类型（MONEY/PROPERTY/RENT/ACTION）
+     * @param cardId clicked card's ID
+     * @param cardType card type (MONEY/PROPERTY/RENT/ACTION)
      */
     private void onCardClicked(String cardId, String cardType) {
         if (!isMyTurn) {
@@ -822,23 +849,42 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * CardSelectionBar 确认回调 — 构建并发送 PLAY_CARD 消息
+     * CardSelectionBar confirm callback — builds and sends the PLAY_CARD message.
+     * Reads target and property selections from CardSelectionBar getters.
      *
-     * @param cardId 卡牌ID
-     * @param action 操作类型（PLAY_MONEY/PLAY_PROPERTY/PLAY_RENT/PLAY_ACTION）
-     * @param targetId 目标玩家ID（可为null）
+     * @param cardId card ID
+     * @param action action type (PLAY_MONEY/PLAY_PROPERTY/PLAY_RENT/PLAY_ACTION)
      */
-    private void onCardActionConfirmed(String cardId, String action, String targetId) {
+    private void onCardActionConfirmed(String cardId, String action) {
         JsonObject payload = new JsonObject();
         payload.addProperty("cardId", cardId);
         payload.addProperty("action", action);
 
-        // 附加目标玩家ID（租金卡、行动卡需要指定目标）
+        // Attach target player ID (rent cards, action cards need a target)
+        String targetId = cardSelectionBar.getSelectedTargetId();
         if (targetId != null && !targetId.isEmpty()) {
             payload.addProperty("targetPlayerId", targetId);
         }
 
-        // 万能卡颜色选择：在动作确认后弹出颜色选择器
+        // Sly Deal: property card to steal from target
+        String targetCardId = cardSelectionBar.getSelectedTargetCardId();
+        if (targetCardId != null && !targetCardId.isEmpty()) {
+            payload.addProperty("targetCardId", targetCardId);
+        }
+
+        // Forced Deal: own property to give up
+        String myPropId = cardSelectionBar.getSelectedMyPropertyId();
+        if (myPropId != null && !myPropId.isEmpty()) {
+            payload.addProperty("myPropertyId", myPropId);
+        }
+
+        // Forced Deal: their property to take
+        String theirPropId = cardSelectionBar.getSelectedTheirPropertyId();
+        if (theirPropId != null && !theirPropId.isEmpty()) {
+            payload.addProperty("theirPropertyId", theirPropId);
+        }
+
+        // Wild card color selection: show color picker after action confirmed
         if (cardDataForClicked != null) {
             String colorStr = cardDataForClicked.getColor();
             String cardName = cardDataForClicked.getCardName();
@@ -862,11 +908,11 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 显示万能地产卡的颜色选择对话框
-     * 根据万能卡的具体类型（多彩/双色）提供不同的可选颜色列表
+     * Show the wild property color picker dialog.
+     * Provides different selectable color lists based on the specific wild card type (multi-color/dual-color).
      *
-     * @param cardName 万能卡名称
-     * @return 选中的颜色名称（取消返回null）
+     * @param cardName wild card name
+     * @return selected color name (null if cancelled)
      */
     private String showWildColorPicker(String cardName) {
         String[] colors = AppTheme.WILD_COLOR_OPTIONS.get(cardName);
@@ -881,8 +927,8 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * 显示通用颜色选择对话框（用于万能租金卡）
-     * @return 选中的颜色名称
+     * Show a generic color picker dialog (for wild rent cards).
+     * @return selected color name
      */
     private String showColorPicker() {
         String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
@@ -894,7 +940,7 @@ public class GamePanel extends JPanel {
                 null, colors, colors[0]);
     }
 
-    /** 结束回合 - 停止倒计时并发送END_TURN消息 */
+    /** End turn — stop countdown and send END_TURN message */
     private void endTurn() {
         stopCountdown();
         cardSelectionBar.dismiss();

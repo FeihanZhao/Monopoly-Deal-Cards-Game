@@ -7,72 +7,72 @@ import java.util.concurrent.*;
 import com.monopolydeal.model.GameConstants;
 
 /**
- * 游戏服务器 - TCP服务器，接受客户端连接并管理游戏房间
+ * Game server — TCP server that accepts client connections and manages game rooms.
  *
- * 服务端架构核心，负责：
- * 1. 监听指定端口，接受客户端Socket连接
- * 2. 为每个客户端创建 ClientHandler 线程处理消息
- * 3. 管理所有游戏房间（GameRoom）的创建、查询和销毁
- * 4. 使用线程池管理客户端连接线程
+ * Core of the server architecture, responsible for:
+ * 1. Listening on a specified port and accepting client socket connections
+ * 2. Creating a ClientHandler thread for each client to process messages
+ * 3. Managing all game rooms (GameRoom) — creation, lookup, and teardown
+ * 4. Using a thread pool to manage client connection threads
  *
- * 启动方式：
+ * Startup:
  * - java -cp target/classes com.monopolydeal.server.GameServer
- * - 或通过 MonopolyDealApplication 的 --server 参数启动
+ * - Or via MonopolyDealApplication with the --server flag
  */
 public class GameServer {
-    /** 服务器监听端口号 */
+    /** Server listening port */
     private final int port;
-    /** 服务器Socket */
+    /** Server socket */
     private ServerSocket serverSocket;
-    /** 服务器是否正在运行 */
+    /** Whether the server is running */
     private boolean running;
-    /** 游戏房间映射表 key=房间代码(6位大写), value=GameRoom */
+    /** Game rooms map: key=room code (6 uppercase chars), value=GameRoom */
     private final Map<String, GameRoom> rooms;
-    /** 在线客户端映射表 key=clientId, value=ClientHandler */
+    /** Online clients map: key=clientId, value=ClientHandler */
     private final Map<String, ClientHandler> clients;
-    /** 线程池 - 使用缓存线程池管理客户端连接 */
+    /** Thread pool — cached thread pool for managing client connections */
     private final ExecutorService threadPool;
 
     /**
-     * 构造函数
-     * @param port 监听端口号
+     * Constructor.
+     * @param port listening port
      */
     public GameServer(int port) {
         this.port = port;
-        this.rooms = new ConcurrentHashMap<>();  // 线程安全的HashMap
+        this.rooms = new ConcurrentHashMap<>();  // Thread-safe HashMap
         this.clients = new ConcurrentHashMap<>();
-        this.threadPool = Executors.newCachedThreadPool();  // 自动扩缩容的线程池
+        this.threadPool = Executors.newCachedThreadPool();  // Auto-scaling thread pool
     }
 
     /**
-     * 启动服务器
-     * 开始监听端口并持续接受客户端连接
-     * 每个新连接的客户端会分配一个UUID作为clientId，并启动独立的ClientHandler线程
+     * Start the server.
+     * Begins listening on the port and continuously accepts client connections.
+     * Each new client is assigned a UUID as clientId and starts an independent ClientHandler thread.
      *
-     * @throws IOException 如果无法绑定端口
+     * @throws IOException if unable to bind the port
      */
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         running = true;
-        System.out.println("游戏服务器已启动，端口：" + port);
+        System.out.println("Game server started on port " + port);
 
         while (running) {
             try {
-                Socket clientSocket = serverSocket.accept();  // 阻塞等待客户端连接
-                String clientId = UUID.randomUUID().toString();  // 为每个客户端分配唯一ID
+                Socket clientSocket = serverSocket.accept();  // Block waiting for client connection
+                String clientId = UUID.randomUUID().toString();  // Assign unique ID per client
                 ClientHandler handler = new ClientHandler(clientId, clientSocket, this);
                 clients.put(clientId, handler);
-                threadPool.execute(handler);  // 在线程池中运行客户端处理器
-                System.out.println("新客户端已连接：" + clientId.substring(0, 8));
+                threadPool.execute(handler);  // Run client handler in thread pool
+                System.out.println("New client connected: " + clientId.substring(0, 8));
             } catch (IOException e) {
                 if (running) {
-                    System.err.println("接受客户端连接时出错：" + e.getMessage());
+                    System.err.println("Error accepting client connection: " + e.getMessage());
                 }
             }
         }
     }
 
-    /** 停止服务器，关闭ServerSocket并关闭线程池 */
+    /** Stop the server — close the ServerSocket and shut down the thread pool */
     public void stop() {
         running = false;
         try {
@@ -80,16 +80,16 @@ public class GameServer {
                 serverSocket.close();
             }
         } catch (IOException e) {
-            System.err.println("关闭ServerSocket时出错：" + e.getMessage());
+            System.err.println("Error closing ServerSocket: " + e.getMessage());
         }
         threadPool.shutdown();
     }
 
     /**
-     * 创建新游戏房间
-     * @param roomCode 房间代码
-     * @param creator 房间创建者（房主）
-     * @return 新创建的GameRoom
+     * Create a new game room.
+     * @param roomCode room code
+     * @param creator room creator (host)
+     * @return the newly created GameRoom
      */
     public GameRoom createRoom(String roomCode, ClientHandler creator) {
         GameRoom room = new GameRoom(roomCode, creator, this);
@@ -97,35 +97,35 @@ public class GameServer {
         return room;
     }
 
-    /** 根据房间代码获取游戏房间 */
+    /** Get a game room by its room code */
     public GameRoom getRoom(String roomCode) {
         return rooms.get(roomCode);
     }
 
-    /** 移除游戏房间（当房间内没有玩家时） */
+    /** Remove a game room (when there are no players left) */
     public void removeRoom(String roomCode) {
         rooms.remove(roomCode);
     }
 
-    /** 移除客户端连接记录 */
+    /** Remove a client connection record */
     public void removeClient(String clientId) {
         clients.remove(clientId);
     }
 
-    /** 根据客户端ID获取ClientHandler */
+    /** Get a ClientHandler by client ID */
     public ClientHandler getClient(String clientId) {
         return clients.get(clientId);
     }
 
     /**
-     * 单独启动服务器（不使用MonopolyDealApplication入口）
+     * Standalone server startup (without using the MonopolyDealApplication entry point).
      */
     public static void main(String[] args) {
         GameServer server = new GameServer(GameConstants.SERVER_PORT);
         try {
             server.start();
         } catch (IOException e) {
-            System.err.println("启动服务器失败：" + e.getMessage());
+            System.err.println("Failed to start server: " + e.getMessage());
             System.exit(1);
         }
     }

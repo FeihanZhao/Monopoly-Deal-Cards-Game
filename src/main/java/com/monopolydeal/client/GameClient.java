@@ -9,71 +9,79 @@ import com.monopolydeal.view.MainFrame;
 import javax.swing.*;
 
 /**
- * 游戏客户端 - 管理与游戏服务器的Socket连接和消息收发
+ * Game client — manages the socket connection to the game server and message sending/receiving.
  *
- * 客户端架构：
- * 1. 通过TCP Socket连接到游戏服务器
- * 2. 在后台线程中持续读取服务器发来的消息
- * 3. 通过消息处理器（Consumer<String>）将收到的消息转发给UI层处理
- * 4. 提供 sendMessage() 方法向服务器发送消息
+ * Client architecture:
+ * 1. Connects to the game server via TCP socket
+ * 2. Continuously reads server messages on a background thread
+ * 3. Forwards received messages to the UI layer via a message handler (Consumer<String>)
+ * 4. Provides sendMessage() method to send messages to the server
  *
- * 使用方式：
- * - 创建 GameClient 实例，指定服务器地址和端口
- * - 调用 setMessageHandler() 注册消息处理器（通常由MainFrame设置）
- * - 调用 sendMessage() 发送操作请求
+ * Usage:
+ * - Create a GameClient instance with the server address and port
+ * - Call setMessageHandler() to register a message handler (typically set by MainFrame)
+ * - Call sendMessage() to send action requests
  *
- * 设计要点：
- * - 消息读取在独立的后台线程中进行，不阻塞Swing事件线程
- * - 使用 newline 作为消息分隔符（每行一条完整JSON消息）
- * - 连接断开时自动清理资源
+ * Design notes:
+ * - Message reading runs on a separate background thread to avoid blocking the Swing event thread
+ * - Uses newline as the message delimiter (one complete JSON message per line)
+ * - Resources are automatically cleaned up on disconnect
  */
 public class GameClient {
-    /** 与服务器的Socket连接 */
-    private Socket socket;
-    /** 输出流 - 向服务器发送消息 */
-    private PrintWriter out;
-    /** 输入流 - 从服务器接收消息 */
-    private BufferedReader in;
-    /** 玩家ID（服务器分配，在首次ROOM_UPDATE消息中设置） */
-    private String playerId;
-    /** 是否已连接到服务器 */
-    private boolean connected;
-    /** 消息处理器 - 收到服务器消息时的回调函数 */
-    private Consumer<String> messageHandler;
+    /** Socket connection to the server */
+    protected Socket socket;
+    /** Output stream — sends messages to the server */
+    protected PrintWriter out;
+    /** Input stream — receives messages from the server */
+    protected BufferedReader in;
+    /** Player ID (assigned by the server; set from the first ROOM_UPDATE message) */
+    protected String playerId;
+    /** Whether the client is connected to the server */
+    protected boolean connected;
+    /** Message handler — callback invoked when a server message is received */
+    protected Consumer<String> messageHandler;
 
     /**
-     * 构造函数 - 建立与游戏服务器的连接
-     * 连接成功后立即启动后台线程开始监听消息
+     * Constructor — establishes a connection to the game server.
+     * Starts a background thread to listen for messages immediately upon successful connection.
      *
-     * @param host 服务器主机地址
-     * @param port 服务器端口号
-     * @throws IOException 如果连接失败
+     * @param host server host address
+     * @param port server port number
+     * @throws IOException if the connection fails
      */
+    /** Protected no-arg constructor for testing — does not open a socket connection */
+    protected GameClient() {
+        this.socket = null;
+        this.out = null;
+        this.in = null;
+        this.connected = false;
+    }
+
     public GameClient(String host, int port) throws IOException {
         this.socket = new Socket(host, port);
         this.out = new PrintWriter(socket.getOutputStream(), true);  // autoFlush=true
         this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         this.connected = true;
-        // 启动后台线程监听服务器消息
+        // Start background thread to listen for server messages
         new Thread(this::listenForMessages).start();
     }
 
     /**
-     * 后台消息监听线程 - 循环读取服务器消息
-     * 每收到一行消息就调用 messageHandler 回调处理
-     * 连接断开时自动调用 disconnect() 清理资源
+     * Background message listener thread — loops reading server messages.
+     * Calls messageHandler.accept() for each line of message received.
+     * Automatically calls disconnect() on connection loss.
      */
     private void listenForMessages() {
         try {
             String message;
             while (connected && (message = in.readLine()) != null) {
                 if (messageHandler != null) {
-                    messageHandler.accept(message);  // 转发给UI层处理
+                    messageHandler.accept(message);  // Forward to UI layer
                 }
             }
         } catch (IOException e) {
             if (connected) {
-                System.err.println("与服务器的连接已断开：" + e.getMessage());
+                System.err.println("Connection to server lost: " + e.getMessage());
             }
         } finally {
             disconnect();
@@ -81,18 +89,18 @@ public class GameClient {
     }
 
     /**
-     * 注册消息处理器
-     * 通常由MainFrame在构造函数中调用，用于接收并路由服务器消息
-     * @param handler 消息处理回调（参数为完整JSON消息字符串）
+     * Register a message handler.
+     * Typically called by MainFrame in its constructor to receive and route server messages.
+     * @param handler message handling callback (parameter is the full JSON message string)
      */
     public void setMessageHandler(Consumer<String> handler) {
         this.messageHandler = handler;
     }
 
     /**
-     * 向服务器发送消息
-     * @param type 消息类型
-     * @param payload 消息负载（JSON字符串）
+     * Send a message to the server.
+     * @param type message type
+     * @param payload message payload (JSON string)
      */
     public void sendMessage(MessageProtocol.MessageType type, String payload) {
         if (connected && out != null) {
@@ -100,7 +108,7 @@ public class GameClient {
         }
     }
 
-    /** 断开与服务器的连接并清理资源 */
+    /** Disconnect from the server and clean up resources */
     public void disconnect() {
         connected = false;
         try {
@@ -108,30 +116,30 @@ public class GameClient {
                 socket.close();
             }
         } catch (IOException e) {
-            System.err.println("关闭Socket时出错：" + e.getMessage());
+            System.err.println("Error closing socket: " + e.getMessage());
         }
     }
 
     // ==================== Getters/Setters ====================
 
-    /** 检查是否与服务器保持连接 */
+    /** Check whether the client is connected to the server */
     public boolean isConnected() {
         return connected;
     }
 
-    /** 设置玩家ID（由MainFrame在收到ROOM_UPDATE后设置） */
+    /** Set the player ID (called by MainFrame after receiving ROOM_UPDATE) */
     public void setPlayerId(String playerId) {
         this.playerId = playerId;
     }
 
-    /** 获取玩家ID */
+    /** Get the player ID */
     public String getPlayerId() {
         return playerId;
     }
 
     /**
-     * 独立启动客户端（不使用MonopolyDealApplication入口）
-     * 用法：java com.monopolydeal.client.GameClient [host] [port]
+     * Standalone client startup (without using the MonopolyDealApplication entry point).
+     * Usage: java com.monopolydeal.client.GameClient [host] [port]
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
@@ -143,7 +151,7 @@ public class GameClient {
                 MainFrame frame = new MainFrame(client);
                 frame.setVisible(true);
             } catch (Exception e) {
-                System.err.println("连接服务器失败：" + e.getMessage());
+                System.err.println("Failed to connect to server: " + e.getMessage());
                 JOptionPane.showMessageDialog(null,
                         "Unable to connect to server " +
                                 (args.length > 0 ? args[0] : "localhost") + ":" +
@@ -154,4 +162,5 @@ public class GameClient {
             }
         });
     }
+
 }

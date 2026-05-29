@@ -4,146 +4,169 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 /**
- * 卡牌选择操作栏 - 点击手牌后弹出的浮动操作栏
+ * Card selection bar — a floating action bar that appears when a hand card is clicked.
  *
- * 替代了之前使用JOptionPane的交互方式，提供更流畅的游戏体验。
- * 当玩家点击手牌中的一张卡牌后，此面板从手牌区上方滑出，显示：
- * 1. 卡牌名称和类型
- * 2. 操作按钮（打出/存入银行/取消）
- * 3. 目标玩家选择行（需要目标的卡牌类型）
+ * Replaces the previous JOptionPane-based interaction with a smoother game experience.
+ * When the player clicks a card in their hand, this panel slides out above the hand area showing:
+ * 1. Card name and type
+ * 2. Action buttons (Play/Bank/Cancel)
+ * 3. Target player selection row (for card types that need a target)
+ * 4. Property card selection row (for Sly Deal / Forced Deal — appears after target selection)
  *
- * 支持的卡牌操作：
- * - 金钱卡 → 只能存入银行（"银行"按钮）
- * - 地产卡 → 可以放置到物业区（"放置"按钮）或存入银行
- * - 行动卡 → 可以打出（"打出"按钮）或存入银行（需要目标时显示目标选择）
- * - 租金卡 → 可以打出或存入银行
+ * Supported card operations:
+ * - Money cards → can only be banked ("Bank" button)
+ * - Property cards → can be placed in property zone ("Place" button) or banked
+ * - Action cards → can be played ("Play" button) or banked (target selection shown when needed)
+ * - Rent cards → can be played or banked
  *
- * 需要选择目标的卡牌类型：租金卡、特定行动卡（偷袭、强制交换、强行交易、债务收集者）
+ * Card types requiring target selection: rent cards, specific action cards (Sly Deal, Forced Deal,
+ * Deal Breaker, Debt Collector)
  *
- * 生命周期（由GamePanel管理）：
- * 1. updatePlayers() - 同步玩家列表
- * 2. show() - 展示操作栏
- * 3. dismiss() - 隐藏操作栏
+ * Sly Deal flow: select target → property row appears with stealable cards → pick one → click Play
+ * Forced Deal flow: select target → two property rows appear (yours + theirs) → pick one from each → click Play
+ * Deal Breaker flow: select target → click Play (steals entire set, no property selection needed)
+ *
+ * Lifecycle (managed by GamePanel):
+ * 1. updatePlayers() — sync player list
+ * 2. updateOpponentProperties() — sync opponent property zone details
+ * 3. show() — display the action bar
+ * 4. dismiss() — hide the action bar
  */
 public class CardSelectionBar extends JPanel {
 
-    // ==================== UI常量 ====================
+    // ==================== UI constants ====================
 
-    /** 操作栏高度 */
-    private static final int BAR_HEIGHT        = 100;
-    /** 操作栏圆角半径 */
+    /** Action bar base height */
+    private static final int BASE_HEIGHT       = 100;
+    /** Extra height per property row */
+    private static final int PROP_ROW_HEIGHT   = 50;
+    /** Action bar corner radius */
     private static final int CORNER_RADIUS     = 14;
-    /** 操作按钮高度 */
+    /** Action button height */
     private static final int BUTTON_H          = 34;
-    /** 操作按钮圆角半径 */
+    /** Action button corner radius */
     private static final int BUTTON_ARC        = 8;
 
-    /** 背景色（深色半透明） */
+    /** Background color (dark semi-transparent) */
     private static final Color BG_COLOR        = new Color(25, 25, 35, 230);
-    /** 边框色（金色） */
+    /** Border color (gold) */
     private static final Color BORDER_COLOR    = new Color(255, 215, 0, 180);
-    /** 确认按钮颜色（绿色） */
+    /** Confirm button color (green) */
     private static final Color BTN_CONFIRM     = new Color(34, 139, 34);
-    /** 银行按钮颜色（蓝色） */
+    /** Bank button color (blue) */
     private static final Color BTN_BANK        = new Color(30, 100, 180);
-    /** 取消按钮颜色（红色） */
+    /** Cancel button color (red) */
     private static final Color BTN_CANCEL      = new Color(120, 40, 40);
-    /** 目标按钮默认颜色 */
+    /** Target button default color */
     private static final Color BTN_TARGET_IDLE = new Color(60, 60, 80);
-    /** 目标按钮选中颜色（金色） */
+    /** Target button selected color (gold) */
     private static final Color BTN_TARGET_SEL  = new Color(180, 130, 0);
-    /** 主文字颜色 */
+    /** Property button color */
+    private static final Color BTN_PROP_IDLE   = new Color(40, 80, 50);
+    /** Property button selected color */
+    private static final Color BTN_PROP_SEL    = new Color(60, 180, 80);
+    /** Primary text color */
     private static final Color TEXT_PRIMARY    = Color.WHITE;
-    /** 辅助文字颜色 */
+    /** Muted text color */
     private static final Color TEXT_MUTED      = new Color(180, 180, 180);
 
-    /** 需要指定单一目标玩家的卡牌名称 */
+    /** Card names that require a single target player */
     private static final java.util.Set<String> NEEDS_TARGET_NAMES =
             new java.util.HashSet<>(java.util.Arrays.asList(
                     "Sly Deal", "Forced Deal", "Deal Breaker",
                     "Debt Collector", "Wild Rent"
             ));
 
-    // ==================== 状态字段 ====================
+    /** Card names that need property card selection (not Deal Breaker — it steals a full set) */
+    private static final java.util.Set<String> NEEDS_PROPERTY_SELECTION =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    "Sly Deal", "Forced Deal"
+            ));
 
-    /** 当前选中的卡牌ID */
+    // ==================== State fields ====================
+
+    /** Currently selected card ID */
     private String selectedCardId   = null;
-    /** 当前选中的卡牌名称 */
+    /** Currently selected card name */
     private String selectedCardName = null;
-    /** 当前选中的卡牌类型 */
+    /** Currently selected card type */
     private String selectedCardType = null;
-    /** 选中的目标玩家ID（null表示未选择） */
+    /** Selected target player ID */
     private String selectedTargetId = null;
+    /** Selected target property card ID (Sly Deal) */
+    private String selectedTargetCardId = null;
+    /** Selected own property card ID (Forced Deal) */
+    private String selectedMyPropertyId = null;
+    /** Selected their property card ID (Forced Deal) */
+    private String selectedTheirPropertyId = null;
 
-    /** 对手玩家映射表 id → 昵称（由GamePanel同步） */
+    /** Opponent player map id → nickname (synced by GamePanel) */
     private final Map<String, String> opponentMap = new LinkedHashMap<>();
+    /** Opponent property cards map playerId → list of {cardId, cardName, isInCompleteSet} */
+    private final Map<String, List<String[]>> opponentPropertyMap = new LinkedHashMap<>();
+    /** Own property cards list of {cardId, cardName} */
+    private final List<String[]> myPropertyList = new ArrayList<>();
 
-    /** 操作确认回调 (cardId, action, targetId) */
-    private TriConsumer triCallback;
+    /** Action confirm callback (cardId, action, jsonPayload) */
+    private BiConsumer<String, String> playCallback;
 
-    // ==================== 子组件 ====================
+    // ==================== Sub-components ====================
 
-    /** 卡牌名称标签 */
+    /** Card name label */
     private JLabel    cardNameLabel;
-    /** 卡牌类型标签 */
+    /** Card type label */
     private JLabel    cardTypeLabel;
-    /** 操作按钮行 */
+    /** Inner content panel */
+    private JPanel    innerPanel;
+    /** Action button row */
     private JPanel    actionRow;
-    /** 目标玩家选择行 */
+    /** Target player selection row */
     private JPanel    targetRow;
-    /** 确认按钮（打出/放置） */
+    /** Property selection row (Sly Deal: steal target; Forced Deal: my property) */
+    private JPanel    myPropRow;
+    /** Their property selection row (Forced Deal only) */
+    private JPanel    theirPropRow;
+    /** Confirm button (Play/Place) */
     private JButton   confirmButton;
-    /** 存入银行按钮 */
+    /** Bank button */
     private JButton   bankButton;
-    /** 取消按钮 */
+    /** Cancel button */
     private JButton   cancelButton;
-    /** 目标玩家按钮映射表 id → 按钮 */
+    /** Target player button map id → button */
     private final Map<String, JButton> targetButtons = new LinkedHashMap<>();
+    /** Property card button map (myPropRow) id → button */
+    private final Map<String, JButton> myPropButtons = new LinkedHashMap<>();
+    /** Property card button map (theirPropRow) id → button */
+    private final Map<String, JButton> theirPropButtons = new LinkedHashMap<>();
 
-    // ==================== 构造函数 ====================
+    // ==================== Constructor ====================
 
-    /** 构造函数 - 构建操作栏UI */
+    /** Constructor — build the action bar UI */
     public CardSelectionBar() {
         setLayout(new BorderLayout(0, 0));
         setOpaque(false);
-        setPreferredSize(new Dimension(0, BAR_HEIGHT));
         buildUI();
-        setVisible(false);  // 初始隐藏，必须在 buildUI() 之后
+        setVisible(false);
     }
 
-    // ==================== 回调接口 ====================
+    // ==================== Public API ====================
 
     /**
-     * 三参数回调接口
-     * (卡牌ID, 操作类型, 目标玩家ID或null)
+     * Set the action confirm callback.
+     * Called as (cardId, action) — GamePanel reads property selections via getters.
      */
-    @FunctionalInterface
-    public interface TriConsumer {
-        void accept(String cardId, String action, String targetId);
+    public void setPlayCallback(BiConsumer<String, String> callback) {
+        this.playCallback = callback;
     }
 
     /**
-     * 设置操作确认回调
-     * 当玩家点击"确认"或"银行"按钮时触发
-     *
-     * @param callback (cardId, action, targetId)
-     */
-    public void setPlayCallback(TriConsumer callback) {
-        this.triCallback  = callback;
-    }
-
-    // ==================== 公共API ====================
-
-    /**
-     * 同步对手玩家列表
-     * 由GamePanel在每个GAME_STATE_UPDATE中调用
-     *
-     * @param idToNickname 对手玩家ID → 昵称映射（不包含本地玩家）
+     * Sync the opponent player list.
+     * Called by GamePanel on every GAME_STATE_UPDATE.
      */
     public void updatePlayers(Map<String, String> idToNickname) {
         opponentMap.clear();
@@ -152,54 +175,83 @@ public class CardSelectionBar extends JPanel {
     }
 
     /**
-     * 显示操作栏（针对指定卡牌）
-     * @param cardId 卡牌ID
-     * @param cardName 卡牌名称
-     * @param cardType 卡牌类型（MONEY/PROPERTY/ACTION/RENT）
+     * Sync opponent property zone details.
+     * Called by GamePanel on every GAME_STATE_UPDATE.
+     * @param idToProperties map playerId → list of [cardId, cardName, isInCompleteSet]
+     */
+    public void updateOpponentProperties(Map<String, List<String[]>> idToProperties) {
+        opponentPropertyMap.clear();
+        opponentPropertyMap.putAll(idToProperties);
+    }
+
+    /**
+     * Sync own property zone details.
+     * @param properties list of [cardId, cardName]
+     */
+    public void updateMyProperties(List<String[]> properties) {
+        myPropertyList.clear();
+        myPropertyList.addAll(properties);
+    }
+
+    /**
+     * Show the action bar for the specified card.
      */
     public void show(String cardId, String cardName, String cardType) {
         this.selectedCardId   = cardId;
         this.selectedCardName = cardName;
         this.selectedCardType = cardType;
         this.selectedTargetId = null;
+        this.selectedTargetCardId = null;
+        this.selectedMyPropertyId = null;
+        this.selectedTheirPropertyId = null;
 
         cardNameLabel.setText(cardName);
         cardTypeLabel.setText(cardType);
 
-        configureActionButtons(cardType, cardName);  // 配置操作按钮可见性
-        configureTargetRow(cardType, cardName);       // 配置目标选择行
+        configureActionButtons(cardType, cardName);
+        configureTargetRow(cardType, cardName);
+        configurePropertyRows(cardName);
         resetTargetSelection();
+        resetPropertySelections();
+        updateHeight();
 
         setVisible(true);
         revalidate();
         repaint();
     }
 
-    /** 隐藏并重置操作栏 */
+    /** Hide and reset the action bar */
     public void dismiss() {
-        if (!isVisible()) return;  // 防止递归重入
+        if (!isVisible()) return;
         selectedCardId   = null;
         selectedCardName = null;
         selectedCardType = null;
         selectedTargetId = null;
+        selectedTargetCardId = null;
+        selectedMyPropertyId = null;
+        selectedTheirPropertyId = null;
         setVisible(false);
     }
 
-    // ==================== UI构建 ====================
+    // ==================== Getters for GamePanel ====================
 
-    /** 构建操作栏的内部布局 */
+    public String getSelectedTargetId() { return selectedTargetId; }
+    public String getSelectedTargetCardId() { return selectedTargetCardId; }
+    public String getSelectedMyPropertyId() { return selectedMyPropertyId; }
+    public String getSelectedTheirPropertyId() { return selectedTheirPropertyId; }
+
+    // ==================== UI construction ====================
+
+    /** Build the internal layout of the action bar */
     private void buildUI() {
-        // 内层面板（带圆角背景和金色边框）
-        JPanel inner = new JPanel(new BorderLayout(12, 0)) {
+        innerPanel = new JPanel(new BorderLayout(12, 0)) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                         RenderingHints.VALUE_ANTIALIAS_ON);
-                // 深色半透明圆角背景
                 g2.setColor(BG_COLOR);
                 g2.fill(new RoundRectangle2D.Float(
                         0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS));
-                // 金色边框
                 g2.setColor(BORDER_COLOR);
                 g2.setStroke(new BasicStroke(1.5f));
                 g2.draw(new RoundRectangle2D.Float(
@@ -208,10 +260,10 @@ public class CardSelectionBar extends JPanel {
                 g2.dispose();
             }
         };
-        inner.setOpaque(false);
-        inner.setBorder(new EmptyBorder(8, 14, 8, 14));
+        innerPanel.setOpaque(false);
+        innerPanel.setBorder(new EmptyBorder(8, 14, 8, 14));
 
-        // ===== 左侧：卡牌信息 =====
+        // ===== Left: card info =====
         JPanel infoPanel = new JPanel(new BorderLayout(0, 2));
         infoPanel.setOpaque(false);
         infoPanel.setPreferredSize(new Dimension(160, 0));
@@ -227,17 +279,18 @@ public class CardSelectionBar extends JPanel {
         infoPanel.add(cardNameLabel, BorderLayout.CENTER);
         infoPanel.add(cardTypeLabel, BorderLayout.SOUTH);
 
-        // ===== 中间：操作按钮 + 目标选择 =====
-        JPanel centrePanel = new JPanel(new BorderLayout(0, 4));
+        // ===== Center: action buttons + target row + property rows =====
+        JPanel centrePanel = new JPanel();
+        centrePanel.setLayout(new BoxLayout(centrePanel, BoxLayout.Y_AXIS));
         centrePanel.setOpaque(false);
 
-        // 操作按钮行
+        // Action button row
         actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         actionRow.setOpaque(false);
 
         confirmButton = makeButton(" Play",   BTN_CONFIRM);
         bankButton    = makeButton(" Bank",   BTN_BANK);
-        cancelButton  = makeButton(" Cancel",   BTN_CANCEL);
+        cancelButton  = makeButton(" Cancel", BTN_CANCEL);
 
         confirmButton.addActionListener(e -> onConfirm());
         bankButton   .addActionListener(e -> onBank());
@@ -247,7 +300,7 @@ public class CardSelectionBar extends JPanel {
         actionRow.add(bankButton);
         actionRow.add(cancelButton);
 
-        // 目标选择行
+        // Target selection row
         targetRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         targetRow.setOpaque(false);
         targetRow.setVisible(false);
@@ -257,16 +310,28 @@ public class CardSelectionBar extends JPanel {
         targetLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         targetRow.add(targetLabel);
 
-        centrePanel.add(actionRow, BorderLayout.NORTH);
-        centrePanel.add(targetRow, BorderLayout.SOUTH);
+        // My property selection row (Forced Deal: own card to give; Sly Deal: not used)
+        myPropRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        myPropRow.setOpaque(false);
+        myPropRow.setVisible(false);
 
-        inner.add(infoPanel,   BorderLayout.WEST);
-        inner.add(centrePanel, BorderLayout.CENTER);
+        // Their property selection row (Sly Deal: card to steal; Forced Deal: their card)
+        theirPropRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        theirPropRow.setOpaque(false);
+        theirPropRow.setVisible(false);
 
-        add(inner, BorderLayout.CENTER);
+        centrePanel.add(actionRow);
+        centrePanel.add(targetRow);
+        centrePanel.add(myPropRow);
+        centrePanel.add(theirPropRow);
+
+        innerPanel.add(infoPanel,   BorderLayout.WEST);
+        innerPanel.add(centrePanel, BorderLayout.CENTER);
+
+        add(innerPanel, BorderLayout.CENTER);
     }
 
-    /** 创建统一样式的操作按钮 */
+    /** Create a uniformly styled button */
     private JButton makeButton(String text, Color bg) {
         JButton btn = new JButton(text) {
             @Override protected void paintComponent(Graphics g) {
@@ -294,7 +359,6 @@ public class CardSelectionBar extends JPanel {
         btn.setPreferredSize(new Dimension(90, BUTTON_H));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // 悬停时略微变亮
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             final Color base = bg;
             @Override public void mouseEntered(java.awt.event.MouseEvent e) {
@@ -308,22 +372,27 @@ public class CardSelectionBar extends JPanel {
         return btn;
     }
 
-    // ==================== 动态按钮配置 ====================
+    // ==================== Dynamic height ====================
 
-    /**
-     * 根据卡牌类型配置操作按钮的可见性和文本
-     * - 金钱卡：只显示"银行"按钮（无"打出"按钮）
-     * - 地产卡：显示"放置" + "银行"
-     * - 行动/租金卡：显示"打出" + "银行"
-     */
+    private void updateHeight() {
+        int rows = 1; // action row always visible
+        if (targetRow.isVisible()) rows++;
+        if (myPropRow.isVisible()) rows++;
+        if (theirPropRow.isVisible()) rows++;
+        int h = BASE_HEIGHT + (rows - 1) * PROP_ROW_HEIGHT;
+        setPreferredSize(new Dimension(0, h));
+    }
+
+    // ==================== Dynamic button configuration ====================
+
     private void configureActionButtons(String cardType, String cardName) {
         switch (cardType) {
             case "MONEY":
-                confirmButton.setVisible(false);    // 金钱卡只能存银行
+                confirmButton.setVisible(false);
                 bankButton.setVisible(true);
                 break;
             case "PROPERTY":
-                confirmButton.setText(" Place");     // property card can be placed
+                confirmButton.setText(" Place");
                 confirmButton.setVisible(true);
                 bankButton.setVisible(true);
                 break;
@@ -340,18 +409,35 @@ public class CardSelectionBar extends JPanel {
         actionRow.revalidate();
     }
 
-    /**
-     * 配置目标玩家选择行的可见性
-     * 仅特定卡牌需要选择单一目标（Sly Deal、Forced Deal、Deal Breaker、Debt Collector、Wild Rent）
-     */
     private void configureTargetRow(String cardType, String cardName) {
         boolean needsTargetPicker = NEEDS_TARGET_NAMES.contains(cardName);
         targetRow.setVisible(needsTargetPicker && !opponentMap.isEmpty());
     }
 
-    // ==================== 目标选择 ====================
+    /**
+     * Configure property selection row visibility and labels based on card name.
+     */
+    private void configurePropertyRows(String cardName) {
+        if (!NEEDS_PROPERTY_SELECTION.contains(cardName)) {
+            myPropRow.setVisible(false);
+            theirPropRow.setVisible(false);
+            return;
+        }
 
-    /** 重建目标玩家按钮 */
+        if (cardName.contains("Forced Deal")) {
+            // Forced Deal: player picks one of their own and one of the target's
+            rebuildMyPropertyButtons();
+            myPropRow.setVisible(!myPropertyList.isEmpty());
+            theirPropRow.setVisible(false); // shown after target selection
+        } else if (cardName.contains("Sly Deal")) {
+            // Sly Deal: player only picks target's property (shown after target selection)
+            myPropRow.setVisible(false);
+            theirPropRow.setVisible(false); // shown after target selection
+        }
+    }
+
+    // ==================== Target selection ====================
+
     private void rebuildTargetButtons() {
         targetButtons.values().forEach(targetRow::remove);
         targetButtons.clear();
@@ -372,75 +458,246 @@ public class CardSelectionBar extends JPanel {
         targetRow.repaint();
     }
 
-    /** 选中目标玩家（高亮按钮，取消其他） */
     private void selectTarget(String playerId, JButton selectedBtn) {
         selectedTargetId = playerId;
         targetButtons.values().forEach(b -> b.setBackground(BTN_TARGET_IDLE));
         selectedBtn.setBackground(BTN_TARGET_SEL);
+
+        // After target selection, update property rows
+        if (NEEDS_PROPERTY_SELECTION.contains(selectedCardName)) {
+            rebuildPropertyRows(playerId);
+        }
+        updateHeight();
+        updateConfirmState();
+        revalidate();
+        repaint();
+    }
+
+    // ==================== Property selection ====================
+
+    /** Rebuild property rows after target selection */
+    private void rebuildPropertyRows(String targetPlayerId) {
+        if (selectedCardName == null) return;
+
+        if (selectedCardName.contains("Sly Deal")) {
+            // Show stealable properties from target (exclude complete sets)
+            theirPropButtons.values().forEach(theirPropRow::remove);
+            theirPropButtons.clear();
+
+            List<String[]> props = opponentPropertyMap.get(targetPlayerId);
+            if (props != null) {
+                boolean first = true;
+                for (String[] p : props) {
+                    boolean inCompleteSet = p.length > 2 && "true".equals(p[2]);
+                    if (inCompleteSet) continue; // Can't steal from complete sets
+
+                    if (first) {
+                        // Add label
+                        JLabel lbl = new JLabel("Steal: ");
+                        lbl.setForeground(TEXT_MUTED);
+                        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                        theirPropRow.add(lbl);
+                        first = false;
+                    }
+                    JButton btn = makePropertyButton(p[0], p[1], false);
+                    btn.addActionListener(e -> selectTheirProperty(p[0], btn));
+                    theirPropButtons.put(p[0], btn);
+                    theirPropRow.add(btn);
+                }
+            }
+
+            boolean hasProps = !theirPropButtons.isEmpty();
+            if (!hasProps) {
+                JLabel lbl = new JLabel("(no stealable properties)");
+                lbl.setForeground(new Color(255, 120, 120));
+                lbl.setFont(new Font("SansSerif", Font.ITALIC, 11));
+                theirPropRow.add(lbl);
+            }
+            theirPropRow.setVisible(true);
+            theirPropRow.revalidate();
+            theirPropRow.repaint();
+
+        } else if (selectedCardName.contains("Forced Deal")) {
+            // Show their properties
+            theirPropButtons.values().forEach(theirPropRow::remove);
+            theirPropButtons.clear();
+
+            List<String[]> props = opponentPropertyMap.get(targetPlayerId);
+            if (props != null) {
+                boolean first = true;
+                for (String[] p : props) {
+                    if (first) {
+                        JLabel lbl = new JLabel("Their: ");
+                        lbl.setForeground(TEXT_MUTED);
+                        lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                        theirPropRow.add(lbl);
+                        first = false;
+                    }
+                    JButton btn = makePropertyButton(p[0], p[1], false);
+                    btn.addActionListener(e -> selectTheirProperty(p[0], btn));
+                    theirPropButtons.put(p[0], btn);
+                    theirPropRow.add(btn);
+                }
+            }
+            theirPropRow.setVisible(!theirPropButtons.isEmpty());
+            theirPropRow.revalidate();
+            theirPropRow.repaint();
+        }
+    }
+
+    /** Rebuild own property buttons (Forced Deal) */
+    private void rebuildMyPropertyButtons() {
+        myPropButtons.values().forEach(myPropRow::remove);
+        myPropButtons.clear();
+
+        boolean first = true;
+        for (String[] p : myPropertyList) {
+            if (first) {
+                JLabel lbl = new JLabel("Yours: ");
+                lbl.setForeground(TEXT_MUTED);
+                lbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                myPropRow.add(lbl);
+                first = false;
+            }
+            JButton btn = makePropertyButton(p[0], p[1], true);
+            btn.addActionListener(e -> selectMyProperty(p[0], btn));
+            myPropButtons.put(p[0], btn);
+            myPropRow.add(btn);
+        }
+        myPropRow.revalidate();
+        myPropRow.repaint();
+    }
+
+    private JButton makePropertyButton(String cardId, String cardName, boolean isOwn) {
+        Color bg = isOwn ? new Color(30, 60, 100) : BTN_PROP_IDLE;
+        JButton btn = makeButton(cardName, bg);
+        btn.setPreferredSize(new Dimension(
+                Math.max(70, cardName.length() * 7 + 20), BUTTON_H));
+        return btn;
+    }
+
+    private void selectMyProperty(String cardId, JButton btn) {
+        selectedMyPropertyId = cardId;
+        myPropButtons.values().forEach(b -> b.setBackground(new Color(30, 60, 100)));
+        btn.setBackground(BTN_PROP_SEL);
         updateConfirmState();
     }
 
-    /** 重置目标选择状态 */
+    private void selectTheirProperty(String cardId, JButton btn) {
+        if (selectedCardName != null && selectedCardName.contains("Sly Deal")) {
+            selectedTargetCardId = cardId;
+        } else {
+            selectedTheirPropertyId = cardId;
+        }
+        theirPropButtons.values().forEach(b -> b.setBackground(BTN_PROP_IDLE));
+        btn.setBackground(BTN_PROP_SEL);
+        updateConfirmState();
+    }
+
     private void resetTargetSelection() {
         selectedTargetId = null;
         targetButtons.values().forEach(b -> b.setBackground(BTN_TARGET_IDLE));
+        theirPropRow.setVisible(false);
+        updateHeight();
         updateConfirmState();
     }
 
-    /** 更新确认按钮的启用状态（需要目标的卡牌在没有选择目标时禁用） */
+    private void resetPropertySelections() {
+        selectedTargetCardId = null;
+        selectedMyPropertyId = null;
+        selectedTheirPropertyId = null;
+    }
+
+    // ==================== Confirm state ====================
+
     private void updateConfirmState() {
         if (confirmButton == null || !confirmButton.isVisible()) return;
 
         boolean needsTarget = targetRow.isVisible()
                 && isStrictTargetRequired(selectedCardName);
 
-        confirmButton.setEnabled(!needsTarget || selectedTargetId != null);
+        if (needsTarget && selectedTargetId == null) {
+            confirmButton.setEnabled(false);
+            return;
+        }
+
+        // Check property selection requirements
+        if (selectedCardName != null && selectedCardName.contains("Sly Deal")) {
+            // Sly Deal: must select a property if target has stealable ones
+            boolean hasProps = theirPropRow.isVisible() && !theirPropButtons.isEmpty();
+            confirmButton.setEnabled(!hasProps || selectedTargetCardId != null);
+        } else if (selectedCardName != null && selectedCardName.contains("Forced Deal")) {
+            // Forced Deal: must select one from each side
+            boolean needMy = myPropRow.isVisible() && !myPropButtons.isEmpty();
+            boolean needTheir = theirPropRow.isVisible() && !theirPropButtons.isEmpty();
+            boolean myOk = !needMy || selectedMyPropertyId != null;
+            boolean theirOk = !needTheir || selectedTheirPropertyId != null;
+            confirmButton.setEnabled(myOk && theirOk);
+        } else {
+            confirmButton.setEnabled(true);
+        }
     }
 
-    /** 检查卡牌是否需要严格指定目标（必须先选择才能确认） */
     private boolean isStrictTargetRequired(String cardName) {
         return cardName != null && NEEDS_TARGET_NAMES.contains(cardName);
     }
 
-    // ==================== 操作处理 ====================
+    // ==================== Action handling ====================
 
-    /** 确认按钮点击处理 */
     private void onConfirm() {
         if (selectedCardId == null) return;
 
-        // 验证：严格目标卡牌必须选择目标
         if (isStrictTargetRequired(selectedCardName) && selectedTargetId == null) {
-            cardNameLabel.setText("Select a target first");
-            cardNameLabel.setForeground(new Color(255, 100, 100));
-            javax.swing.Timer reset = new javax.swing.Timer(1200, e -> {
-                cardNameLabel.setText(selectedCardName);
-                cardNameLabel.setForeground(TEXT_PRIMARY);
-            });
-            reset.setRepeats(false);
-            reset.start();
+            flashMessage("Select a target first");
             return;
         }
 
-        String action = resolveAction();
-        if (triCallback != null) {
-            triCallback.accept(selectedCardId, action, selectedTargetId);
+        // Validate property selections
+        if (selectedCardName != null && selectedCardName.contains("Sly Deal")) {
+            boolean hasProps = theirPropRow.isVisible() && !theirPropButtons.isEmpty();
+            if (hasProps && selectedTargetCardId == null) {
+                flashMessage("Select a property to steal");
+                return;
+            }
+        }
+        if (selectedCardName != null && selectedCardName.contains("Forced Deal")) {
+            if (myPropRow.isVisible() && !myPropButtons.isEmpty()
+                    && selectedMyPropertyId == null) {
+                flashMessage("Select your property to trade");
+                return;
+            }
+            if (theirPropRow.isVisible() && !theirPropButtons.isEmpty()
+                    && selectedTheirPropertyId == null) {
+                flashMessage("Select their property to trade");
+                return;
+            }
+        }
+
+        if (playCallback != null) {
+            playCallback.accept(selectedCardId, resolveAction());
         }
         dismiss();
     }
 
-    /** 存入银行按钮点击处理 - 以PLAY_MONEY操作发送 */
+    private void flashMessage(String msg) {
+        cardNameLabel.setText(msg);
+        cardNameLabel.setForeground(new Color(255, 100, 100));
+        javax.swing.Timer reset = new javax.swing.Timer(1200, e -> {
+            cardNameLabel.setText(selectedCardName);
+            cardNameLabel.setForeground(TEXT_PRIMARY);
+        });
+        reset.setRepeats(false);
+        reset.start();
+    }
+
     private void onBank() {
         if (selectedCardId == null) return;
-        if (triCallback != null) {
-            triCallback.accept(selectedCardId, "PLAY_MONEY", null);
+        if (playCallback != null) {
+            playCallback.accept(selectedCardId, "PLAY_MONEY");
         }
         dismiss();
     }
 
-    /**
-     * 根据卡牌类型解析操作字符串
-     * @return 操作类型（PLAY_MONEY/PLAY_PROPERTY/PLAY_RENT/PLAY_ACTION）
-     */
     private String resolveAction() {
         switch (selectedCardType) {
             case "MONEY":    return "PLAY_MONEY";
@@ -451,9 +708,8 @@ public class CardSelectionBar extends JPanel {
         }
     }
 
-    /** 背景绘制为空，由内层面板负责绘制 */
     @Override
     protected void paintComponent(Graphics g) {
-        // 透明背景，绘制由内层面板负责
+        // Transparent background; drawing handled by inner panel
     }
 }

@@ -10,41 +10,41 @@ import com.google.gson.JsonParser;
 import com.google.gson.Gson;
 
 /**
- * 游戏房间 - 管理一组玩家从大厅到游戏开始的过程
+ * Game room — manages a group of players from lobby through game start.
  *
- * 生命周期：
- * 1. 房主创建房间（CREATE_ROOM），自动成为第一名玩家
- * 2. 其他玩家通过房间代码加入（JOIN_ROOM），最多支持MAX_PLAYERS人
- * 3. 玩家在大厅中点击"准备"（PLAYER_READY）
- * 4. 当所有玩家（>=MIN_PLAYERS）都准备就绪，自动开始游戏
- * 5. 创建 GameSession 并调用 start() 进入游戏流程
+ * Lifecycle:
+ * 1. Host creates the room (CREATE_ROOM) and automatically becomes the first player
+ * 2. Other players join via room code (JOIN_ROOM), up to MAX_PLAYERS
+ * 3. Players click "Ready" in the lobby (PLAYER_READY)
+ * 4. When all players (>= MIN_PLAYERS) are ready, the game can start
+ * 5. A GameSession is created and start() is called to begin gameplay
  *
- * 状态广播：
- * - 每次玩家加入/离开/准备状态变化时，向所有房间成员广播 ROOM_UPDATE
- * - ROOM_UPDATE 包含房间代码、玩家列表及其准备状态
+ * State broadcast:
+ * - ROOM_UPDATE is sent to all room members on every join/leave/ready state change
+ * - ROOM_UPDATE includes room code, player list, and ready states
  */
 public class GameRoom {
-    /** 房间代码（6位大写字母数字） */
+    /** Room code (6 uppercase alphanumeric characters) */
     private final String roomCode;
-    /** 房主（房间创建者） */
+    /** Host (room creator) */
     private final ClientHandler creator;
-    /** 房间内的所有玩家 key=clientId, value=ClientHandler */
+    /** All players in the room: key=clientId, value=ClientHandler */
     private final Map<String, ClientHandler> players;
-    /** 玩家的准备状态 key=clientId, value=是否已准备 */
+    /** Player ready states: key=clientId, value=whether ready */
     private final Map<String, Boolean> readyStates;
-    /** 游戏会话（游戏开始后创建） */
+    /** Game session (created after the game starts) */
     private GameSession gameSession;
-    /** 游戏是否已开始 */
+    /** Whether the game has started */
     private boolean gameStarted;
-    /** Gson序列化器 */
+    /** Gson serializer */
     private final Gson gson;
-    /** 所属服务器（用于销毁空房间） */
+    /** Owning server (for destroying empty rooms) */
     private final GameServer server;
 
     /**
-     * 构造函数 - 创建新房间，房主自动加入
-     * @param roomCode 房间代码
-     * @param creator 房主
+     * Constructor — creates a new room; host auto-joins.
+     * @param roomCode room code
+     * @param creator host
      */
     public GameRoom(String roomCode, ClientHandler creator, GameServer server) {
         this.roomCode = roomCode;
@@ -54,70 +54,70 @@ public class GameRoom {
         this.gameStarted = false;
         this.gson = new Gson();
         this.server = server;
-        addPlayer(creator);  // 房主自动加入
+        addPlayer(creator);  // Host auto-joins
     }
 
     /**
-     * 添加玩家到房间
-     * @param player 要加入的玩家
-     * @return true=加入成功，false=房间已满
+     * Add a player to the room.
+     * @param player the player to add
+     * @return true=joined successfully, false=room is full
      */
     public boolean addPlayer(ClientHandler player) {
         if (players.size() >= GameConstants.MAX_PLAYERS) {
-            return false;  // 房间已满，拒绝加入
+            return false;  // Room full, reject
         }
         players.put(player.getClientId(), player);
-        readyStates.put(player.getClientId(), false);  // 初始未准备
+        readyStates.put(player.getClientId(), false);  // Initially not ready
         return true;
     }
 
     /**
-     * 从房间移除玩家
-     * 如果游戏已开始，通知GameSession处理玩家断线
-     * 如果房间变空，标记游戏结束
+     * Remove a player from the room.
+     * If the game has already started, notifies GameSession to handle the disconnect.
+     * If the room becomes empty, marks the game as ended.
      *
-     * @param clientId 要移除的玩家ID
+     * @param clientId ID of the player to remove
      */
     public void removePlayer(String clientId) {
         players.remove(clientId);
         readyStates.remove(clientId);
 
-        // 如果游戏已开始，通知GameSession处理断线
+        // If game has started, notify GameSession of the disconnect
         if (gameStarted && gameSession != null) {
             gameSession.handlePlayerDisconnect(clientId);
         }
 
-        // 如果房间空了，清理游戏状态
+        // If room is empty, clean up game state
         if (players.isEmpty()) {
             gameStarted = false;
             gameSession = null;
             server.removeRoom(roomCode);
         }
 
-        broadcastRoomUpdate();  // 通知剩余玩家房间状态变化
+        broadcastRoomUpdate();  // Notify remaining players of the room state change
     }
 
     /**
-     * 设置玩家的准备状态
-     * 当所有玩家（>=MIN_PLAYERS）都准备就绪且游戏尚未开始时，自动启动游戏
+     * Set a player's ready state.
+     * Auto-starts the game when all players (>= MIN_PLAYERS) are ready and the game hasn't started yet.
      *
-     * @param clientId 玩家ID
-     * @param ready true=准备，false=取消准备
+     * @param clientId player ID
+     * @param ready true=ready, false=unready
      */
     public void setPlayerReady(String clientId, boolean ready) {
         readyStates.put(clientId, ready);
         broadcastRoomUpdate();
     }
 
-    /** 检查是否所有玩家都已准备 */
+    /** Check whether all players are ready */
     private boolean allPlayersReady() {
         return players.size() >= GameConstants.MIN_PLAYERS &&
                 readyStates.values().stream().allMatch(Boolean::booleanValue);
     }
 
     /**
-     * 开始游戏 - 创建Player列表，初始化GameSession
-     * 玩家信息从ClientHandler中提取（ID和昵称）
+     * Start the game — creates the Player list and initializes GameSession.
+     * Player info is extracted from ClientHandler (ID and nickname).
      */
     private void startGame() {
         gameStarted = true;
@@ -128,12 +128,12 @@ public class GameRoom {
         }
 
         gameSession = new GameSession(this, playerList);
-        gameSession.start();  // 启动游戏会话（发牌、开始第一回合）
+        gameSession.start();  // Start the game session (deal cards, begin first turn)
     }
 
     /**
-     * 向所有玩家广播房间状态更新
-     * 包含房间代码、玩家列表、准备状态、房主标识
+     * Broadcast room state update to all players.
+     * Includes room code, player list, ready states, and host indicator.
      */
     public void broadcastRoomUpdate() {
         JsonObject roomState = new JsonObject();
@@ -142,7 +142,7 @@ public class GameRoom {
         roomState.addProperty("maxPlayers", GameConstants.MAX_PLAYERS);
         roomState.addProperty("gameStarted", gameStarted);
 
-        // 构建玩家信息数组
+        // Build player info array
         JsonArray playerArray = new JsonArray();
         for (Map.Entry<String, ClientHandler> entry : players.entrySet()) {
             JsonObject playerInfo = new JsonObject();
@@ -154,15 +154,15 @@ public class GameRoom {
         }
         roomState.add("players", playerArray);
 
-        System.out.println("广播房间更新：" + roomCode + "，玩家数：" + players.size());
+        System.out.println("Broadcasting room update: " + roomCode + ", players: " + players.size());
         broadcast(MessageProtocol.MessageType.ROOM_UPDATE, roomState.toString());
     }
 
     /**
-     * 房主请求开始游戏
-     * 仅房主可调用，要求所有玩家已准备且人数满足最低要求
-     * @param clientId 请求者ID
-     * @return null=成功，否则返回错误消息
+     * Host requests to start the game.
+     * Only the host can call this. All players must be ready and the minimum player count must be met.
+     * @param clientId requester ID
+     * @return null=success, otherwise an error message string
      */
     public String requestStartGame(String clientId) {
         if (!clientId.equals(creator.getClientId())) {
@@ -181,14 +181,14 @@ public class GameRoom {
         return null;
     }
 
-    /** 向房间内所有玩家广播消息 */
+    /** Broadcast a message to all players in the room */
     public void broadcast(MessageProtocol.MessageType type, String payload) {
         for (ClientHandler player : players.values()) {
             player.sendMessage(type, payload);
         }
     }
 
-    /** 向指定玩家发送消息 */
+    /** Send a message to a specific player */
     public void sendToPlayer(String clientId, MessageProtocol.MessageType type, String payload) {
         ClientHandler player = players.get(clientId);
         if (player != null) {

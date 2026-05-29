@@ -5,10 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 自动换行布局 — FlowLayout 的增强版
+ * Wrap layout — an enhanced version of FlowLayout.
  *
- * 子组件在容器宽度不足时自动换到下一行。
- * 用于手牌区域，使卡牌在窗口缩小时自动折行显示，无需横向滚动。
+ * Child components automatically wrap to the next row when the container width is insufficient.
+ * Used for the hand card area so cards wrap naturally when the window is resized, avoiding
+ * horizontal scrolling.
  */
 public class WrapLayout extends FlowLayout {
 
@@ -16,9 +17,7 @@ public class WrapLayout extends FlowLayout {
         super(align, hgap, vgap);
     }
 
-    /**
-     * 获取可用宽度（父容器宽度减去 insets）
-     */
+    /** Get available width (parent container width minus insets) */
     private int getMaxWidth(Container target) {
         Container parent = target.getParent();
         if (parent == null) return Integer.MAX_VALUE;
@@ -100,7 +99,7 @@ public class WrapLayout extends FlowLayout {
         }
     }
 
-    /** 内部类：记录一行的布局信息 */
+    /** Inner class: stores layout info for a single row */
     private static class RowInfo {
         final int startIdx, endIdx, y, height;
         RowInfo(int s, int e, int y, int h) {

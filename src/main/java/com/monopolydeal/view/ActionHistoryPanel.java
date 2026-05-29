@@ -10,24 +10,25 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 /**
- * 行动历史面板 — 以颜色编码列表展示游戏操作日志
+ * Action history panel — displays the game action log as a color-coded list.
  *
- * 每条记录显示为一行，包含：
- * - 灰色时间戳（HH:mm:ss）
- * - 彩色玩家昵称（每个玩家分配固定颜色）
- * - 白色操作描述
+ * Each record is shown as a single line containing:
+ * - Gray timestamp (HH:mm:ss)
+ * - Colored player nickname (each player gets a fixed color)
+ * - White action description
  *
- * 自动滚动到最新记录，但当用户主动上滚查看历史时不强制跳回。
+ * Auto-scrolls to the latest record, but won't force-scroll when the user has manually
+ * scrolled up to review history.
  */
 public class ActionHistoryPanel extends JPanel {
 
-    /** 列表数据模型 */
+    /** List data model */
     private final DefaultListModel<ActionEntry> listModel;
-    /** 行动记录列表 */
+    /** Action record list */
     private final JList<ActionEntry> actionList;
-    /** 玩家颜色缓存（按玩家昵称分配颜色） */
+    /** Player color cache (assigns colors by player nickname) */
     private final Map<String, Color> playerColors;
-    /** 颜色轮盘 */
+    /** Color wheel */
     private static final Color[] COLORS = {
             new Color(255, 140, 100),
             new Color(100, 255, 140),
@@ -38,12 +39,12 @@ public class ActionHistoryPanel extends JPanel {
     };
     private int colorIndex;
 
-    /** 时间格式化器 */
+    /** Time formatter */
     private final SimpleDateFormat timeFormat;
 
-    // ==================== 内部数据类 ====================
+    // ==================== Inner data class ====================
 
-    /** 单条行动记录 */
+    /** A single action record */
     private static class ActionEntry {
         final String timeStr;
         final String nickname;
@@ -56,9 +57,9 @@ public class ActionHistoryPanel extends JPanel {
         }
     }
 
-    // ==================== 自定义渲染器 ====================
+    // ==================== Custom renderer ====================
 
-    /** 行动记录列表项渲染器 — 时间灰色 + 玩家名彩色 + 描述白色 */
+    /** Action record list item renderer — gray time + colored player name + white description */
     private class ActionRenderer extends JPanel implements ListCellRenderer<ActionEntry> {
         private final JLabel label;
 
@@ -82,7 +83,7 @@ public class ActionHistoryPanel extends JPanel {
                 return this;
             }
 
-            // 构建带颜色标注的文本：时间(灰) | 昵称(彩色) : 操作(白)
+            // Build color-coded text: time(gray) | nickname(colored) : action(white)
             Color playerColor = getPlayerColor(value.nickname);
             String html = String.format(
                     "<html><span style='color:#999999'>[%s]</span> "
@@ -99,13 +100,13 @@ public class ActionHistoryPanel extends JPanel {
             return this;
         }
 
-        /** 转义 HTML 特殊字符 */
+        /** Escape HTML special characters */
         private String escapeHtml(String text) {
             return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
         }
     }
 
-    // ==================== 构造函数 ====================
+    // ==================== Constructor ====================
 
     public ActionHistoryPanel() {
         setLayout(new BorderLayout());
@@ -139,14 +140,14 @@ public class ActionHistoryPanel extends JPanel {
         add(scrollPane, BorderLayout.CENTER);
     }
 
-    // ==================== 公共 API ====================
+    // ==================== Public API ====================
 
     /**
-     * 更新行动历史 — 由 GamePanel 在每次 GAME_STATE_UPDATE 中调用
-     * @param actions 行动记录 JSON 数组（格式不变）
+     * Update action history — called by GamePanel on every GAME_STATE_UPDATE.
+     * @param actions action record JSON array
      */
     public void updateActions(JsonArray actions) {
-        // 判断用户是否正在查看历史（不在底部 = 用户上滚）
+        // Determine whether the user is currently viewing history (not at bottom = scrolled up)
         boolean autoScroll = isScrolledToBottom();
 
         listModel.clear();
@@ -169,13 +170,13 @@ public class ActionHistoryPanel extends JPanel {
             listModel.addElement(new ActionEntry(timeStr, nickname, actionDesc));
         }
 
-        // 自动滚到底部（仅当用户之前已在底部）
+        // Auto-scroll to bottom (only if user was already at bottom)
         if (autoScroll && listModel.getSize() > 0) {
             actionList.ensureIndexIsVisible(listModel.getSize() - 1);
         }
     }
 
-    /** 检测滚动条是否在底部 */
+    /** Check whether the scrollbar is at the bottom */
     private boolean isScrolledToBottom() {
         JScrollPane sp = null;
         Container parent = actionList.getParent();
@@ -191,7 +192,7 @@ public class ActionHistoryPanel extends JPanel {
         return current + extent >= max - extent;
     }
 
-    // ==================== 玩家颜色分配 ====================
+    // ==================== Player color assignment ====================
 
     private Color getPlayerColor(String nickname) {
         return playerColors.computeIfAbsent(nickname, k -> {
@@ -201,7 +202,7 @@ public class ActionHistoryPanel extends JPanel {
         });
     }
 
-    // ==================== 操作描述格式化（与旧版一致） ====================
+    // ==================== Action description formatting ====================
 
     private String formatAction(String actionType, String target, int amount) {
         switch (actionType) {

@@ -9,43 +9,43 @@ import java.util.*;
 import java.util.Map;
 
 /**
- * 玩家面板 - 显示单个玩家的状态信息
+ * Player panel — displays a single player's status information.
  *
- * 在GamePanel中每个玩家对应一个PlayerPanel，横向排列显示：
- * 1. 左侧信息区（180px宽）- 昵称、在线状态、银行余额、完整组合数、手牌数
- * 2. 右侧地产展示区 - 以叠放卡片形式展示各颜色的地产数量
+ * In GamePanel, each player gets one PlayerPanel, arranged horizontally, showing:
+ * 1. Left info area (180px wide) — nickname, online status, bank balance, complete sets, hand count
+ * 2. Right property display area — stacked cards showing property counts by color
  *
- * 视觉特点：
- * - 活跃玩家面板左侧有金色边框高亮
- * - 断线玩家显示红色"已断线"状态
- * - 地产卡按颜色分组叠放显示，颜色与CardColor定义一致
+ * Visual highlights:
+ * - Active player's panel has a gold left-border highlight
+ * - Disconnected players show a red "Disconnected" status
+ * - Property cards are grouped and stacked by color, with colors matching CardColor definitions
  *
- * 颜色映射：
- * 每种地产颜色都有对应的RGB值，用于在地产展示区中绘制彩色卡片
+ * Color mapping:
+ * Each property color has a corresponding RGB value used to draw colored cards in the display area.
  */
 public class PlayerPanel extends JPanel {
-    /** 玩家唯一标识符 */
+    /** Player unique identifier */
     private final String playerId;
-    /** 昵称标签 */
+    /** Nickname label */
     private JLabel nicknameLabel;
-    /** 状态标签（在线/活跃/断线） */
+    /** Status label (online/active/disconnected) */
     private JLabel statusLabel;
-    /** 银行余额标签 */
+    /** Bank balance label */
     private JLabel bankTotalLabel;
-    /** 完整地产组合数标签 */
+    /** Complete property sets label */
     private JLabel setsLabel;
-    /** 手牌数量标签 */
+    /** Hand count label */
     private JLabel handCountLabel;
-    /** 地产展示面板 */
+    /** Property display panel */
     private JPanel propertyPanel;
-    /** 地产分组面板映射表 key=颜色名称, value=叠放绘制面板 */
+    /** Property group panel map key=color name, value=stack drawing panel */
     private Map<String, JPanel> propertyGroupPanels;
-    /** 当前各地产颜色的卡牌数量缓存 */
+    /** Current property card counts per color (cached) */
     private Map<String, Integer> currentPropertyCounts;
 
     /**
-     * 构造函数 - 创建玩家面板的UI布局
-     * @param playerId 玩家唯一标识符
+     * Constructor — create the player panel UI layout.
+     * @param playerId player unique identifier
      */
     public PlayerPanel(String playerId) {
         this.playerId = playerId;
@@ -54,48 +54,48 @@ public class PlayerPanel extends JPanel {
 
         setLayout(new BorderLayout(15, 0));
         setOpaque(false);
-        // 默认底部灰色分隔线
+        // Default bottom gray separator line
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(60, 65, 75)),
                 new EmptyBorder(12, 15, 12, 15)));
         setMaximumSize(new Dimension(Integer.MAX_VALUE, 160));
 
-        createLeftInfo();      // 创建左侧信息区
-        createPropertyArea();  // 创建右侧地产展示区
+        createLeftInfo();      // Create left info area
+        createPropertyArea();  // Create right property display area
     }
 
-    /** 创建左侧信息区 - 包含昵称、状态、余额、组合数、手牌数 */
+    /** Create left info area — nickname, status, balance, sets, hand count */
     private void createLeftInfo() {
         JPanel leftPanel = new JPanel();
         leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
         leftPanel.setOpaque(false);
         leftPanel.setPreferredSize(new Dimension(180, 0));
 
-        // 昵称（白色加粗）
+        // Nickname (white bold)
         nicknameLabel = new JLabel("Player");
         nicknameLabel.setForeground(Color.WHITE);
         nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
 
-        // 状态指示器（在线/活跃/断线）
+        // Status indicator (online/active/disconnected)
         statusLabel = new JLabel("");
         statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
 
-        // 银行余额（金色）
+        // Bank balance (gold)
         bankTotalLabel = new JLabel("Bank: 0M");
         bankTotalLabel.setForeground(new Color(255, 215, 0));
         bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
-        // 完整组合数（绿色）
+        // Complete sets (green)
         setsLabel = new JLabel("Sets: 0");
         setsLabel.setForeground(new Color(100, 255, 100));
         setsLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
 
-        // 手牌数量（灰色）
+        // Hand count (gray)
         handCountLabel = new JLabel("Hand: 0 cards");
         handCountLabel.setForeground(new Color(180, 180, 180));
         handCountLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
 
-        // 垂直排列各标签（带间距）
+        // Vertical layout with spacing
         leftPanel.add(nicknameLabel);
         leftPanel.add(Box.createVerticalStrut(2));
         leftPanel.add(statusLabel);
@@ -109,7 +109,7 @@ public class PlayerPanel extends JPanel {
         add(leftPanel, BorderLayout.WEST);
     }
 
-    /** 创建右侧地产展示区 - 水平排列各颜色的地产叠放卡片 */
+    /** Create right property display area — horizontally arranged stacked cards per color */
     private void createPropertyArea() {
         propertyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
         propertyPanel.setOpaque(false);
@@ -117,14 +117,14 @@ public class PlayerPanel extends JPanel {
     }
 
     /**
-     * 根据JSON数据更新玩家面板显示
-     * 由GamePanel.updatePlayerPanelsFromStates()在每个GAME_STATE_UPDATE中调用
+     * Update the player panel display from JSON data.
+     * Called by GamePanel.updatePlayerPanelsFromStates() on every GAME_STATE_UPDATE.
      *
-     * @param data 简化的玩家JSON数据
-     * @param propertyColorCounts 各颜色地产卡数量映射
+     * @param data simplified player JSON data
+     * @param propertyColorCounts property card counts per color
      */
     public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
-        // 解析JSON字段
+        // Parse JSON fields
         String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "Player";
         boolean isActive = data.has("isActive") && data.get("isActive").getAsBoolean();
         boolean connected = !data.has("connected") || data.get("connected").getAsBoolean();
@@ -132,16 +132,16 @@ public class PlayerPanel extends JPanel {
         int completeSets = data.has("completeSets") ? data.get("completeSets").getAsInt() : 0;
         int handCount = data.has("handCount") ? data.get("handCount").getAsInt() : 0;
 
-        // 更新显示信息
+        // Update display info
         nicknameLabel.setText(nickname);
 
-        // 状态指示器
+        // Status indicator
         if (!connected) {
             statusLabel.setText("Disconnected");
             statusLabel.setForeground(Color.RED);
         } else if (isActive) {
             statusLabel.setText("Active");
-            statusLabel.setForeground(new Color(255, 215, 0));  // 金色
+            statusLabel.setForeground(new Color(255, 215, 0));  // Gold
         } else {
             statusLabel.setText("Waiting");
             statusLabel.setForeground(new Color(150, 150, 150));
@@ -151,7 +151,7 @@ public class PlayerPanel extends JPanel {
         setsLabel.setText("Sets: " + completeSets + "/3");
         handCountLabel.setText("Hand: " + handCount + " cards");
 
-        // 活跃玩家左侧金色高亮边框
+        // Active player gets a gold left-border highlight
         if (isActive) {
             setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 1, 0, new Color(255, 215, 0)),
@@ -168,15 +168,15 @@ public class PlayerPanel extends JPanel {
     }
 
     /**
-     * 更新地产展示区域
-     * 为每种有卡牌的颜色创建叠放卡片面板
+     * Update the property display area.
+     * Creates a stacked card panel for each color that has cards.
      *
-     * @param colorCounts 颜色名称 → 卡牌数量
+     * @param colorCounts color name → card count
      */
     private void updatePropertyDisplay(Map<String, Integer> colorCounts) {
         if (colorCounts == null) colorCounts = new LinkedHashMap<>();
 
-        // 更新缓存
+        // Update cache
         for (String color : colorCounts.keySet()) {
             currentPropertyCounts.put(color, colorCounts.get(color));
         }
@@ -190,7 +190,7 @@ public class PlayerPanel extends JPanel {
             int count = entry.getValue();
             Color color = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
 
-            // 创建自定义绘制的叠放卡片面板
+            // Create custom-drawn stacked card panel
             JPanel pilePanel = new JPanel() {
                 @Override
                 protected void paintComponent(Graphics g) {
@@ -198,30 +198,30 @@ public class PlayerPanel extends JPanel {
                     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                             RenderingHints.VALUE_ANTIALIAS_ON);
 
-                    // 从后向前绘制每张卡片（后面的卡片偏移3px做叠放效果）
+                    // Draw cards from back to front (each offset by 3px for stack effect)
                     for (int i = count - 1; i >= 0; i--) {
                         int offsetX = i * 3;
                         int offsetY = i * 3;
 
-                        // 卡片阴影
+                        // Card shadow
                         g2.setColor(new Color(0, 0, 0, 80));
                         g2.fillRoundRect(offsetX + 1, offsetY + 1, 44, 56, 8, 8);
 
-                        // 卡片主体（对应颜色）
+                        // Card body (corresponding color)
                         g2.setColor(color);
                         g2.fillRoundRect(offsetX, offsetY, 44, 56, 8, 8);
 
-                        // 卡片高光（顶部白色半透明条）
+                        // Card highlight (semi-transparent white bar at top)
                         g2.setColor(new Color(255, 255, 255, 60));
                         g2.fillRoundRect(offsetX + 3, offsetY + 3, 38, 20, 6, 6);
 
-                        // 卡片边框
+                        // Card border
                         g2.setColor(color.darker());
                         g2.setStroke(new BasicStroke(1.2f));
                         g2.drawRoundRect(offsetX, offsetY, 44, 56, 8, 8);
                     }
 
-                    // 在最上层绘制数量文本
+                    // Draw count text on top layer
                     if (count > 0) {
                         g2.setColor(Color.WHITE);
                         g2.setFont(new Font("SansSerif", Font.BOLD, 9));
@@ -236,7 +236,7 @@ public class PlayerPanel extends JPanel {
             };
             pilePanel.setOpaque(false);
             pilePanel.setPreferredSize(new Dimension(50, 64));
-            pilePanel.setToolTipText(colorName + ": " + count + " cards");  // tooltip
+            pilePanel.setToolTipText(colorName + ": " + count + " cards");
             propertyPanel.add(pilePanel);
         }
 
@@ -244,7 +244,7 @@ public class PlayerPanel extends JPanel {
         propertyPanel.repaint();
     }
 
-    /** 获取玩家ID */
+    /** Get player ID */
     public String getPlayerId() {
         return playerId;
     }

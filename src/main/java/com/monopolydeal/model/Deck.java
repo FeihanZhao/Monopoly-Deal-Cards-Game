@@ -3,51 +3,59 @@ package com.monopolydeal.model;
 import java.util.*;
 
 /**
- * 牌堆类 - 管理游戏中的抽牌堆和弃牌堆
+ * Deck class — manages the game's draw pile and discard pile.
  *
- * 负责卡牌的初始化、洗牌、抽牌、弃牌以及弃牌堆重洗复用。
+ * Responsible for card initialization, shuffling, drawing, discarding,
+ * and recycling the discard pile back into the draw pile.
  *
- * 牌堆初始组成为官方 106 张正版配置：
- * - 货币卡 20 张：10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
- * - 标准房产卡 28 张：棕×2, 浅蓝×3, 粉×3, 橙×3, 红×3, 黄×3, 绿×3, 深蓝×2, 车站×4, 公用事业×2
- * - 万能房产卡 11 张：多种双色/十色组合
- * - 租金卡 13 张：双色×10(1M each) + 全能×3(3M each)
- * - 行动卡 34 张：全部带面值，可存入银行
+ * The initial deck follows the official 106-card configuration:
+ * - Money cards 20: 10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
+ * - Standard properties 28: Brown×2, Light Blue×3, Pink×3, Orange×3, Red×3, Yellow×3,
+ *   Green×3, Dark Blue×2, Railroad×4, Utility×2
+ * - Wild properties 11: various dual/multi-color combinations
+ * - Rent cards 13: dual-color×10 (1M each) + wild×3 (3M each)
+ * - Action cards 34: all have monetary value and can be banked
  *
- * 当抽牌堆为空时，自动将弃牌堆洗牌后移入抽牌堆继续使用。
+ * When the draw pile is empty, the discard pile is automatically shuffled
+ * into the draw pile so the game never runs out of cards.
  */
 public class Deck {
-    /** 抽牌堆（栈结构，从顶部抽牌） */
+    /** Draw pile (stack structure; cards are drawn from the top) */
     private final Stack<Card> drawPile;
-    /** 弃牌堆（列表结构，弃牌后重新洗入抽牌堆） */
+    /** Discard pile (list structure; recycled into draw pile when needed) */
     private final List<Card> discardPile;
-    /** 共享随机数生成器 */
+    /** Shared random number generator */
     private final Random random;
 
     /**
-     * 构造函数 - 初始化牌组并洗牌
-     * 按照官方规则预设所有卡牌的数量和类型
+     * Constructor — initializes the deck and shuffles it.
+     * Pre-configures all card types and counts per official rules.
      */
     public Deck() {
         this.drawPile = new Stack<>();
         this.discardPile = new ArrayList<>();
         this.random = new Random();
-        initializeDeck();  // 按规则创建所有卡牌
-        shuffle();         // 初始洗牌
+        initializeDeck();  // Create all cards per rules
+        shuffle();         // Initial shuffle
     }
 
     /**
-     * 初始化完整的 106 张正版牌组
+     * Initialize the complete 106-card official deck.
      *
-     * 卡牌组成（严格按官方配置）：
-     * - 货币卡 20 张：10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
-     * - 标准房产卡 28 张：棕×2, 浅蓝×3, 粉×3, 橙×3, 红×3, 黄×3, 绿×3, 深蓝×2, 车站×4, 公用事业×2
-     * - 万能房产卡 11 张：深蓝/绿×1, 浅蓝/棕×1, 粉/橙×2, 红/黄×2, 车站/公用事业×1, 绿/车站×1, 浅蓝/车站×1, 十色全能×2
-     * - 租金卡 13 张：双色租金×10 (1M each), 全能租金×3 (3M each)
-     * - 行动卡 34 张：Deal Breaker 5M×2, Just Say No 4M×3, Sly Deal 3M×3, Forced Deal 3M×3, Debt Collector 3M×3, Birthday 2M×3, Pass Go 1M×10, Double Rent 1M×2, House 3M×3, Hotel 4M×2
+     * Card composition (strictly per official configuration):
+     * - Money cards 20: 10M×1, 5M×2, 4M×3, 3M×3, 2M×5, 1M×6
+     * - Standard properties 28: Brown×2, Light Blue×3, Pink×3, Orange×3, Red×3, Yellow×3,
+     *   Green×3, Dark Blue×2, Railroad×4, Utility×2
+     * - Wild properties 11: Dark Blue/Green×1, Brown/Light Blue×1, Pink/Orange×2,
+     *   Red/Yellow×2, Railroad/Utility×1, Green/Railroad×1, Light Blue/Railroad×1,
+     *   Multi-Color×2
+     * - Rent cards 13: dual-color rent×10 (1M each), wild rent×3 (3M each)
+     * - Action cards 34: Deal Breaker 5M×2, Just Say No 4M×3, Sly Deal 3M×3,
+     *   Forced Deal 3M×3, Debt Collector 3M×3, Birthday 2M×3, Pass Go 1M×10,
+     *   Double Rent 1M×2, House 3M×3, Hotel 4M×2
      */
     private void initializeDeck() {
-        // ===== 货币卡 (20张) =====
+        // ===== Money Cards (20) =====
         addCards(CardType.MONEY, CardColor.NONE, 10, 1);
         addCards(CardType.MONEY, CardColor.NONE, 5, 2);
         addCards(CardType.MONEY, CardColor.NONE, 4, 3);
@@ -55,7 +63,7 @@ public class Deck {
         addCards(CardType.MONEY, CardColor.NONE, 2, 5);
         addCards(CardType.MONEY, CardColor.NONE, 1, 6);
 
-        // ===== 标准房产卡 (28张) =====
+        // ===== Standard Property Cards (28) =====
         addCards(CardType.PROPERTY, CardColor.BROWN, 0, 2);
         addCards(CardType.PROPERTY, CardColor.LIGHT_BLUE, 0, 3);
         addCards(CardType.PROPERTY, CardColor.PINK, 0, 3);
@@ -67,7 +75,7 @@ public class Deck {
         addCards(CardType.PROPERTY, CardColor.BLACK, 0, 4, "Railroad Property");
         addCards(CardType.PROPERTY, CardColor.LIGHT_GREEN, 0, 2, "Utility Property");
 
-        // ===== 万能房产卡 (11张) =====
+        // ===== Wild Property Cards (11) =====
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Dark Blue/Green Wild");
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Brown/Light Blue Wild");
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Orange/Pink Wild");
@@ -77,7 +85,7 @@ public class Deck {
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 1, "Light Blue/Railroad Wild");
         addCards(CardType.PROPERTY, CardColor.WILD, 0, 2, "Multi-Color Wild");
 
-        // ===== 租金卡 (13张，全部带面值) =====
+        // ===== Rent Cards (13, all with monetary value) =====
         addCards(CardType.RENT, CardColor.BROWN_LIGHT_BLUE, 1, 2, "Brown/Light Blue Rent");
         addCards(CardType.RENT, CardColor.PINK_ORANGE, 1, 2, "Pink/Orange Rent");
         addCards(CardType.RENT, CardColor.RED_YELLOW, 1, 2, "Red/Yellow Rent");
@@ -85,7 +93,7 @@ public class Deck {
         addCards(CardType.RENT, CardColor.BLACK_LIGHT_GREEN, 1, 2, "Railroad/Utility Rent");
         addCards(CardType.RENT, CardColor.WILD, 3, 3, "Wild Rent");
 
-        // ===== 行动卡 (34张，全部带面值) =====
+        // ===== Action Cards (34, all with monetary value) =====
         addCards(CardType.ACTION, CardColor.NONE, 5, 2, "Deal Breaker");
         addCards(CardType.ACTION, CardColor.NONE, 4, 3, "Just Say No");
         addCards(CardType.ACTION, CardColor.NONE, 3, 3, "Sly Deal");
@@ -97,7 +105,7 @@ public class Deck {
         addCards(CardType.ACTION, CardColor.NONE, 3, 3, "House");
         addCards(CardType.ACTION, CardColor.NONE, 4, 2, "Hotel");
 
-        // 验证牌组总数 = 106
+        // Verify total = 106
         int total = drawPile.size();
         if (total != 106) {
             throw new IllegalStateException(
@@ -106,25 +114,25 @@ public class Deck {
     }
 
     /**
-     * 批量添加相同属性的卡牌到抽牌堆
-     * @param type 卡牌类型
-     * @param color 卡牌颜色
-     * @param value 金钱面值
-     * @param count 添加数量
+     * Batch-add cards with the same attributes to the draw pile.
+     * @param type card type
+     * @param color card color
+     * @param value monetary value
+     * @param count number of copies
      */
     private void addCards(CardType type, CardColor color, int value, int count) {
         addCards(type, color, value, count, null);
     }
 
     /**
-     * 批量添加相同属性的卡牌（支持自定义名称）
-     * 每张卡牌使用UUID前8位作为唯一ID
+     * Batch-add cards with the same attributes (supports custom name).
+     * Each card uses the first 8 chars of a UUID as its unique ID.
      *
-     * @param type 卡牌类型
-     * @param color 卡牌颜色
-     * @param value 金钱面值
-     * @param count 添加数量
-     * @param customName 自定义名称（null则自动生成）
+     * @param type card type
+     * @param color card color
+     * @param value monetary value
+     * @param count number of copies
+     * @param customName custom name (auto-generated if null)
      */
     private void addCards(CardType type, CardColor color, int value, int count, String customName) {
         for (int i = 0; i < count; i++) {
@@ -135,27 +143,27 @@ public class Deck {
         }
     }
 
-    /** 洗牌 - 使用随机打乱算法重新排列抽牌堆 */
+    /** Shuffle — randomly reorder the draw pile */
     public void shuffle() {
         Collections.shuffle(drawPile, random);
     }
 
     /**
-     * 从抽牌堆顶部抽取一张卡牌
-     * 如果抽牌堆为空，自动将弃牌堆洗牌后移入抽牌堆再抽
-     * @return 抽到的卡牌（牌堆完全为空时返回null）
+     * Draw a single card from the top of the draw pile.
+     * If the draw pile is empty, the discard pile is shuffled and moved into the draw pile first.
+     * @return the drawn card (null if both piles are completely empty)
      */
     public Card draw() {
         if (drawPile.isEmpty()) {
-            reshuffleDiscardPile();  // 弃牌堆回收
+            reshuffleDiscardPile();  // Recycle discard pile
         }
         return drawPile.isEmpty() ? null : drawPile.pop();
     }
 
     /**
-     * 从抽牌堆顶部批量抽取卡牌
-     * @param count 抽取数量
-     * @return 抽到的卡牌列表（实际数量可能少于count，取决于牌堆剩余数）
+     * Draw multiple cards from the top of the draw pile.
+     * @param count number of cards to draw
+     * @return list of drawn cards (actual count may be less if the deck runs low)
      */
     public List<Card> drawMultiple(int count) {
         List<Card> cards = new ArrayList<>();
@@ -168,20 +176,20 @@ public class Deck {
         return cards;
     }
 
-    /** 将一张卡牌放入弃牌堆 */
+    /** Place a single card into the discard pile */
     public void discard(Card card) {
         discardPile.add(card);
     }
 
-    /** 批量将卡牌放入弃牌堆 */
+    /** Place multiple cards into the discard pile */
     public void discardMultiple(List<Card> cards) {
         discardPile.addAll(cards);
     }
 
     /**
-     * 弃牌堆回收 - 当抽牌堆为空时触发
-     * 将弃牌堆洗牌后全部移入抽牌堆，清空弃牌堆
-     * 这样保证了游戏过程中不会出现无牌可抽的情况
+     * Discard pile recycling — triggered when the draw pile is empty.
+     * Shuffles the discard pile and moves all cards to the draw pile, then clears the discard pile.
+     * This ensures the game never runs out of cards to draw.
      */
     private void reshuffleDiscardPile() {
         if (!discardPile.isEmpty()) {
@@ -191,19 +199,19 @@ public class Deck {
         }
     }
 
-    // ==================== 查询方法 ====================
+    // ==================== Query Methods ====================
 
-    /** 获取抽牌堆当前数量 */
+    /** Get the current draw pile size */
     public int getDrawPileSize() {
         return drawPile.size();
     }
 
-    /** 获取弃牌堆当前数量 */
+    /** Get the current discard pile size */
     public int getDiscardPileSize() {
         return discardPile.size();
     }
 
-    /** 检查牌堆是否完全为空（抽牌堆和弃牌堆都空） */
+    /** Check whether the deck is completely empty (both draw and discard piles) */
     public boolean isEmpty() {
         return drawPile.isEmpty() && discardPile.isEmpty();
     }

@@ -9,47 +9,47 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 卡牌渲染组件 - 自定义绘制的游戏卡牌UI组件
+ * Card renderer component — custom-drawn game card UI component.
  *
- * 在玩家手牌区以可视化卡片形式展示每张卡牌。支持：
- * - 按颜色/类型自动选择背景配色（Palette系统）
- * - 鼠标悬停浮动效果（卡片上升12px）
- * - 选中状态发光效果（金色发光边框）
- * - 卡面包含：类型标签、图标、名称、面值（仅金钱卡）
- * - 点击触发playListener回调
+ * Displays each card as a visual card in the player's hand area. Supports:
+ * - Automatic background color selection by color/type (Palette system)
+ * - Mouse hover lift effect (card rises 12px)
+ * - Selected state glow effect (gold glowing border)
+ * - Card face contains: type badge, icon, name, value (money cards only)
+ * - Click triggers playListener callback
  *
- * 卡牌尺寸：90×130px，圆角12px
+ * Card dimensions: 90x130px, corner radius 12px
  *
- * 配色方案：
- * - 每种地产颜色有对应的背景色+渐变+边框色
- * - 金钱卡：绿色系
- * - 行动卡：紫色系
- * - 租金卡：红棕色系
- * - 万能卡：彩虹渐变
+ * Color schemes:
+ * - Each property color has a corresponding background + gradient + border color
+ * - Money cards: green tones
+ * - Action cards: purple tones
+ * - Rent cards: reddish-brown tones
+ * - Wild cards: rainbow gradient
  */
 public class CardRenderer extends JPanel {
 
-    /** 卡牌宽度（像素） */
+    /** Card width (pixels) */
     public static final int CARD_W = 90;
-    /** 卡牌高度（像素） */
+    /** Card height (pixels) */
     public static final int CARD_H = 130;
-    /** 卡牌圆角半径 */
+    /** Card corner radius */
     public static final int CORNER_RADIUS = 12;
 
-    /** 鼠标悬停时卡牌上浮距离 */
+    /** Card lift distance on mouse hover */
     private static final int LIFT_HOVER    = 12;
-    /** 选中时卡牌上浮距离 */
+    /** Card lift distance when selected */
     private static final int LIFT_SELECTED = 22;
 
     /**
-     * 卡牌配色方案内部类
-     * 包含背景色、渐变色、边框色和文字色
+     * Card color palette inner class.
+     * Contains background color, gradient color, border color and text color.
      */
     private static final class CardPalette {
-        final Color bg;        // 主背景色
-        final Color gradient;  // 渐变终点色（用于从上到下的渐变）
-        final Color border;    // 边框颜色
-        final Color text;      // 文字颜色
+        final Color bg;        // Main background color
+        final Color gradient;  // Gradient endpoint color (for top-to-bottom gradient)
+        final Color border;    // Border color
+        final Color text;      // Text color
 
         CardPalette(Color bg, Color gradient, Color border, Color text) {
             this.bg       = bg;
@@ -63,11 +63,11 @@ public class CardRenderer extends JPanel {
         }
     }
 
-    /** 卡牌配色方案映射表 key=颜色名/类型名, value=配色方案 */
+    /** Card color palette map key=color name/type name, value=palette */
     private static final Map<String, CardPalette> PALETTES = new HashMap<>();
 
     static {
-        // ===== 纯地产颜色配色（颜色值统一来自 AppTheme） =====
+        // ===== Pure property color palettes (color values from AppTheme) =====
         for (Map.Entry<String, Color> entry : AppTheme.PROPERTY_COLORS.entrySet()) {
             String colorName = entry.getKey();
             Color bg = entry.getValue();
@@ -77,7 +77,7 @@ public class CardRenderer extends JPanel {
             PALETTES.put(colorName, new CardPalette(bg, gradient, text));
         }
 
-        // ===== 双色租金卡配色（左色→右色渐变） =====
+        // ===== Dual-color rent card palettes (left→right gradient) =====
         PALETTES.put("BROWN_LIGHT_BLUE",
                 new CardPalette(new Color(0x8B5E3C), new Color(0x87CEEB), new Color(0xFFFFFF)));
         PALETTES.put("PINK_ORANGE",
@@ -89,7 +89,7 @@ public class CardRenderer extends JPanel {
         PALETTES.put("BLACK_LIGHT_GREEN",
                 new CardPalette(new Color(0x2B2B2B), new Color(0x90EE90), new Color(0xFFFFFF)));
 
-        // ===== 按卡牌类型的默认配色 =====
+        // ===== Default palettes by card type =====
         PALETTES.put("MONEY",
                 new CardPalette(new Color(0x2E7D32), new Color(0x1B5E20), new Color(0xFFFFFF)));
         PALETTES.put("ACTION",
@@ -97,73 +97,73 @@ public class CardRenderer extends JPanel {
         PALETTES.put("RENT",
                 new CardPalette(new Color(0xBF360C), new Color(0x870000), new Color(0xFFFFFF)));
 
-        // ===== 万能卡配色（彩虹渐变，paintComponent中特殊处理） =====
+        // ===== Wild card palette (rainbow gradient, special handling in paintComponent) =====
         PALETTES.put("WILD",
                 new CardPalette(new Color(0xFF6B6B), new Color(0x4D96FF), new Color(0xFFFFFF)));
 
-        // ===== 无颜色（兜底灰色） =====
+        // ===== Fallback gray for no color =====
         PALETTES.put("NONE",
                 new CardPalette(Color.GRAY, Color.DARK_GRAY, Color.WHITE));
     }
 
-    /** 判断是否为浅色背景（需要深色文字以保证可读性） */
+    /** Check whether this is a light background color (needs dark text for readability) */
     private static boolean isLightColor(String colorName) {
         return "LIGHT_BLUE".equals(colorName)
                 || "YELLOW".equals(colorName)
                 || "LIGHT_GREEN".equals(colorName);
     }
 
-    /** 卡牌类型图标映射表 */
+    /** Card type icon mapping */
     private static final Map<String, String> TYPE_ICONS = new HashMap<>();
 
     static {
-        TYPE_ICONS.put("MONEY",    "");   // 💵 美元图标
-        TYPE_ICONS.put("PROPERTY", "");  // 🏠 房屋图标
-        TYPE_ICONS.put("ACTION",   "");   // ⚡ 闪电图标
-        TYPE_ICONS.put("RENT",     "");   // 💸 飞钱图标
+        TYPE_ICONS.put("MONEY",    "");   // Dollar icon
+        TYPE_ICONS.put("PROPERTY", "");  // House icon
+        TYPE_ICONS.put("ACTION",   "");   // Lightning icon
+        TYPE_ICONS.put("RENT",     "");   // Flying money icon
     }
 
-    /** 卡牌唯一标识符 */
+    /** Card unique identifier */
     private final String cardId;
-    /** 卡牌名称（显示在卡面上） */
+    /** Card name (displayed on the card face) */
     private final String cardName;
-    /** 卡牌类型（MONEY/PROPERTY/ACTION/RENT） */
+    /** Card type (MONEY/PROPERTY/ACTION/RENT) */
     private final String cardType;
-    /** 颜色键（用于查找配色方案） */
+    /** Color key (used to look up the color palette) */
     private final String colorKey;
-    /** 金钱面值（仅金钱卡，其他=0） */
+    /** Money value (only for money cards, 0 otherwise) */
     private final int    value;
-    /** 卡牌视图模型（用于外部查询 cardId、cardName 等） */
+    /** Card view model (for external queries of cardId, cardName, etc.) */
     private CardViewModel viewModel;
 
-    /** 是否处于选中状态 */
+    /** Whether in selected state */
     private boolean selected  = false;
-    /** 鼠标是否悬停 */
+    /** Whether mouse is hovering */
     private boolean hovered   = false;
 
-    /** 当前上浮像素数（动画插值结果） */
+    /** Current lift in pixels (animation interpolation result) */
     private float   currentLift = 0f;
-    /** 动画定时器（16ms/帧，约60fps） */
+    /** Animation timer (16ms/frame, approx 60fps) */
     private javax.swing.Timer animTimer;
 
     /**
-     * 卡牌点击回调接口
+     * Card click callback interface.
      */
     @FunctionalInterface
     public interface PlayListener {
         void onPlay(String cardId);
     }
 
-    /** 卡牌点击回调 */
+    /** Card click callback */
     private PlayListener playListener;
 
     /**
-     * 完整构造函数
-     * @param cardId 卡牌ID
-     * @param cardName 卡牌名称
-     * @param cardType 卡牌类型
-     * @param colorKey 颜色键
-     * @param value 金钱面值
+     * Full constructor.
+     * @param cardId card ID
+     * @param cardName card name
+     * @param cardType card type
+     * @param colorKey color key
+     * @param value money value
      */
     public CardRenderer(String cardId, String cardName,
                         String cardType, String colorKey, int value) {
@@ -175,22 +175,22 @@ public class CardRenderer extends JPanel {
         initComponent();
     }
 
-    /** 从 CardViewModel 构造（常用方式，由 GamePanel 调用） */
+    /** Construct from CardViewModel (common path, called by GamePanel) */
     public CardRenderer(CardViewModel vm) {
         this(vm.getCardId(), vm.getCardName(), vm.getCardType(),
              vm.getColor(), vm.getValue());
         this.viewModel = vm;
     }
 
-    /** 初始化组件 - 设置尺寸、鼠标事件和动画系统 */
+    /** Initialize component — set size, mouse events, and animation system */
     private void initComponent() {
-        // 固定尺寸（高度包含浮动空间）
+        // Fixed size (height includes room for lift)
         setPreferredSize(new Dimension(CARD_W, CARD_H + LIFT_SELECTED + 4));
         setMinimumSize(getPreferredSize());
         setMaximumSize(getPreferredSize());
         setOpaque(false);
 
-        // 鼠标事件：悬停检测和点击回调
+        // Mouse events: hover detection and click callback
         addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) {
                 if (isEnabled()) { hovered = true;  animateLift(); }
@@ -205,7 +205,7 @@ public class CardRenderer extends JPanel {
             }
         });
 
-        // 浮动动画定时器（16ms/帧 ≈ 60fps）
+        // Lift animation timer (16ms/frame ≈ 60fps)
         animTimer = new javax.swing.Timer(16, e -> {
             float target = getTargetLift();
             float delta  = target - currentLift;
@@ -213,7 +213,7 @@ public class CardRenderer extends JPanel {
                 currentLift = target;
                 ((javax.swing.Timer) e.getSource()).stop();
             } else {
-                currentLift += delta * 0.25f;  // 缓动插值
+                currentLift += delta * 0.25f;  // Ease interpolation
             }
             repaint();
         });
@@ -221,39 +221,40 @@ public class CardRenderer extends JPanel {
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    // ==================== 公共方法 ====================
+    // ==================== Public methods ====================
 
-    /** 设置卡牌点击回调 */
+    /** Set the card click callback */
     public void setPlayListener(PlayListener listener) {
         this.playListener = listener;
     }
 
-    /** 设置选中状态并触发动画 */
+    /** Set selected state and trigger animation */
     public void setSelected(boolean selected) {
         this.selected = selected;
         animateLift();
         repaint();
     }
 
-    /** 是否选中 */
+    /** Whether selected */
     public boolean isSelected() {
         return selected;
     }
 
-    /** 获取卡牌ID */
+    /** Get card ID */
     public String getCardId() {
         return cardId;
     }
 
     /**
-     * 获取卡牌视图模型（用于查询 cardId、cardName 等信息）
-     * 仅通过 CardViewModel 构造函数创建的实例有值；静态工厂创建的返回 null。
+     * Get the card view model (for querying cardId, cardName, etc.).
+     * Only instances created via the CardViewModel constructor have a value;
+     * those created via static factory methods return null.
      */
     public CardViewModel getViewModel() {
         return viewModel;
     }
 
-    /** 设置启用/禁用状态（禁用时卡片半透明、鼠标变回默认） */
+    /** Set enabled/disabled state (disabled cards are semi-transparent, cursor reverts to default) */
     @Override
     public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
@@ -263,63 +264,63 @@ public class CardRenderer extends JPanel {
         repaint();
     }
 
-    // ==================== 动画系统 ====================
+    // ==================== Animation system ====================
 
-    /** 获取目标浮动高度（根据选中/悬停/默认状态） */
+    /** Get target lift distance (based on selected/hovered/default state) */
     private float getTargetLift() {
         if (selected) return LIFT_SELECTED;
         if (hovered && isEnabled()) return LIFT_HOVER;
         return 0f;
     }
 
-    /** 启动浮动动画 */
+    /** Start the lift animation */
     private void animateLift() {
         if (!animTimer.isRunning()) animTimer.start();
     }
 
-    // ==================== 自定义绘制 ====================
+    // ==================== Custom painting ====================
 
     /**
-     * 绘制卡牌 - 分为背影、发光、类型标签、图标、名称、面值、边框七个层次
+     * Paint the card — seven layers: shadow, background, selection glow, type badge, icon, name, value, border.
      */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
-        // 开启抗锯齿和高质量渲染
+        // Enable anti-aliasing and high-quality rendering
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
         int liftPx = Math.round(currentLift);
-        int cardTop = (getHeight() - CARD_H) - liftPx;  // 从底部上浮
+        int cardTop = (getHeight() - CARD_H) - liftPx;  // Lift from bottom
 
         Shape cardShape = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
                 CORNER_RADIUS, CORNER_RADIUS);
-        g2.setClip(cardShape);  // 裁剪到卡牌圆角区域
+        g2.setClip(cardShape);  // Clip to card rounded rectangle
 
-        // 逐层绘制
-        paintDropShadow(g2, cardTop);      // 1. 阴影
-        paintCardBackground(g2, cardTop);   // 2. 背景
-        if (selected) paintSelectionGlow(g2, cardTop);  // 3. 选中发光
+        // Paint layer by layer
+        paintDropShadow(g2, cardTop);      // 1. Shadow
+        paintCardBackground(g2, cardTop);   // 2. Background
+        if (selected) paintSelectionGlow(g2, cardTop);  // 3. Selection glow
 
-        // 禁用状态：覆盖半透明黑色遮罩
+        // Disabled state: overlay semi-transparent black mask
         if (!isEnabled()) {
             g2.setColor(new Color(0, 0, 0, 120));
             g2.fill(cardShape);
         }
 
-        g2.setClip(null);  // 取消裁剪
-        paintTypeBadge(g2, cardTop);   // 4. 类型标签
-        paintIcon(g2, cardTop);        // 5. 类型图标
-        paintName(g2, cardTop);        // 6. 卡牌名称
-        if (value > 0) paintValueBadge(g2, cardTop);  // 7. 面值标签
-        paintBorder(g2, cardTop);      // 8. 边框
+        g2.setClip(null);  // Remove clip
+        paintTypeBadge(g2, cardTop);   // 4. Type badge
+        paintIcon(g2, cardTop);        // 5. Type icon
+        paintName(g2, cardTop);        // 6. Card name
+        if (value > 0) paintValueBadge(g2, cardTop);  // 7. Value badge
+        paintBorder(g2, cardTop);      // 8. Border
 
         g2.dispose();
     }
 
-    /** 绘制投影阴影（多层半透明黑色圆角矩形） */
+    /** Draw drop shadow (multi-layer semi-transparent black rounded rectangles) */
     private void paintDropShadow(Graphics2D g2, int cardTop) {
         int shadowOffset = selected ? 8 : (hovered ? 6 : 3);
         int shadowAlpha  = selected ? 120 : (hovered ? 100 : 70);
@@ -332,38 +333,38 @@ public class CardRenderer extends JPanel {
         }
     }
 
-    /** 绘制卡牌背景（纯色或渐变） */
+    /** Draw card background (solid or gradient) */
     private void paintCardBackground(Graphics2D g2, int cardTop) {
         Shape shape = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
                 CORNER_RADIUS, CORNER_RADIUS);
 
-        // 万能卡使用彩虹渐变色
+        // Wild cards use a rainbow gradient
         if ("WILD".equals(colorKey)) {
             float[] fractions = {0f, 0.33f, 0.66f, 1f};
             Color[] colors    = {
-                    new Color(0xFF6B6B),  // 红
-                    new Color(0xFFD93D),  // 黄
-                    new Color(0x6BCB77),  // 绿
-                    new Color(0x4D96FF)   // 蓝
+                    new Color(0xFF6B6B),  // Red
+                    new Color(0xFFD93D),  // Yellow
+                    new Color(0x6BCB77),  // Green
+                    new Color(0x4D96FF)   // Blue
             };
             g2.setPaint(new LinearGradientPaint(0, cardTop, CARD_W, cardTop + CARD_H,
                     fractions, colors));
         } else {
             CardPalette palette = resolvePalette();
             if (palette != null && palette.gradient != null) {
-                // 从上到下的渐变色
+                // Top-to-bottom gradient
                 g2.setPaint(new GradientPaint(0, cardTop, palette.bg,
                         0, cardTop + CARD_H, palette.gradient));
             } else if (palette != null) {
-                g2.setPaint(palette.bg);  // 纯色
+                g2.setPaint(palette.bg);  // Solid color
             } else {
-                g2.setPaint(Color.GRAY);  // 兜底灰色
+                g2.setPaint(Color.GRAY);  // Fallback gray
             }
         }
         g2.fill(shape);
     }
 
-    /** 绘制选中发光效果（金色径向渐变） */
+    /** Draw selection glow effect (gold radial gradient) */
     private void paintSelectionGlow(Graphics2D g2, int cardTop) {
         RadialGradientPaint glow = new RadialGradientPaint(
                 new Point2D.Float(CARD_W / 2f, cardTop + CARD_H / 2f),
@@ -376,7 +377,7 @@ public class CardRenderer extends JPanel {
                 CORNER_RADIUS, CORNER_RADIUS));
     }
 
-    /** 绘制左上角的类型标签（如"ACTION"） */
+    /** Draw the top-left type badge (e.g. "ACTION") */
     private void paintTypeBadge(Graphics2D g2, int cardTop) {
         String label = cardType;
         Font font = new Font("SansSerif", Font.BOLD, 8);
@@ -385,33 +386,33 @@ public class CardRenderer extends JPanel {
         int tw = fm.stringWidth(label);
         int bx = 5, by = cardTop + 5;
         int bw = tw + 8, bh = fm.getHeight() + 2;
-        // 半透明黑色圆角背景
+        // Semi-transparent black rounded background
         g2.setColor(new Color(0, 0, 0, 100));
         g2.fill(new RoundRectangle2D.Float(bx, by, bw, bh, 6, 6));
         g2.setColor(Color.WHITE);
         g2.drawString(label, bx + 4, by + fm.getAscent() + 1);
     }
 
-    /** 绘制卡面中央的类型图标（Emoji） */
+    /** Draw the central type icon (emoji) */
     private void paintIcon(Graphics2D g2, int cardTop) {
-        String icon = TYPE_ICONS.getOrDefault(cardType, "");  // 默认扑克牌图标
+        String icon = TYPE_ICONS.getOrDefault(cardType, "");  // Default playing card icon
         Font emojiFont = new Font("Segoe UI Emoji", Font.PLAIN, 28);
         g2.setFont(emojiFont);
         FontMetrics fm = g2.getFontMetrics();
         int x = (CARD_W - fm.stringWidth(icon)) / 2;
         int y = cardTop + 30 + fm.getAscent();
-        // 图标带阴影
+        // Icon with shadow
         g2.setColor(new Color(0, 0, 0, 80));
         g2.drawString(icon, x + 1, y + 2);
         g2.setColor(Color.WHITE);
         g2.drawString(icon, x, y);
     }
 
-    /** 绘制卡牌名称（支持自动换行） */
+    /** Draw card name (supports auto line wrap) */
     private void paintName(Graphics2D g2, int cardTop) {
         CardPalette palette = resolvePalette();
         g2.setColor(palette != null ? palette.text : Color.WHITE);
-        // 根据名称长度自动调整字号
+        // Auto-adjust font size based on name length
         int fontSize = cardName.length() > 12 ? 9 : (cardName.length() > 8 ? 10 : 11);
         g2.setFont(new Font("SansSerif", Font.BOLD, fontSize));
         FontMetrics fm = g2.getFontMetrics();
@@ -421,7 +422,7 @@ public class CardRenderer extends JPanel {
         int startY = cardTop + CARD_H - (value > 0 ? 32 : 16) - totalH;
         for (String line : lines) {
             int x = (CARD_W - fm.stringWidth(line)) / 2;
-            // 文字带阴影
+            // Text with shadow
             g2.setColor(new Color(0, 0, 0, 100));
             g2.drawString(line, x + 1, startY + 1);
             g2.setColor(palette != null ? palette.text : Color.WHITE);
@@ -430,7 +431,7 @@ public class CardRenderer extends JPanel {
         }
     }
 
-    /** 绘制底部面值标签（仅金钱卡，如 "$5M"） */
+    /** Draw bottom value badge (money cards only, e.g. "$5M") */
     private void paintValueBadge(Graphics2D g2, int cardTop) {
         String label = "$" + value + "M";
         Font font = new Font("SansSerif", Font.BOLD, 12);
@@ -440,21 +441,21 @@ public class CardRenderer extends JPanel {
         int bh = fm.getHeight() + 4;
         int bx = (CARD_W - bw) / 2;
         int by = cardTop + CARD_H - bh - 6;
-        // 半透明黑色圆角背景 + 金色文字
+        // Semi-transparent black rounded background + gold text
         g2.setColor(new Color(0, 0, 0, 160));
         g2.fill(new RoundRectangle2D.Float(bx, by, bw, bh, 8, 8));
         g2.setColor(new Color(0xFFD700));
         g2.drawString(label, bx + 7, by + fm.getAscent() + 2);
     }
 
-    /** 绘制卡牌边框（选中=金色发光，默认=深色边框） */
+    /** Draw card border (selected=gold glow, default=dark border) */
     private void paintBorder(Graphics2D g2, int cardTop) {
         RoundRectangle2D.Float border = new RoundRectangle2D.Float(
                 0.5f, cardTop + 0.5f, CARD_W - 1f, CARD_H - 1f,
                 CORNER_RADIUS, CORNER_RADIUS);
 
         if (selected) {
-            // 多层金色发光边框
+            // Multi-layer gold glow border
             for (int i = 3; i > 0; i--) {
                 g2.setColor(new Color(255, 215, 0, 60 * i));
                 g2.setStroke(new BasicStroke(i * 2 + 1f));
@@ -471,8 +472,8 @@ public class CardRenderer extends JPanel {
     }
 
     /**
-     * 解析当前卡牌的配色方案
-     * 优先级：colorKey → cardType → 兜底灰色
+     * Resolve the current card's color palette.
+     * Priority: colorKey → cardType → fallback gray.
      */
     private CardPalette resolvePalette() {
         CardPalette p = PALETTES.get(colorKey);
@@ -482,11 +483,11 @@ public class CardRenderer extends JPanel {
     }
 
     /**
-     * 文本换行工具 - 将长名称拆分为最多两行
-     * @param text 原始文本
-     * @param fm 字体度量器
-     * @param maxWidth 最大宽度（像素）
-     * @return 拆分后的行数组（1-2行）
+     * Text wrapping utility — splits a long name into at most two lines.
+     * @param text original text
+     * @param fm font metrics
+     * @param maxWidth maximum width (pixels)
+     * @return array of split lines (1-2 lines)
      */
     private static String[] wrapText(String text, FontMetrics fm, int maxWidth) {
         if (fm.stringWidth(text) <= maxWidth) return new String[]{text};
@@ -513,24 +514,24 @@ public class CardRenderer extends JPanel {
                 new String[]{line1.toString(), line2.toString()};
     }
 
-    // ==================== 静态工厂方法（便捷创建） ====================
+    // ==================== Static factory methods (convenience constructors) ====================
 
-    /** 创建金钱卡渲染器 */
+    /** Create a money card renderer */
     public static CardRenderer money(String cardId, int value) {
         return new CardRenderer(cardId, value + "M", "MONEY", "MONEY", value);
     }
 
-    /** 创建地产卡渲染器 */
+    /** Create a property card renderer */
     public static CardRenderer property(String cardId, String name, String colorKey) {
         return new CardRenderer(cardId, name, "PROPERTY", colorKey, 0);
     }
 
-    /** 创建行动卡渲染器 */
+    /** Create an action card renderer */
     public static CardRenderer action(String cardId, String name) {
         return new CardRenderer(cardId, name, "ACTION", "ACTION", 0);
     }
 
-    /** 创建租金卡渲染器 */
+    /** Create a rent card renderer */
     public static CardRenderer rent(String cardId, String name, String colorKey) {
         return new CardRenderer(cardId, name, "RENT", colorKey, 0);
     }

@@ -9,43 +9,43 @@ import com.google.gson.Gson;
 import java.util.UUID;
 
 /**
- * 客户端处理器 - 负责单个客户端连接的所有消息收发
+ * Client handler — manages all message sending/receiving for a single client connection.
  *
- * 每个连接的客户端对应一个ClientHandler实例，运行在独立的线程中。
- * 实现Runnable接口，在run()方法中循环读取客户端发来的消息。
+ * Each connected client corresponds to one ClientHandler instance running on its own thread.
+ * Implements Runnable; the run() method loops to read messages from the client.
  *
- * 消息处理流程：
- * 1. 从Socket读取一行JSON消息
- * 2. 解析MessageType（CREATE_ROOM/JOIN_ROOM/PLAY_CARD等）
- * 3. 根据消息类型调用相应的处理方法
- * 4. 处理方法通过GameServer找到对应的GameRoom，委托给GameRoom或GameSession处理
+ * Message handling flow:
+ * 1. Read a line of JSON from the socket
+ * 2. Parse the MessageType (CREATE_ROOM, JOIN_ROOM, PLAY_CARD, etc.)
+ * 3. Dispatch to the appropriate handler method
+ * 4. The handler locates the GameRoom via GameServer and delegates to GameRoom or GameSession
  *
- * 支持的消息类型：
- * - 房间管理：CREATE_ROOM, JOIN_ROOM, LEAVE_ROOM, PLAYER_READY
- * - 游戏操作：PLAY_CARD, END_TURN
- * - 通信：CHAT_MESSAGE, PING
+ * Supported message types:
+ * - Room management: CREATE_ROOM, JOIN_ROOM, LEAVE_ROOM, PLAYER_READY
+ * - Game actions: PLAY_CARD, END_TURN
+ * - Communication: CHAT_MESSAGE, PING
  */
 public class ClientHandler implements Runnable {
-    /** 客户端唯一标识符（由服务器在连接时分配） */
+    /** Unique client identifier (assigned by the server on connection) */
     private final String clientId;
-    /** 客户端Socket连接 */
+    /** Client socket connection */
     private final Socket socket;
-    /** 所属的游戏服务器 */
+    /** Owning game server */
     private final GameServer server;
-    /** 输出流 - 向客户端发送消息 */
+    /** Output stream — sends messages to the client */
     private PrintWriter out;
-    /** 输入流 - 从客户端读取消息 */
+    /** Input stream — reads messages from the client */
     private BufferedReader in;
-    /** 玩家昵称（在创建/加入房间时设定） */
+    /** Player nickname (set when creating/joining a room) */
     private String nickname;
-    /** 当前所在的房间代码（null表示未加入任何房间） */
+    /** Current room code (null if not in any room) */
     private String currentRoom;
 
     /**
-     * 构造函数
-     * @param clientId 客户端唯一标识符
-     * @param socket 客户端Socket连接
-     * @param server 所属游戏服务器
+     * Constructor.
+     * @param clientId unique client identifier
+     * @param socket client socket connection
+     * @param server owning game server
      */
     public ClientHandler(String clientId, Socket socket, GameServer server) {
         this.clientId = clientId;
@@ -54,8 +54,8 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * 线程主方法 - 循环读取客户端消息
-     * 当连接断开或发生IO异常时退出循环并断开连接
+     * Thread main method — loops reading client messages.
+     * Exits loop and disconnects on connection close or IO exception.
      */
     @Override
     public void run() {
@@ -65,18 +65,18 @@ public class ClientHandler implements Runnable {
 
             String message;
             while ((message = in.readLine()) != null) {
-                handleMessage(message);  // 逐行处理JSON消息
+                handleMessage(message);  // Process JSON messages line by line
             }
         } catch (IOException e) {
-            System.out.println("客户端 " + clientId.substring(0, 8) + " 已断开连接");
+            System.out.println("Client " + clientId.substring(0, 8) + " disconnected");
         } finally {
-            disconnect();  // 确保资源清理
+            disconnect();  // Ensure resource cleanup
         }
     }
 
     /**
-     * 处理单条JSON消息 - 解析消息类型并分派到对应处理方法
-     * @param jsonMessage 完整的JSON消息字符串（格式：{"type":"MESSAGE_TYPE","payload":{...}}）
+     * Handle a single JSON message — parse type and dispatch to the appropriate handler.
+     * @param jsonMessage full JSON message string (format: {"type":"MESSAGE_TYPE","payload":{...}})
      */
     private void handleMessage(String jsonMessage) {
         try {
@@ -87,40 +87,40 @@ public class ClientHandler implements Runnable {
 
             switch (type) {
                 case CREATE_ROOM:
-                    handleCreateRoom(payload);     // 创建房间请求
+                    handleCreateRoom(payload);     // Create room request
                     break;
                 case JOIN_ROOM:
-                    handleJoinRoom(payload);       // 加入房间请求
+                    handleJoinRoom(payload);       // Join room request
                     break;
                 case LEAVE_ROOM:
-                    handleLeaveRoom();             // 离开房间请求
+                    handleLeaveRoom();             // Leave room request
                     break;
                 case PLAYER_READY:
-                    handlePlayerReady(payload);    // 玩家准备状态切换
+                    handlePlayerReady(payload);    // Toggle ready status
                     break;
                 case REQUEST_START_GAME:
-                    handleRequestStartGame(payload); // 房主请求开始游戏
+                    handleRequestStartGame(payload); // Host requests game start
                     break;
                 case PLAY_CARD:
-                    handlePlayCard(payload);       // 出牌请求
+                    handlePlayCard(payload);       // Play card request
                     break;
                 case END_TURN:
-                    handleEndTurn();               // 结束回合请求
+                    handleEndTurn();               // End turn request
                     break;
                 case FLIP_WILD_CARD:
-                    handleFlipWildCard(payload);   // 切换万能地产颜色
+                    handleFlipWildCard(payload);   // Change wild property color
                     break;
                 case SUBMIT_PAYMENT:
-                    handleSubmitPayment(payload);  // 提交支付卡牌选择
+                    handleSubmitPayment(payload);  // Submit payment card selection
                     break;
                 case SUBMIT_DISCARD:
-                    handleSubmitDiscard(payload);  // 提交弃牌选择
+                    handleSubmitDiscard(payload);  // Submit discard selection
                     break;
                 case PLAY_JUST_SAY_NO:
-                    handlePlayJustSayNo(payload);  // 打出 Just Say No 拒绝行动
+                    handlePlayJustSayNo(payload);  // Play Just Say No to counter an action
                     break;
                 case PASS_REACTION:
-                    handlePassReaction(payload);   // 放弃响应（不打 Just Say No）
+                    handlePassReaction(payload);   // Pass on response (don't play Just Say No)
                     break;
                 case PING:
                     sendMessage(MessageProtocol.MessageType.PONG, "{}");
@@ -129,16 +129,16 @@ public class ClientHandler implements Runnable {
                     handleChatMessage(payload);
                     break;
                 default:
-                    System.out.println("未知消息类型：" + type);
+                    System.out.println("Unknown message type: " + type);
             }
         } catch (Exception e) {
-            System.err.println("处理消息时出错：" + e.getMessage());
+            System.err.println("Error handling message: " + e.getMessage());
             e.printStackTrace();
             sendError("Internal server error: " + e.getMessage());
         }
     }
 
-    /** 处理创建房间请求 - 生成6位房间代码，创建GameRoom */
+    /** Handle create room request — generate 6-char room code, create GameRoom */
     private void handleCreateRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
@@ -149,11 +149,11 @@ public class ClientHandler implements Runnable {
         String roomCode = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         GameRoom room = server.createRoom(roomCode, this);
         this.currentRoom = roomCode;
-        System.out.println("房间已创建：" + roomCode + "，创建者：" + nickname);
-        room.broadcastRoomUpdate();  // 通知房间内所有玩家房间状态更新
+        System.out.println("Room created: " + roomCode + ", host: " + nickname);
+        room.broadcastRoomUpdate();  // Notify all players in the room
     }
 
-    /** 处理加入房间请求 - 通过房间代码查找并加入现有房间 */
+    /** Handle join room request — look up an existing room by code and join it */
     private void handleJoinRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
@@ -175,11 +175,11 @@ public class ClientHandler implements Runnable {
         }
 
         this.currentRoom = roomCode;
-        System.out.println(nickname + " 加入了房间：" + roomCode);
+        System.out.println(nickname + " joined room: " + roomCode);
         room.broadcastRoomUpdate();
     }
 
-    /** 处理离开房间请求 - 从房间中移除自己并通知其他玩家 */
+    /** Handle leave room request — remove self from room and notify other players */
     private void handleLeaveRoom() {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -190,7 +190,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理玩家准备状态切换 - 在大厅中标记"准备"或"取消准备" */
+    /** Handle player ready toggle — mark "ready" or "unready" in the lobby */
     private void handlePlayerReady(JsonObject payload) {
         boolean ready = payload.get("ready").getAsBoolean();
         if (currentRoom != null) {
@@ -201,7 +201,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理房主请求开始游戏 */
+    /** Handle host request to start the game */
     private void handleRequestStartGame(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -214,7 +214,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理出牌请求 - 委托给GameSession执行游戏逻辑 */
+    /** Handle play card request — delegate to GameSession for game logic */
     private void handlePlayCard(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -224,7 +224,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理结束回合请求 - 委托给GameSession执行 */
+    /** Handle end turn request — delegate to GameSession */
     private void handleEndTurn() {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -234,7 +234,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理切换万能地产颜色请求 - 委托给GameSession，不消耗出牌次数 */
+    /** Handle wild property color change — delegate to GameSession; does not consume a play */
     private void handleFlipWildCard(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -246,7 +246,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理打出 Just Say No — 委托给 GameSession */
+    /** Handle play Just Say No — delegate to GameSession */
     private void handlePlayJustSayNo(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -256,7 +256,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理放弃响应 — 委托给 GameSession */
+    /** Handle pass reaction — delegate to GameSession */
     private void handlePassReaction(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -266,7 +266,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理提交支付请求 - 委托给GameSession执行支付校验和转账 */
+    /** Handle submit payment request — delegate to GameSession for payment validation and transfer */
     private void handleSubmitPayment(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -276,7 +276,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理客户端提交的弃牌选择 */
+    /** Handle client-submitted discard selection */
     private void handleSubmitDiscard(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -286,7 +286,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 处理聊天消息 - 向房间内所有玩家广播 */
+    /** Handle chat message — broadcast to all players in the room */
     private void handleChatMessage(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -297,9 +297,9 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * 向此客户端发送一条消息
-     * @param type 消息类型
-     * @param payload 消息负载（JSON字符串）
+     * Send a message to this client.
+     * @param type message type
+     * @param payload message payload (JSON string)
      */
     public void sendMessage(MessageProtocol.MessageType type, String payload) {
         if (out != null) {
@@ -309,7 +309,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** 发送错误消息给客户端 */
+    /** Send an error message to the client */
     private void sendError(String errorMessage) {
         JsonObject error = new JsonObject();
         error.addProperty("message", errorMessage);
@@ -323,7 +323,7 @@ public class ClientHandler implements Runnable {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getCurrentRoom() { return currentRoom; }
 
-    /** 断开连接 - 离开房间、从服务器移除并关闭Socket */
+    /** Disconnect — leave room, remove from server, and close the socket */
     public void disconnect() {
         handleLeaveRoom();
         server.removeClient(clientId);
@@ -332,11 +332,11 @@ public class ClientHandler implements Runnable {
                 socket.close();
             }
         } catch (IOException e) {
-            // 关闭Socket时的异常可以忽略
+            // Ignore exceptions when closing the socket
         }
     }
 
-    /** 校验昵称合法性：非空、长度1-12、仅允许中英文数字下划线 */
+    /** Validate nickname: non-empty, 1-12 chars, alphanumeric/Chinese/underscore only */
     private boolean isValidNickname(String nickname) {
         if (nickname == null || nickname.trim().isEmpty()) return false;
         String trimmed = nickname.trim();

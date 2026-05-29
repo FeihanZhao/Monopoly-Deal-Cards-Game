@@ -12,62 +12,62 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
 
 /**
- * 大厅面板 - 游戏开始前的房间管理界面
+ * Lobby panel — room management interface shown before the game starts.
  *
- * 提供两种视图模式：
- * 1. 登录视图（loginPanel）- 输入昵称、创建或加入房间
- * 2. 房间视图（roomPanel）- 显示房间代码、玩家列表、准备按钮
+ * Provides two view modes:
+ * 1. Login view (loginPanel) — enter nickname, create or join a room
+ * 2. Room view (roomPanel) — show room code, player list, ready button
  *
- * 功能流程：
- * 1. 输入昵称 → 点击"创建房间"或"加入房间"（需输入房间代码）
- * 2. 成功加入房间后自动切换到房间视图
- * 3. 点击"准备"按钮标记自己已就绪
- * 4. 所有玩家准备就绪（>=2人）后，服务器自动开始游戏
- * 5. MainFrame收到GAME_STATE_UPDATE后切换到GamePanel
+ * Flow:
+ * 1. Enter nickname → click "Create Room" or "Join Room" (requires room code)
+ * 2. Auto-switch to room view after successfully joining a room
+ * 3. Click "Ready" button to mark self as ready
+ * 4. When all players are ready (≥2 people), the server auto-starts the game
+ * 5. MainFrame switches to GamePanel when it receives GAME_STATE_UPDATE
  *
- * UI风格：深色主题（深紫蓝渐变背景），金色标题，圆角渐变按钮
+ * UI style: dark theme (deep purple-blue gradient background), gold title, rounded gradient buttons
  */
 public class LobbyPanel extends JPanel {
-    /** 游戏客户端连接 */
+    /** Game client connection */
     private final GameClient client;
 
-    /** 昵称输入框 */
+    /** Nickname input field */
     private JTextField nicknameField;
-    /** 房间代码输入框（加入房间时使用） */
+    /** Room code input field (used when joining a room) */
     private JTextField roomCodeField;
-    /** 创建房间按钮 */
+    /** Create room button */
     private JButton createRoomButton;
-    /** 加入房间按钮 */
+    /** Join room button */
     private JButton joinRoomButton;
-    /** 准备/取消准备按钮 */
+    /** Ready/unready button */
     private JButton readyButton;
-    /** 离开房间按钮 */
+    /** Leave room button */
     private JButton leaveButton;
-    /** 开始游戏按钮（仅房主可见） */
+    /** Start game button (only visible to host) */
     private JButton startGameButton;
-    /** 当前玩家是否为房主 */
+    /** Whether the current player is the room host */
     private boolean amICreator = false;
-    /** 玩家列表组件 */
+    /** Player list component */
     private JList<String> playerList;
-    /** 玩家列表数据模型 */
+    /** Player list data model */
     private DefaultListModel<String> playerListModel;
-    /** 房间代码标签 */
+    /** Room code label */
     private JLabel roomCodeLabel;
-    /** 状态提示标签 */
+    /** Status hint label */
     private JLabel statusLabel;
-    /** 房间视图面板 */
+    /** Room view panel */
     private JPanel roomPanel;
-    /** 登录视图面板 */
+    /** Login view panel */
     private JPanel loginPanel;
 
-    /** 是否已在房间中 */
+    /** Whether currently in a room */
     private boolean isInRoom;
-    /** 是否已准备就绪 */
+    /** Whether currently ready */
     private boolean isReady;
 
     /**
-     * 构造函数 - 初始化大厅界面
-     * @param client 已连接的GameClient实例
+     * Constructor — initialize the lobby UI.
+     * @param client connected GameClient instance
      */
     public LobbyPanel(GameClient client) {
         this.client = client;
@@ -75,17 +75,17 @@ public class LobbyPanel extends JPanel {
         this.isReady = false;
 
         setLayout(new BorderLayout());
-        setBackground(new Color(20, 20, 40));  // 深色背景
+        setBackground(new Color(20, 20, 40));  // Dark background
 
-        createLoginPanel();   // 构建登录视图
-        createRoomPanel();    // 构建房间视图
+        createLoginPanel();   // Build login view
+        createRoomPanel();    // Build room view
 
-        add(loginPanel, BorderLayout.CENTER);  // 默认显示登录视图
+        add(loginPanel, BorderLayout.CENTER);  // Default to login view
     }
 
     /**
-     * 创建登录视图面板 - 包含标题、昵称输入、房间代码输入和操作按钮
-     * 使用GridBagLayout布局，深紫蓝色渐变背景
+     * Create the login view panel — contains title, nickname input, room code input, and action buttons.
+     * Uses GridBagLayout with a deep purple-blue gradient background.
      */
     private void createLoginPanel() {
         loginPanel = new JPanel(new GridBagLayout()) {
@@ -94,7 +94,7 @@ public class LobbyPanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2d = (Graphics2D) g;
                 g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                // 从左上到右下的深紫蓝色渐变背景
+                // Top-left to bottom-right deep purple-blue gradient background
                 GradientPaint gradient = new GradientPaint(0, 0, new Color(15, 12, 35),
                         getWidth(), getHeight(), new Color(35, 30, 60));
                 g2d.setPaint(gradient);
@@ -104,13 +104,13 @@ public class LobbyPanel extends JPanel {
         loginPanel.setBorder(new EmptyBorder(60, 60, 60, 60));
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(15, 15, 15, 15);  // 组件间距
+        gbc.insets = new Insets(15, 15, 15, 15);  // Component spacing
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // ===== 标题 =====
+        // ===== Title =====
         JLabel titleLabel = new JLabel("Monopoly Deal");
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 52));
-        titleLabel.setForeground(new Color(255, 215, 0));  // 金色
+        titleLabel.setForeground(new Color(255, 215, 0));  // Gold
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 0;
@@ -118,7 +118,7 @@ public class LobbyPanel extends JPanel {
         gbc.gridwidth = 2;
         loginPanel.add(titleLabel, gbc);
 
-        // ===== 副标题 =====
+        // ===== Subtitle =====
         JLabel subtitleLabel = new JLabel("Premium Card Game");
         subtitleLabel.setFont(new Font("SansSerif", Font.ITALIC, 24));
         subtitleLabel.setForeground(new Color(180, 180, 220));
@@ -126,7 +126,7 @@ public class LobbyPanel extends JPanel {
         gbc.gridy = 1;
         loginPanel.add(subtitleLabel, gbc);
 
-        // ===== 昵称输入行 =====
+        // ===== Nickname input row =====
         gbc.gridwidth = 1;
         gbc.gridy = 2;
         gbc.gridx = 0;
@@ -138,12 +138,12 @@ public class LobbyPanel extends JPanel {
         gbc.gridx = 1;
         nicknameField = new JTextField(20);
         nicknameField.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        // 随机生成默认昵称
+        // Generate random default nickname
         nicknameField.setText("Player" + (int)(Math.random() * 1000));
         styleTextField(nicknameField);
         loginPanel.add(nicknameField, gbc);
 
-        // ===== 房间代码输入行 =====
+        // ===== Room code input row =====
         gbc.gridy = 3;
         gbc.gridx = 0;
         JLabel roomLabel = new JLabel("Room Code:");
@@ -157,14 +157,14 @@ public class LobbyPanel extends JPanel {
         styleTextField(roomCodeField);
         loginPanel.add(roomCodeField, gbc);
 
-        // ===== 按钮面板 =====
+        // ===== Button panel =====
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 15));
         buttonPanel.setOpaque(false);
 
-        // 创建房间按钮（绿色渐变）
+        // Create room button (green gradient)
         createRoomButton = createGradientButton("Create Room",
                 new Color(34, 186, 157), new Color(27, 156, 133));
-        // 加入房间按钮（蓝色渐变）
+        // Join room button (blue gradient)
         joinRoomButton = createGradientButton("Join Room",
                 new Color(72, 133, 237), new Color(58, 112, 207));
 
@@ -179,8 +179,31 @@ public class LobbyPanel extends JPanel {
         gbc.gridwidth = 2;
         loginPanel.add(buttonPanel, gbc);
 
-        // ===== 状态提示标签 =====
+        // ===== Status hint label =====
         gbc.gridy = 5;
+        statusLabel = new JLabel("Enter nickname to start");
+        statusLabel.setForeground(new Color(180, 180, 200));
+        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 16));
+        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        loginPanel.add(statusLabel, gbc);
+
+        // ===== Rules button =====
+        gbc.gridy = 5;
+        gbc.gridx = 0;
+        gbc.gridwidth = 2;
+        JButton rulesButton = new JButton("Rules");
+        rulesButton.setFont(new Font("SansSerif", Font.BOLD, 14));
+        rulesButton.setForeground(new Color(200, 200, 255));
+        rulesButton.setBackground(new Color(60, 55, 100));
+        rulesButton.setFocusPainted(false);
+        rulesButton.setBorder(BorderFactory.createLineBorder(new Color(120, 110, 180), 2, true));
+        rulesButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        rulesButton.setPreferredSize(new Dimension(160, 40));
+        rulesButton.addActionListener(e -> showRulesDialog());
+        loginPanel.add(rulesButton, gbc);
+
+// ===== Status hint label (shifted to row 6) =====
+        gbc.gridy = 6;
         statusLabel = new JLabel("Enter nickname to start");
         statusLabel.setForeground(new Color(180, 180, 200));
         statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 16));
@@ -189,8 +212,8 @@ public class LobbyPanel extends JPanel {
     }
 
     /**
-     * 创建房间视图面板 - 进入房间后显示
-     * 包含房间代码、玩家列表、准备/离开按钮
+     * Create the room view panel — shown after entering a room.
+     * Contains room code, player list, ready/leave buttons.
      */
     private void createRoomPanel() {
         roomPanel = new JPanel(new BorderLayout()) {
@@ -207,32 +230,32 @@ public class LobbyPanel extends JPanel {
         };
         roomPanel.setBorder(new EmptyBorder(30, 30, 30, 30));
 
-        // ===== 顶部信息栏 =====
+        // ===== Top info bar =====
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
 
-        // 房间代码标签（金色大字）
+        // Room code label (large gold text)
         roomCodeLabel = new JLabel("Room: -----");
         roomCodeLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
         roomCodeLabel.setForeground(new Color(255, 215, 0));
         topPanel.add(roomCodeLabel, BorderLayout.WEST);
 
-        // 准备/离开按钮
+        // Ready/Leave buttons
         JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
         topButtonPanel.setOpaque(false);
 
-        // 准备按钮（绿色渐变）
+        // Ready button (green gradient)
         readyButton = createGradientButton("Ready",
                 new Color(46, 204, 113), new Color(39, 174, 96));
         readyButton.addActionListener(e -> toggleReady());
 
-        // 开始游戏按钮（仅房主可见，金色渐变，默认隐藏）
+        // Start game button (host only, gold gradient, hidden by default)
         startGameButton = createGradientButton("Start Game",
                 new Color(255, 193, 7), new Color(255, 152, 0));
         startGameButton.addActionListener(e -> requestStartGame());
         startGameButton.setVisible(false);
 
-        // 离开按钮（红色渐变）
+        // Leave button (red gradient)
         leaveButton = createGradientButton("Leave Room",
                 new Color(231, 76, 60), new Color(192, 57, 43));
         leaveButton.addActionListener(e -> leaveRoom());
@@ -244,7 +267,7 @@ public class LobbyPanel extends JPanel {
 
         roomPanel.add(topPanel, BorderLayout.NORTH);
 
-        // ===== 玩家列表 =====
+        // ===== Player list =====
         playerListModel = new DefaultListModel<>();
         playerList = new JList<>(playerListModel) {
             @Override
@@ -253,7 +276,7 @@ public class LobbyPanel extends JPanel {
                 setOpaque(false);
             }
         };
-        playerList.setBackground(new Color(60, 55, 100, 180));  // 半透明背景
+        playerList.setBackground(new Color(60, 55, 100, 180));  // Semi-transparent background
         playerList.setForeground(Color.WHITE);
         playerList.setFont(new Font("SansSerif", Font.PLAIN, 18));
         playerList.setFixedCellHeight(48);
@@ -268,13 +291,13 @@ public class LobbyPanel extends JPanel {
     }
 
     /**
-     * 创建带渐变色背景的按钮
-     * 按钮使用自定义绘制，支持渐变背景、圆角、悬停放大效果
+     * Create a button with a gradient background.
+     * The button uses custom painting for gradient background, rounded corners, and hover scale effect.
      *
-     * @param text 按钮文本
-     * @param start 渐变起始颜色
-     * @param end 渐变结束颜色
-     * @return 自定义绘制的按钮
+     * @param text button text
+     * @param start gradient start color
+     * @param end gradient end color
+     * @return custom-painted button
      */
     private JButton createGradientButton(String text, Color start, Color end) {
         JButton button = new JButton(text) {
@@ -282,7 +305,7 @@ public class LobbyPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g;
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 绘制渐变背景（通过 client property 支持运行时换色）
+                // Draw gradient background (supports runtime color change via client property)
                 Color s = (Color) getClientProperty("gradientStart");
                 Color e = (Color) getClientProperty("gradientEnd");
                 if (s == null) s = start;
@@ -290,7 +313,7 @@ public class LobbyPanel extends JPanel {
                 GradientPaint gradient = new GradientPaint(0, 0, s, 0, getHeight(), e);
                 g2d.setPaint(gradient);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
-                // 绘制白色文字
+                // Draw white text
                 g2d.setColor(Color.WHITE);
                 g2d.setFont(getFont());
                 FontMetrics fm = g2d.getFontMetrics();
@@ -301,13 +324,13 @@ public class LobbyPanel extends JPanel {
         };
 
         button.setFont(new Font("SansSerif", Font.BOLD, 16));
-        button.setFocusPainted(false);       // 不绘制焦点框
-        button.setBorderPainted(false);      // 不绘制边框
-        button.setContentAreaFilled(false);  // 不填充默认背景
+        button.setFocusPainted(false);       // Don't paint focus indicator
+        button.setBorderPainted(false);      // Don't paint border
+        button.setContentAreaFilled(false);  // Don't fill default background
         button.setPreferredSize(new Dimension(180, 50));
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));  // 鼠标悬停变手型
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));  // Hand cursor on hover
 
-        // 鼠标悬停时按钮略微放大
+        // Slightly enlarge button on mouse hover
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 button.setPreferredSize(new Dimension(190, 52));
@@ -325,8 +348,8 @@ public class LobbyPanel extends JPanel {
     }
 
     /**
-     * 更新渐变按钮的颜色和文本（不创建新按钮实例）
-     * 用于 toggleReady() 和 leaveRoom() 中动态切换按钮配色的场景
+     * Update a gradient button's color and text (without creating a new button instance).
+     * Used by toggleReady() and leaveRoom() for dynamic button color switching.
      */
     private void updateGradientButton(JButton button, Color start, Color end, String text) {
         button.setText(text);
@@ -335,11 +358,11 @@ public class LobbyPanel extends JPanel {
         button.repaint();
     }
 
-    /** 设置文本框的统一样式（深色背景、白色文字、圆角边框） */
+    /** Apply uniform styling to text fields (dark background, white text, rounded border) */
     private void styleTextField(JTextField field) {
         field.setBackground(new Color(50, 45, 80));
         field.setForeground(Color.WHITE);
-        field.setCaretColor(Color.WHITE);  // 光标颜色
+        field.setCaretColor(Color.WHITE);  // Cursor color
         field.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(100, 90, 150), 2, true),
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)
@@ -347,7 +370,7 @@ public class LobbyPanel extends JPanel {
         field.setOpaque(true);
     }
 
-    /** 处理创建房间按钮点击 - 验证昵称后向服务器发送CREATE_ROOM请求 */
+    /** Handle create room button click — validate nickname then send CREATE_ROOM to server */
     private void createRoom() {
         String nickname = nicknameField.getText().trim();
         if (nickname.isEmpty()) {
@@ -362,10 +385,10 @@ public class LobbyPanel extends JPanel {
         setStatus("Creating room...", new Color(255, 200, 0));
     }
 
-    /** 处理加入房间按钮点击 - 验证昵称和房间代码后向服务器发送JOIN_ROOM请求 */
+    /** Handle join room button click — validate nickname and room code then send JOIN_ROOM to server */
     private void joinRoom() {
         String nickname = nicknameField.getText().trim();
-        String roomCode = roomCodeField.getText().trim().toUpperCase();  // 房间代码自动转大写
+        String roomCode = roomCodeField.getText().trim().toUpperCase();  // Auto-uppercase room code
 
         if (nickname.isEmpty()) {
             setStatus("Please enter a nickname", Color.RED);
@@ -384,13 +407,13 @@ public class LobbyPanel extends JPanel {
         setStatus("Joining room...", new Color(255, 200, 0));
     }
 
-    /** 房主请求开始游戏 */
+    /** Host requests to start the game */
     private void requestStartGame() {
         client.sendMessage(MessageProtocol.MessageType.REQUEST_START_GAME, "{}");
         setStatus("Starting game...", new Color(255, 200, 0));
     }
 
-    /** 切换准备状态 - 在"准备"和"取消准备"之间切换 */
+    /** Toggle ready state — switches between "Ready" and "Unready" */
     private void toggleReady() {
         isReady = !isReady;
         if (isReady) {
@@ -406,7 +429,7 @@ public class LobbyPanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.PLAYER_READY, payload.toString());
     }
 
-    /** 离开当前房间 - 发送LEAVE_ROOM请求并返回登录视图 */
+    /** Leave current room — send LEAVE_ROOM and return to login view */
     private void leaveRoom() {
         client.sendMessage(MessageProtocol.MessageType.LEAVE_ROOM, "{}");
         isInRoom = false;
@@ -417,10 +440,10 @@ public class LobbyPanel extends JPanel {
     }
 
     /**
-     * 更新房间状态 - 由MainFrame在收到ROOM_UPDATE消息时调用
-     * 解析服务器返回的房间和玩家信息，更新UI显示
+     * Update room state — called by MainFrame when receiving ROOM_UPDATE messages.
+     * Parses server-returned room and player info and updates the UI.
      *
-     * @param jsonPayload ROOM_UPDATE消息的JSON负载
+     * @param jsonPayload ROOM_UPDATE message JSON payload
      */
     public void updateRoom(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
@@ -429,7 +452,7 @@ public class LobbyPanel extends JPanel {
                 String roomCode = payload.get("roomCode").getAsString();
                 roomCodeLabel.setText("Room: " + roomCode);
 
-                // 解析玩家列表
+                // Parse player list
                 JsonArray players = payload.getAsJsonArray("players");
                 playerListModel.clear();
 
@@ -439,20 +462,20 @@ public class LobbyPanel extends JPanel {
                     boolean ready = player.get("ready").getAsBoolean();
                     boolean isCreator = player.get("isCreator").getAsBoolean();
 
-                    // 构建显示文本：昵称 + 房主标识 + 准备状态
+                    // Build display text: nickname + host indicator + ready state
                     String displayText = nickname;
                     if (isCreator) displayText += " Host";
                     displayText += ready ? " Ready" : " Not Ready";
                     playerListModel.addElement(displayText);
                 }
 
-                // 首次进入房间时切换到房间视图
+                // Switch to room view on first entry
                 if (!isInRoom) {
                     isInRoom = true;
                     showRoomPanel();
                 }
 
-                // 控制开始游戏按钮可见性：房主 + 全员准备 + 至少2人
+                // Control start game button visibility: host + all ready + at least 2 players
                 int totalPlayers = players.size();
                 long readyCount = 0;
                 for (JsonElement elem : players) {
@@ -469,7 +492,7 @@ public class LobbyPanel extends JPanel {
         });
     }
 
-    /** 切换到房间视图 */
+    /** Switch to room view */
     private void showRoomPanel() {
         remove(loginPanel);
         add(roomPanel, BorderLayout.CENTER);
@@ -477,7 +500,7 @@ public class LobbyPanel extends JPanel {
         repaint();
     }
 
-    /** 切换回登录视图 */
+    /** Switch back to login view */
     private void showLoginPanel() {
         remove(roomPanel);
         add(loginPanel, BorderLayout.CENTER);
@@ -486,11 +509,85 @@ public class LobbyPanel extends JPanel {
         setStatus("Enter nickname to start", new Color(180, 180, 200));
     }
 
-    /** 设置状态栏提示文本和颜色 */
+    /** Set the status bar hint text and color */
     private void setStatus(String message, Color color) {
         if (statusLabel != null) {
             statusLabel.setText(message);
             statusLabel.setForeground(color);
         }
+    }
+
+    private void showRulesDialog() {
+        String rules =
+                "MONOPOLY DEAL - GAME RULES\n\n" +
+                        "OBJECTIVE\n" +
+                        "Be the first player to collect 3 complete property sets.\n\n" +
+                        "SETUP\n" +
+                        "- 2-5 players\n" +
+                        "- Each player starts with 5 cards\n" +
+                        "- Draw 3 cards at the start of your turn\n\n" +
+                        "YOUR TURN\n" +
+                        "1. Draw Phase: Draw 3 cards from the draw pile\n" +
+                        "2. Play Phase: Play up to 3 cards (30 second timer)\n" +
+                        "3. Discard Phase: If you have more than 7 cards,\n" +
+                        "   discard down to 7\n\n" +
+                        "CARD TYPES\n" +
+                        "- Money Cards (1M-10M): Deposit into your bank\n" +
+                        "- Property Cards: Place in your property zone\n" +
+                        "  Wild Property: Assign to any color\n" +
+                        "- Rent Cards: Charge rent to other players\n" +
+                        "  Wild Rent: Targets one player\n" +
+                        "  Others: Target all players\n" +
+                        "- Action Cards: Special one-time effects\n\n" +
+                        "ACTION CARDS\n" +
+                        "- Debt Collector: One player pays you 5M\n" +
+                        "- Birthday: All players pay you 2M\n" +
+                        "- Deal Breaker: Steal a complete property set\n" +
+                        "- Pass Go: Draw 2 extra cards\n" +
+                        "- Double Rent: Next rent card value is doubled\n" +
+                        "- Forced Deal: Swap a property with another player\n" +
+                        "- Sly Deal: Steal one property\n" +
+                        "  (not from a complete set)\n" +
+                        "- House/Hotel: Build on complete sets\n" +
+                        "  for extra rent value\n" +
+                        "- Just Say No: Cancel an action against you\n\n" +
+                        "PROPERTY SET SIZES\n" +
+                        "2 cards: Brown, Light Blue, Blue\n" +
+                        "3 cards: Pink, Orange, Red, Yellow, Green,\n" +
+                        "         Purple, Light Green\n" +
+                        "4 cards: Black\n\n" +
+                        "RENT VALUES (per property in set)\n" +
+                        "Brown/Light Blue: 1-2M\n" +
+                        "Pink/Orange: 1-3M\n" +
+                        "Red/Yellow: 2-4-6M\n" +
+                        "Green: 2-4-7M\n" +
+                        "Blue: 3-8M\n" +
+                        "Purple: 1-2-4M\n" +
+                        "Black: 1-2-3-5M\n" +
+                        "Light Green: 1-2-4M\n\n" +
+                        "BUILDINGS\n" +
+                        "House: +1M rent each (max 4 per set)\n" +
+                        "Hotel: Replaces 4 houses (+3M rent)\n\n" +
+                        "WINNING\n" +
+                        "First player to collect 3 complete\n" +
+                        "property sets wins the game!";
+
+        JTextArea textArea = new JTextArea(rules);
+        textArea.setEditable(false);
+        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        textArea.setForeground(Color.WHITE);
+        textArea.setBackground(new Color(20, 18, 40));
+        textArea.setCaretPosition(0);
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(520, 520));
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(120, 100, 180), 2));
+
+        JOptionPane.showMessageDialog(
+                SwingUtilities.getWindowAncestor(this),
+                scrollPane,
+                "Game Rules - Monopoly Deal",
+                JOptionPane.PLAIN_MESSAGE
+        );
     }
 }

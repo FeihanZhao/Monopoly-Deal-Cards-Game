@@ -1,32 +1,32 @@
 package com.monopolydeal.model;
 
 /**
- * 卡牌类型枚举类
+ * Card type enumeration.
  *
- * 定义了《大富翁纸牌游戏》中的四种卡牌类型：
- * - MONEY（金钱卡）：存入银行作为资金，用于支付租金等
- * - PROPERTY（地产卡）：放置在物业区组成颜色组合，集齐即可获胜
- * - RENT（租金卡）：向其他玩家收取租金
- * - ACTION（行动卡）：执行特殊效果的卡牌（如强行交易、债务收集等）
+ * Defines the four card types in Monopoly Deal:
+ * - MONEY: banked as funds, used to pay rent etc.
+ * - PROPERTY: placed in property zone to form color sets; completing sets wins the game
+ * - RENT: charges rent to other players
+ * - ACTION: cards with special effects (e.g. Forced Deal, Debt Collector)
  */
 public enum CardType {
-    MONEY("Money"),        // 金钱卡 - 面值有1M/2M/3M/4M/5M/10M
-    PROPERTY("Property"),  // 地产卡 - 分为11种纯地产颜色+万能地产
-    RENT("Rent"),          // 租金卡 - 可针对特定颜色地产向其他玩家收租
-    ACTION("Action");      // 行动卡 - 包含多种特殊效果
+    MONEY("Money"),        // Money card — denominations: 1M/2M/3M/4M/5M/10M
+    PROPERTY("Property"),  // Property card — 10 pure property colors + wild properties
+    RENT("Rent"),          // Rent card — charges rent based on a specific property color
+    ACTION("Action");      // Action card — various special effects
 
-    /** 类型的显示名称 */
+    /** Display name of the type */
     private final String displayName;
 
     /**
-     * 构造函数
-     * @param displayName 类型的显示名称
+     * Constructor.
+     * @param displayName display name of the type
      */
     CardType(String displayName) {
         this.displayName = displayName;
     }
 
-    /** 获取类型的显示名称 */
+    /** Get the display name of the type */
     public String getDisplayName() {
         return displayName;
     }

@@ -4,58 +4,58 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 游戏状态类 - 数据传输对象（DTO），用于将游戏状态从服务器同步到客户端
+ * GameState class — Data Transfer Object (DTO) for syncing game state from server to client.
  *
- * 每个 GAME_STATE_UPDATE 消息都包含一个序列化为JSON的GameState对象。
- * GameState包含游戏的全部可观察状态：房间信息、游戏阶段、活跃玩家、
- * 所有玩家的状态快照（PlayerState）、以及最近的行动历史记录（ActionRecord）。
+ * Each GAME_STATE_UPDATE message contains a JSON-serialized GameState object.
+ * GameState holds all observable game state: room info, game phase, active player,
+ * all player state snapshots (PlayerState), and recent action history (ActionRecord).
  *
- * 重要隐私设计：玩家的手牌详情（handCards）仅对玩家本人可见，
- * 其他玩家只能看到手牌数量（handCount）。这通过 createGameState() 中的
- * viewerId 过滤实现。
+ * Privacy design: a player's hand card details (handCards) are only visible to that player;
+ * other players only see hand count (handCount). This is enforced via viewerId filtering
+ * in createGameState().
  *
- * 内部类：
- * - PlayerState：单个玩家的状态快照（手牌数、银行余额、完整组合数等）
- * - CardInfo：卡牌的轻量级信息（用于序列化传输）
- * - ActionRecord：行动历史记录条目
+ * Inner classes:
+ * - PlayerState: a single player's state snapshot (hand count, bank balance, complete sets, etc.)
+ * - CardInfo: lightweight card info for serialization
+ * - ActionRecord: action history entry
  */
 public class GameState {
-    // ==================== 基本游戏信息 ====================
+    // ==================== Basic Game Info ====================
 
-    /** 房间代码（6位大写字母数字） */
+    /** Room code (6 uppercase alphanumeric characters) */
     private String roomCode;
-    /** 当前游戏阶段（INIT/DRAW/PLAY/END/DISCARD/GAME_OVER） */
+    /** Current game phase (INIT/DRAW/PLAY/END/DISCARD/GAME_OVER) */
     private GamePhase phase;
-    /** 当前活跃玩家ID（轮到谁操作） */
+    /** Current active player ID (whose turn it is) */
     private String activePlayerId;
-    /** 当前玩家在玩家列表中的索引 */
+    /** Current player index in the player list */
     private int currentPlayerIndex;
-    /** 回合计数 */
+    /** Turn count */
     private int turnNumber;
-    /** 当前回合开始时间戳（毫秒） */
+    /** Current turn start timestamp (milliseconds) */
     private long turnStartTime;
-    /** 游戏开始时间戳（毫秒） */
+    /** Game start timestamp (milliseconds) */
     private long gameStartTime;
-    /** 抽牌堆剩余卡牌数 */
+    /** Cards remaining in draw pile */
     private int drawPileSize;
-    /** 弃牌堆卡牌数 */
+    /** Cards in discard pile */
     private int discardPileSize;
-    /** 所有玩家的状态快照 key=playerId, value=PlayerState */
+    /** All player state snapshots: key=playerId, value=PlayerState */
     private final Map<String, PlayerState> playerStates;
-    /** 行动历史记录列表 */
+    /** Action history list */
     private final List<ActionRecord> actionHistory;
-    /** 游戏是否已开始 */
+    /** Whether the game has started */
     private boolean gameStarted;
-    /** 游戏是否已结束 */
+    /** Whether the game is over */
     private boolean gameOver;
-    /** 获胜者ID */
+    /** Winner ID */
     private String winnerId;
-    /** 获胜者昵称 */
+    /** Winner nickname */
     private String winnerNickname;
-    /** 当前查看者的ID（此GameState的接收者） */
+    /** Current viewer ID (recipient of this GameState) */
     private String viewerId;
 
-    /** 构造函数 - 初始化默认状态 */
+    /** Constructor — initializes default state */
     public GameState() {
         this.phase = GamePhase.INIT;
         this.activePlayerId = "";
@@ -65,7 +65,7 @@ public class GameState {
         this.gameStartTime = 0;
         this.drawPileSize = 0;
         this.discardPileSize = 0;
-        this.playerStates = new LinkedHashMap<>();  // 保持玩家加入顺序
+        this.playerStates = new LinkedHashMap<>();  // Preserve player join order
         this.actionHistory = new ArrayList<>();
         this.gameStarted = false;
         this.gameOver = false;
@@ -118,68 +118,69 @@ public class GameState {
     public String getViewerId() { return viewerId; }
     public void setViewerId(String viewerId) { this.viewerId = viewerId; }
 
-    // ==================== 玩家状态管理 ====================
+    // ==================== Player State Management ====================
 
-    /** 添加玩家状态快照 */
+    /** Add a player state snapshot */
     public void addPlayerState(String playerId, PlayerState state) {
         playerStates.put(playerId, state);
     }
 
-    /** 获取指定玩家的状态快照 */
+    /** Get a specific player's state snapshot */
     public PlayerState getPlayerState(String playerId) {
         return playerStates.get(playerId);
     }
 
-    /** 获取所有玩家状态快照的只读映射 */
+    /** Get a read-only map of all player state snapshots */
     public Map<String, PlayerState> getAllPlayerStates() {
         return Collections.unmodifiableMap(playerStates);
     }
 
-    /** 获取玩家数量 */
+    /** Get the number of players */
     public int getPlayerCount() {
         return playerStates.size();
     }
 
-    // ==================== 行动历史管理 ====================
+    // ==================== Action History Management ====================
 
-    /** 设置行动历史记录（覆盖原有记录） */
+    /** Set the action history (replaces existing entries) */
     public void setActionHistory(List<ActionRecord> actions) {
         actionHistory.clear();
         actionHistory.addAll(actions);
     }
 
-    /** 获取行动历史记录的只读列表 */
+    /** Get a read-only list of action history entries */
     public List<ActionRecord> getActionHistory() {
         return Collections.unmodifiableList(actionHistory);
     }
 
-    // ==================== 内部类：玩家状态快照 ====================
+    // ==================== Inner Class: Player State Snapshot ====================
 
     /**
-     * PlayerState - 单个玩家的状态快照
+     * PlayerState — a single player's state snapshot.
      *
-     * 包含该玩家在某个时刻的全部可观察状态。
-     * 隐私保护：handCards字段仅在该玩家是当前GameState的接收者时才填充。
+     * Contains all observable state for a player at a point in time.
+     * Privacy: handCards is only populated when this player is the GameState recipient.
      */
     public static class PlayerState {
-        private String playerId;               // 玩家ID
-        private String nickname;               // 昵称
-        private boolean isReady;               // 是否已准备
-        private boolean isConnected;           // 是否在线
-        private boolean isActivePlayer;        // 是否是当前回合的活跃玩家
-        private int handCount;                 // 手牌数量（所有玩家可见）
-        private int bankTotal;                 // 银行总余额（所有玩家可见）
-        private Map<Integer, Integer> bankDenominations; // 银行中各面值金钱卡分布
-        private int propertyCount;             // 地产卡总数
-        private int completeSets;              // 完整地产组合数
-        private Map<String, Integer> propertyColorCounts; // 各颜色地产卡数量
-        private int playsUsed;                 // 已使用的出牌数
-        private int remainingPlays;            // 剩余可出牌数
-        private boolean doubleRentActive;      // 双倍租金效果是否激活
-        private List<CardInfo> handCards;      // 手牌详情（仅玩家本人可见）
-        private String avatar;                 // 头像标识
+        private String playerId;               // Player ID
+        private String nickname;               // Nickname
+        private boolean isReady;               // Whether readied up
+        private boolean isConnected;           // Whether online
+        private boolean isActivePlayer;        // Whether this is the current turn's active player
+        private int handCount;                 // Hand size (visible to all players)
+        private int bankTotal;                 // Total bank balance (visible to all players)
+        private Map<Integer, Integer> bankDenominations; // Bank denomination distribution
+        private int propertyCount;             // Total property cards
+        private int completeSets;              // Complete property set count
+        private Map<String, Integer> propertyColorCounts; // Property counts by color
+        private int playsUsed;                 // Plays used this turn
+        private int remainingPlays;            // Remaining plays this turn
+        private boolean doubleRentActive;      // Whether double rent effect is active
+        private List<CardInfo> handCards;      // Hand card details (only visible to this player)
+        private List<CardInfo> propertyCards; // Property zone details (public info for all players)
+        private String avatar;                 // Avatar identifier
 
-        /** 构造函数 - 初始化默认值 */
+        /** Constructor — initializes defaults */
         public PlayerState() {
             this.playerId = "";
             this.nickname = "";
@@ -193,9 +194,10 @@ public class GameState {
             this.completeSets = 0;
             this.propertyColorCounts = new HashMap<>();
             this.playsUsed = 0;
-            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;  // 初始每回合最多3次出牌
+            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;  // Initially 3 plays per turn
             this.doubleRentActive = false;
             this.handCards = new ArrayList<>();
+            this.propertyCards = new ArrayList<>();
             this.avatar = "";
         }
 
@@ -260,28 +262,36 @@ public class GameState {
             this.handCards = new ArrayList<>(handCards);
         }
 
+        public List<CardInfo> getPropertyCards() {
+            return Collections.unmodifiableList(propertyCards);
+        }
+        public void setPropertyCards(List<CardInfo> propertyCards) {
+            this.propertyCards = new ArrayList<>(propertyCards);
+        }
+
         public String getAvatar() { return avatar; }
         public void setAvatar(String avatar) { this.avatar = avatar; }
     }
 
-    // ==================== 内部类：卡牌信息（轻量级传输对象） ====================
+    // ==================== Inner Class: Card Info (Lightweight Transport Object) ====================
 
     /**
-     * CardInfo - 卡牌的轻量级信息
+     * CardInfo — lightweight card information.
      *
-     * 用于在网络中传输卡牌信息，避免传输完整的Card对象。
-     * 包含卡牌在客户端渲染所需的全部数据。
+     * Used for transmitting card info over the network instead of the full Card object.
+     * Contains all data needed for client-side card rendering.
      */
     public static class CardInfo {
-        private String cardId;       // 卡牌唯一ID
-        private String cardName;     // 卡牌名称
-        private String cardType;     // 卡牌类型（MONEY/PROPERTY/RENT/ACTION）
-        private String color;        // 卡牌颜色
-        private int value;           // 金钱面值（仅金钱卡有效）
-        private String description;  // 描述文本
-        private String wildColor;    // 万能地产的选定颜色（null表示未选定）
+        private String cardId;       // Unique card ID
+        private String cardName;     // Card name
+        private String cardType;     // Card type (MONEY/PROPERTY/RENT/ACTION)
+        private String color;        // Card color
+        private int value;           // Monetary value (only valid for money cards)
+        private String description;  // Description text
+        private String wildColor;    // Chosen color for wild property (null if not set)
+        private boolean inCompleteSet; // Whether this card belongs to a complete set
 
-        /** 默认构造函数 */
+        /** Default constructor */
         public CardInfo() {
             this.cardId = "";
             this.cardName = "";
@@ -290,9 +300,10 @@ public class GameState {
             this.value = 0;
             this.description = "";
             this.wildColor = null;
+            this.inCompleteSet = false;
         }
 
-        /** 从Card对象创建CardInfo（用于序列化传输） */
+        /** Create CardInfo from a Card object (for serialization) */
         public CardInfo(Card card) {
             this.cardId = card.getId();
             this.cardName = card.getName();
@@ -301,6 +312,7 @@ public class GameState {
             this.value = card.getValue();
             this.description = card.getDescription();
             this.wildColor = card.getWildColor() != null ? card.getWildColor().name() : null;
+            this.inCompleteSet = false;
         }
 
         // ==================== Getters/Setters ====================
@@ -325,27 +337,30 @@ public class GameState {
 
         public String getWildColor() { return wildColor; }
         public void setWildColor(String wildColor) { this.wildColor = wildColor; }
+
+        public boolean isInCompleteSet() { return inCompleteSet; }
+        public void setInCompleteSet(boolean inCompleteSet) { this.inCompleteSet = inCompleteSet; }
     }
 
-    // ==================== 内部类：行动历史记录 ====================
+    // ==================== Inner Class: Action History Record ====================
 
     /**
-     * ActionRecord - 行动历史记录条目
+     * ActionRecord — action history entry.
      *
-     * 记录游戏中的每一次操作（抽牌、出牌、弃牌、收租、游戏结束等）。
-     * 在客户端用于显示操作日志。
+     * Records every operation in the game (draw, play, discard, rent collection, game over, etc.).
+     * Used on the client side to display the operation log.
      */
     public static class ActionRecord {
-        private int index;             // 行动序号
-        private String playerId;       // 执行者ID
-        private String playerNickname; // 执行者昵称
-        private String actionType;     // 行动类型（DRAW/PLAY_MONEY/PLAY_PROPERTY/RENT等）
-        private String targetPlayer;   // 目标玩家昵称（无目标则为空字符串）
-        private int amount;            // 涉及金额（无金额则为0）
-        private String details;        // 详细描述
-        private long timestamp;        // 发生时间戳（毫秒）
+        private int index;             // Action sequence number
+        private String playerId;       // Executor ID
+        private String playerNickname; // Executor nickname
+        private String actionType;     // Action type (DRAW/PLAY_MONEY/PLAY_PROPERTY/RENT, etc.)
+        private String targetPlayer;   // Target player nickname (empty string if no target)
+        private int amount;            // Amount involved (0 if no monetary amount)
+        private String details;        // Detailed description
+        private long timestamp;        // Timestamp in milliseconds
 
-        /** 默认构造函数 */
+        /** Default constructor */
         public ActionRecord() {
             this.index = 0;
             this.playerId = "";
@@ -357,7 +372,7 @@ public class GameState {
             this.timestamp = System.currentTimeMillis();
         }
 
-        /** 带参数的构造函数 */
+        /** Parameterized constructor */
         public ActionRecord(int index, String playerId, String playerNickname,
                             String actionType, String targetPlayer, int amount, String details) {
             this.index = index;

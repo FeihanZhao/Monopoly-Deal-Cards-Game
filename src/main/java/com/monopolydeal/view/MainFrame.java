@@ -8,81 +8,81 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 /**
- * 主窗口 - 游戏客户端的主界面容器
+ * Main window — the game client's main UI container.
  *
- * 使用 CardLayout 管理两个主要面板：
- * 1. LobbyPanel（大厅面板）- 创建/加入房间、准备
- * 2. GamePanel（游戏面板）- 实际的游戏界面
+ * Uses CardLayout to manage two main panels:
+ * 1. LobbyPanel — create/join rooms, ready up
+ * 2. GamePanel — the actual game interface
  *
- * 作为客户端消息处理的中转站，负责：
- * - 注册为GameClient的消息处理器
- * - 根据消息类型（ROOM_UPDATE/GAME_STATE_UPDATE/GAME_OVER/ERROR）将消息路由到对应面板
- * - 自动切换显示面板（从大厅切换到游戏，或游戏结束后返回大厅）
+ * Acts as a message relay for the client, responsible for:
+ * - Registering as the GameClient's message handler
+ * - Routing messages to the appropriate panel based on message type (ROOM_UPDATE/GAME_STATE_UPDATE/GAME_OVER/ERROR)
+ * - Automatically switching display panels (from lobby to game, or back to lobby after game ends)
  *
- * UI配置：
- * - 默认窗口大小：1280×800
- * - 最小窗口大小：1024×768
- * - 点击关闭按钮时退出程序（EXIT_ON_CLOSE）
+ * UI configuration:
+ * - Default window size: 1280x800
+ * - Minimum window size: 1024x768
+ * - Exit on close (EXIT_ON_CLOSE)
  */
 public class MainFrame extends JFrame {
-    /** 游戏客户端连接 */
+    /** Game client connection */
     private final GameClient client;
-    /** 卡片布局管理器（用于切换大厅/游戏面板） */
+    /** Card layout manager (used to switch between lobby/game panels) */
     private CardLayout cardLayout;
-    /** 主面板（包含所有子面板的容器） */
+    /** Main panel (container for all child panels) */
     private JPanel mainPanel;
-    /** 大厅面板 */
+    /** Lobby panel */
     private LobbyPanel lobbyPanel;
-    /** 游戏面板 */
+    /** Game panel */
     private GamePanel gamePanel;
-    /** 本地玩家ID（在收到服务器消息后设置） */
+    /** Local player ID (set after receiving server messages) */
     private String localPlayerId;
 
     /**
-     * 构造函数 - 初始化UI并设置消息处理器
-     * @param client 已连接的GameClient实例
+     * Constructor — initialize UI and set up message handler.
+     * @param client connected GameClient instance
      */
     public MainFrame(GameClient client) {
         this.client = client;
         this.localPlayerId = null;
-        initializeUI();         // 构建Swing界面
-        setupMessageHandler();  // 注册消息处理回调
+        initializeUI();         // Build Swing UI
+        setupMessageHandler();  // Register message handling callback
     }
 
     /**
-     * 初始化Swing UI界面
-     * 创建CardLayout容器，加入LobbyPanel和GamePanel，默认显示大厅
+     * Initialize the Swing UI.
+     * Create CardLayout container, add LobbyPanel and GamePanel, default to showing lobby.
      */
     private void initializeUI() {
         setTitle("Monopoly Deal Cards Game");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);  // 关闭窗口时退出程序
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);  // Exit program on window close
         setSize(1280, 800);
         setMinimumSize(new Dimension(1024, 768));
-        setLocationRelativeTo(null);  // 窗口居中显示
+        setLocationRelativeTo(null);  // Center window on screen
 
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
 
-        lobbyPanel = new LobbyPanel(client);   // 大厅面板
-        gamePanel = new GamePanel(client);     // 游戏面板
+        lobbyPanel = new LobbyPanel(client);   // Lobby panel
+        gamePanel = new GamePanel(client);     // Game panel
 
         mainPanel.add(lobbyPanel, "LOBBY");
         mainPanel.add(gamePanel, "GAME");
         add(mainPanel);
 
-        cardLayout.show(mainPanel, "LOBBY");  // 默认显示大厅
+        cardLayout.show(mainPanel, "LOBBY");  // Default to lobby view
     }
 
     /**
-     * 设置消息处理器 - 注册到GameClient以接收服务器消息
+     * Set up the message handler — register with GameClient to receive server messages.
      *
-     * 消息路由规则：
-     * - ROOM_UPDATE → 转发给LobbyPanel更新房间状态
-     * - GAME_STATE_UPDATE → 切换到游戏面板并更新游戏状态
-     * - GAME_OVER → 显示获胜信息并返回大厅
-     * - ERROR → 弹出错误对话框
+     * Message routing rules:
+     * - ROOM_UPDATE → forward to LobbyPanel to update room state
+     * - GAME_STATE_UPDATE → switch to game panel and update game state
+     * - GAME_OVER → show winner info and return to lobby
+     * - ERROR → show error dialog
      *
-     * 所有UI操作都通过SwingUtilities.invokeLater确保在EDT线程执行
+     * All UI operations go through SwingUtilities.invokeLater to ensure EDT execution.
      */
     private void setupMessageHandler() {
         client.setMessageHandler(message -> {
@@ -93,50 +93,50 @@ public class MainFrame extends JFrame {
 
                     switch (type) {
                         case ROOM_UPDATE:
-                            // 大厅面板更新房间信息（玩家列表、准备状态等）
+                            // Lobby panel updates room info (player list, ready state, etc.)
                             lobbyPanel.updateRoom(payload);
                             break;
                         case GAME_STATE_UPDATE:
-                            // 切换到游戏面板并更新游戏状态
+                            // Switch to game panel and update game state
                             cardLayout.show(mainPanel, "GAME");
                             gamePanel.updateGameState(payload);
                             break;
                         case GAME_OVER:
-                            // 游戏结束，显示获胜者并返回大厅
+                            // Game over, show winner and return to lobby
                             handleGameOver(payload);
                             break;
                         case REACTION_REQUIRED:
-                            // Just Say No 响应请求
+                            // Just Say No reaction request
                             cardLayout.show(mainPanel, "GAME");
                             gamePanel.handleReactionRequired(payload);
                             break;
                         case PAYMENT_REQUIRED:
-                            // 支付请求
+                            // Payment request
                             cardLayout.show(mainPanel, "GAME");
                             gamePanel.handlePaymentRequired(payload);
                             break;
                         case DISCARD_REQUIRED:
-                            // 弃牌请求（回合结束时手牌超上限）
+                            // Discard request (hand exceeds limit at end of turn)
                             cardLayout.show(mainPanel, "GAME");
                             gamePanel.handleDiscardRequired(payload);
                             break;
                         case ERROR:
-                            // 显示错误消息
+                            // Show error message
                             handleError(payload);
                             break;
                         default:
                             break;
                     }
                 } catch (Exception e) {
-                    System.err.println("处理消息时出错：" + e.getMessage());
+                    System.err.println("Error processing message: " + e.getMessage());
                 }
             });
         });
     }
 
     /**
-     * 处理游戏结束消息 - 弹出获胜信息对话框并返回大厅
-     * @param payload GAME_OVER消息的JSON负载，包含winnerNickname等字段
+     * Handle game over message — show winner dialog and return to lobby.
+     * @param payload GAME_OVER message JSON payload, contains winnerNickname etc.
      */
     private void handleGameOver(String payload) {
         try {
@@ -146,12 +146,12 @@ public class MainFrame extends JFrame {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Game Over!");
         }
-        cardLayout.show(mainPanel, "LOBBY");  // 返回大厅
+        cardLayout.show(mainPanel, "LOBBY");  // Return to lobby
     }
 
     /**
-     * 处理错误消息 - 弹出错误对话框
-     * @param payload ERROR消息的JSON负载，包含message字段
+     * Handle error message — show error dialog.
+     * @param payload ERROR message JSON payload, contains message field
      */
     private void handleError(String payload) {
         try {
