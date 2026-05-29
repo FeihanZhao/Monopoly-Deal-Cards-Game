@@ -831,8 +831,9 @@ public class GameSession {
             return;
         }
 
-        // No pending payment → return to play phase
+        // No pending payment → return to play phase, resume turn timer
         phase = GamePhase.PLAY;
+        startTurnTimer();
         broadcastGameState();
 
         if (activePlayer != null && activePlayer.getRemainingPlays() <= 0) {
@@ -1255,8 +1256,9 @@ public class GameSession {
             }
         }
 
-        // All targets processed, return to play phase
+        // All targets processed, return to play phase, resume turn timer
         phase = GamePhase.PLAY;
+        startTurnTimer();
         broadcastGameState();
 
         // If active player has no plays remaining, automatically end turn
