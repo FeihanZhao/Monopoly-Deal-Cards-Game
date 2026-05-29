@@ -658,14 +658,128 @@ public class GamePanel extends JPanel {
     }
 
     private String showWildColorPicker(String cardName) {
-        String[] colors = WILD_COLOR_OPTIONS.get(cardName);
-        if (colors == null) colors = WILD_COLOR_OPTIONS.get("Multi-Color Wild");
-        return (String) JOptionPane.showInputDialog(this, "Select color for wild property:", "Wild Property Color", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
+        String[] colorNames = WILD_COLOR_OPTIONS.get(cardName);
+        if (colorNames == null) colorNames = WILD_COLOR_OPTIONS.get("Multi-Color Wild");
+        return showColorPickerDialog("Select Color for Wild Property", "Wild Property Color", colorNames);
     }
 
     private String showColorPicker() {
-        String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED", "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"};
-        return (String) JOptionPane.showInputDialog(this, "Select color:", "Color Selection", JOptionPane.QUESTION_MESSAGE, null, colors, colors[0]);
+        String[] colorNames = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED", "YELLOW", "GREEN", "BLUE", "PURPLE", "BLACK", "LIGHT_GREEN"};
+        return showColorPickerDialog("Select Rent Color", "Rent Color", colorNames);
+    }
+
+    /** Custom styled color picker with color swatch buttons */
+    private String showColorPickerDialog(String message, String title, String[] colorNames) {
+        final String[] result = {null};
+
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), title, true);
+        dialog.setUndecorated(true);
+
+        JPanel panel = new JPanel(new BorderLayout(0, 15));
+        panel.setBackground(BG_MID);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 215, 0, 80), 2, true),
+            BorderFactory.createEmptyBorder(25, 30, 20, 30)
+        ));
+
+        // Title
+        JLabel titleLabel = new JLabel("🎨 " + message, SwingConstants.CENTER);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(GOLD_PRIMARY);
+
+        // Color buttons grid
+        int cols = 3;
+        int rows = (int) Math.ceil(colorNames.length / (double) cols);
+        JPanel gridPanel = new JPanel(new GridLayout(rows, cols, 8, 8));
+        gridPanel.setOpaque(false);
+
+        for (String colorName : colorNames) {
+            Color cardColor = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, new Color(100, 100, 100));
+            Color textColor = AppTheme.TEXT_CONTRAST_COLORS.getOrDefault(colorName, Color.WHITE);
+            Color hoverColor = AppTheme.HOVER_LIGHT_COLORS.getOrDefault(colorName, cardColor.brighter());
+
+            JButton colorBtn = new JButton(colorName.replace("_", " ")) {
+                private float hover = 0f;
+                private boolean hov = false;
+                private final javax.swing.Timer t = new javax.swing.Timer(16, null);
+                {
+                    t.addActionListener(e -> {
+                        hover = Math.max(0, Math.min(1, hover + (hov ? 0.1f : -0.06f)));
+                        repaint();
+                        if ((hov && hover >= 1) || (!hov && hover <= 0)) t.stop();
+                    });
+                    addMouseListener(new java.awt.event.MouseAdapter() {
+                        @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                            hov = true; if (!t.isRunning()) t.start();
+                            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                        }
+                        @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                            hov = false; if (!t.isRunning()) t.start();
+                            setCursor(Cursor.getDefaultCursor());
+                        }
+                    });
+                }
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    int w = getWidth(), h = getHeight();
+                    int arc = 12;
+                    if (hover > 0.01f) {
+                        g2.setColor(new Color(255, 215, 0, (int)(hover * 60)));
+                        g2.fillRoundRect(-2, -2, w + 4, h + 4, arc + 2, arc + 2);
+                    }
+                    Color base = interpolateColor(cardColor, hoverColor, hover);
+                    g2.setColor(base);
+                    g2.fillRoundRect(1, 1, w - 2, h - 2, arc, arc);
+                    g2.setColor(new Color(255, 255, 255, 40));
+                    g2.setStroke(new BasicStroke(1.2f));
+                    g2.drawRoundRect(1, 1, w - 2, h - 2, arc, arc);
+                    g2.setColor(textColor);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                    FontMetrics fm = g2.getFontMetrics();
+                    String txt = getText();
+                    g2.drawString(txt, (w - fm.stringWidth(txt)) / 2,
+                        (h + fm.getAscent() - fm.getDescent()) / 2);
+                    g2.dispose();
+                }
+            };
+            colorBtn.setPreferredSize(new Dimension(110, 38));
+            colorBtn.setFocusPainted(false);
+            colorBtn.setBorderPainted(false);
+            colorBtn.setContentAreaFilled(false);
+            colorBtn.addActionListener(e -> {
+                result[0] = colorName;
+                dialog.dispose();
+            });
+            gridPanel.add(colorBtn);
+        }
+
+        // Cancel button
+        JButton cancelBtn = new JButton("✕ Cancel");
+        cancelBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        cancelBtn.setForeground(TEXT_GRAY);
+        cancelBtn.setBackground(BG_MID);
+        cancelBtn.setFocusPainted(false);
+        cancelBtn.setBorder(BorderFactory.createLineBorder(new Color(100, 90, 140), 1, true));
+        cancelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        cancelBtn.addActionListener(e -> dialog.dispose());
+
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        bottomPanel.setOpaque(false);
+        bottomPanel.add(cancelBtn);
+
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(gridPanel, BorderLayout.CENTER);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
+
+        dialog.add(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setVisible(true);
+
+        return result[0];
     }
 
     public void handleReactionRequired(String jsonPayload) {
