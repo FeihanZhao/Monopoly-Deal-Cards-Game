@@ -4,28 +4,16 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
-import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Card renderer component — custom-drawn game card UI component.
  *
- * Displays each card as a visual card in the player's hand area. Supports:
- * - Automatic background color selection by color/type (Palette system)
- * - Mouse hover lift effect (card rises 12px)
- * - Selected state glow effect (gold glowing border)
- * - Card face contains: type badge, icon, name, value (money cards only)
- * - Click triggers playListener callback
+ * Design: clean modern card face with rich color gradients,
+ * subtle shadow, small type badge, central icon, and bottom name.
  *
- * Card dimensions: 90x130px, corner radius 12px
- *
- * Color schemes:
- * - Each property color has a corresponding background + gradient + border color
- * - Money cards: green tones
- * - Action cards: purple tones
- * - Rent cards: reddish-brown tones
- * - Wild cards: rainbow gradient
+ * Card dimensions: 90x130px, corner radius 10px
  */
 public class CardRenderer extends JPanel {
 
@@ -34,32 +22,29 @@ public class CardRenderer extends JPanel {
     /** Card height (pixels) */
     public static final int CARD_H = 130;
     /** Card corner radius */
-    public static final int CORNER_RADIUS = 12;
+    public static final int CORNER_RADIUS = 10;
 
     /** Card lift distance on mouse hover */
-    private static final int LIFT_HOVER    = 12;
+    private static final int LIFT_HOVER    = 10;
     /** Card lift distance when selected */
-    private static final int LIFT_SELECTED = 22;
+    private static final int LIFT_SELECTED = 18;
 
     /**
      * Card color palette inner class.
-     * Contains background color, gradient color, border color and text color.
      */
     private static final class CardPalette {
         final Color bg;        // Main background color
-        final Color gradient;  // Gradient endpoint color (for top-to-bottom gradient)
-        final Color border;    // Border color
+        final Color gradient;  // Gradient endpoint color
         final Color text;      // Text color
 
-        CardPalette(Color bg, Color gradient, Color border, Color text) {
+        CardPalette(Color bg, Color gradient, Color text) {
             this.bg       = bg;
             this.gradient = gradient;
-            this.border   = border;
             this.text     = text;
         }
 
-        CardPalette(Color bg, Color border, Color text) {
-            this(bg, null, border, text);
+        CardPalette(Color bg, Color text) {
+            this(bg, null, text);
         }
     }
 
@@ -67,7 +52,7 @@ public class CardRenderer extends JPanel {
     private static final Map<String, CardPalette> PALETTES = new HashMap<>();
 
     static {
-        // ===== Pure property color palettes (color values from AppTheme) =====
+        // ===== Pure property color palettes =====
         for (Map.Entry<String, Color> entry : AppTheme.PROPERTY_COLORS.entrySet()) {
             String colorName = entry.getKey();
             Color bg = entry.getValue();
@@ -77,50 +62,39 @@ public class CardRenderer extends JPanel {
             PALETTES.put(colorName, new CardPalette(bg, gradient, text));
         }
 
-        // ===== Dual-color rent card palettes (left→right gradient) =====
+        // ===== Dual-color rent card palettes =====
         PALETTES.put("BROWN_LIGHT_BLUE",
-                new CardPalette(new Color(0x8B5E3C), new Color(0x87CEEB), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0x8B5E3C), new Color(0x87CEEB), Color.WHITE));
         PALETTES.put("PINK_ORANGE",
-                new CardPalette(new Color(0xFF69B4), new Color(0xFF8C00), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0xFF69B4), new Color(0xFF8C00), Color.WHITE));
         PALETTES.put("RED_YELLOW",
                 new CardPalette(new Color(0xDC143C), new Color(0xFFD700), new Color(0x1A1A1A)));
         PALETTES.put("GREEN_BLUE",
-                new CardPalette(new Color(0x228B22), new Color(0x00008B), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0x228B22), new Color(0x00008B), Color.WHITE));
         PALETTES.put("BLACK_LIGHT_GREEN",
-                new CardPalette(new Color(0x2B2B2B), new Color(0x90EE90), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0x2B2B2B), new Color(0x90EE90), Color.WHITE));
 
         // ===== Default palettes by card type =====
         PALETTES.put("MONEY",
-                new CardPalette(new Color(0x2E7D32), new Color(0x1B5E20), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0x2E7D32), new Color(0x1B5E20), Color.WHITE));
         PALETTES.put("ACTION",
-                new CardPalette(new Color(0x6A1B9A), new Color(0x4A0072), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0x6A1B9A), new Color(0x4A0072), Color.WHITE));
         PALETTES.put("RENT",
-                new CardPalette(new Color(0xBF360C), new Color(0x870000), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0xBF360C), new Color(0x870000), Color.WHITE));
 
-        // ===== Wild card palette (rainbow gradient, special handling in paintComponent) =====
+        // ===== Wild card palette =====
         PALETTES.put("WILD",
-                new CardPalette(new Color(0xFF6B6B), new Color(0x4D96FF), new Color(0xFFFFFF)));
+                new CardPalette(new Color(0xFF6B6B), new Color(0x4D96FF), Color.WHITE));
 
-        // ===== Fallback gray for no color =====
+        // ===== Fallback gray =====
         PALETTES.put("NONE",
                 new CardPalette(Color.GRAY, Color.DARK_GRAY, Color.WHITE));
     }
 
-    /** Check whether this is a light background color (needs dark text for readability) */
     private static boolean isLightColor(String colorName) {
         return "LIGHT_BLUE".equals(colorName)
                 || "YELLOW".equals(colorName)
                 || "LIGHT_GREEN".equals(colorName);
-    }
-
-    /** Card type icon mapping */
-    private static final Map<String, String> TYPE_ICONS = new HashMap<>();
-
-    static {
-        TYPE_ICONS.put("MONEY",    "");   // Dollar icon
-        TYPE_ICONS.put("PROPERTY", "");  // House icon
-        TYPE_ICONS.put("ACTION",   "");   // Lightning icon
-        TYPE_ICONS.put("RENT",     "");   // Flying money icon
     }
 
     /** Card unique identifier */
@@ -133,7 +107,7 @@ public class CardRenderer extends JPanel {
     private final String colorKey;
     /** Money value (only for money cards, 0 otherwise) */
     private final int    value;
-    /** Card view model (for external queries of cardId, cardName, etc.) */
+    /** Card view model */
     private CardViewModel viewModel;
 
     /** Whether in selected state */
@@ -146,25 +120,13 @@ public class CardRenderer extends JPanel {
     /** Animation timer (16ms/frame, approx 60fps) */
     private javax.swing.Timer animTimer;
 
-    /**
-     * Card click callback interface.
-     */
     @FunctionalInterface
     public interface PlayListener {
         void onPlay(String cardId);
     }
 
-    /** Card click callback */
     private PlayListener playListener;
 
-    /**
-     * Full constructor.
-     * @param cardId card ID
-     * @param cardName card name
-     * @param cardType card type
-     * @param colorKey color key
-     * @param value money value
-     */
     public CardRenderer(String cardId, String cardName,
                         String cardType, String colorKey, int value) {
         this.cardId   = cardId;
@@ -175,22 +137,18 @@ public class CardRenderer extends JPanel {
         initComponent();
     }
 
-    /** Construct from CardViewModel (common path, called by GamePanel) */
     public CardRenderer(CardViewModel vm) {
         this(vm.getCardId(), vm.getCardName(), vm.getCardType(),
              vm.getColor(), vm.getValue());
         this.viewModel = vm;
     }
 
-    /** Initialize component — set size, mouse events, and animation system */
     private void initComponent() {
-        // Fixed size (height includes room for lift)
         setPreferredSize(new Dimension(CARD_W, CARD_H + LIFT_SELECTED + 4));
         setMinimumSize(getPreferredSize());
         setMaximumSize(getPreferredSize());
         setOpaque(false);
 
-        // Mouse events: hover detection and click callback
         addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) {
                 if (isEnabled()) { hovered = true;  animateLift(); }
@@ -205,7 +163,6 @@ public class CardRenderer extends JPanel {
             }
         });
 
-        // Lift animation timer (16ms/frame ≈ 60fps)
         animTimer = new javax.swing.Timer(16, e -> {
             float target = getTargetLift();
             float delta  = target - currentLift;
@@ -213,7 +170,7 @@ public class CardRenderer extends JPanel {
                 currentLift = target;
                 ((javax.swing.Timer) e.getSource()).stop();
             } else {
-                currentLift += delta * 0.25f;  // Ease interpolation
+                currentLift += delta * 0.25f;
             }
             repaint();
         });
@@ -223,38 +180,28 @@ public class CardRenderer extends JPanel {
 
     // ==================== Public methods ====================
 
-    /** Set the card click callback */
     public void setPlayListener(PlayListener listener) {
         this.playListener = listener;
     }
 
-    /** Set selected state and trigger animation */
     public void setSelected(boolean selected) {
         this.selected = selected;
         animateLift();
         repaint();
     }
 
-    /** Whether selected */
     public boolean isSelected() {
         return selected;
     }
 
-    /** Get card ID */
     public String getCardId() {
         return cardId;
     }
 
-    /**
-     * Get the card view model (for querying cardId, cardName, etc.).
-     * Only instances created via the CardViewModel constructor have a value;
-     * those created via static factory methods return null.
-     */
     public CardViewModel getViewModel() {
         return viewModel;
     }
 
-    /** Set enabled/disabled state (disabled cards are semi-transparent, cursor reverts to default) */
     @Override
     public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
@@ -264,174 +211,255 @@ public class CardRenderer extends JPanel {
         repaint();
     }
 
-    // ==================== Animation system ====================
+    // ==================== Animation ====================
 
-    /** Get target lift distance (based on selected/hovered/default state) */
     private float getTargetLift() {
         if (selected) return LIFT_SELECTED;
         if (hovered && isEnabled()) return LIFT_HOVER;
         return 0f;
     }
 
-    /** Start the lift animation */
     private void animateLift() {
         if (!animTimer.isRunning()) animTimer.start();
     }
 
     // ==================== Custom painting ====================
 
-    /**
-     * Paint the card — seven layers: shadow, background, selection glow, type badge, icon, name, value, border.
-     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
-        // Enable anti-aliasing and high-quality rendering
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 
         int liftPx = Math.round(currentLift);
-        int cardTop = (getHeight() - CARD_H) - liftPx;  // Lift from bottom
+        int cardTop = (getHeight() - CARD_H) - liftPx;
 
         Shape cardShape = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
                 CORNER_RADIUS, CORNER_RADIUS);
-        g2.setClip(cardShape);  // Clip to card rounded rectangle
+        g2.setClip(cardShape);
 
-        // Paint layer by layer
-        paintDropShadow(g2, cardTop);      // 1. Shadow
-        paintCardBackground(g2, cardTop);   // 2. Background
-        if (selected) paintSelectionGlow(g2, cardTop);  // 3. Selection glow
-
-        // Disabled state: overlay semi-transparent black mask
+        // 1. Drop shadow
+        paintShadow(g2, cardTop);
+        // 2. Card background gradient
+        paintBackground(g2, cardTop);
+        // 3. Selection glow
+        if (selected) paintSelectionGlow(g2, cardTop);
+        // 4. Disabled overlay
         if (!isEnabled()) {
             g2.setColor(new Color(0, 0, 0, 120));
             g2.fill(cardShape);
         }
+        g2.setClip(null);
 
-        g2.setClip(null);  // Remove clip
-        paintTypeBadge(g2, cardTop);   // 4. Type badge
-        paintIcon(g2, cardTop);        // 5. Type icon
-        paintName(g2, cardTop);        // 6. Card name
-        if (value > 0) paintValueBadge(g2, cardTop);  // 7. Value badge
-        paintBorder(g2, cardTop);      // 8. Border
+        // Elements drawn outside clip
+        // 5. Type badge
+        paintTypeBadge(g2, cardTop);
+        // 6. Central icon
+        paintCenterIcon(g2, cardTop);
+        // 7. Card name
+        paintCardName(g2, cardTop);
+        // 8. Value badge
+        if (value > 0) paintValueBadge(g2, cardTop);
+        // 9. Border
+        paintBorder(g2, cardTop);
 
         g2.dispose();
     }
 
-    /** Draw drop shadow (multi-layer semi-transparent black rounded rectangles) */
-    private void paintDropShadow(Graphics2D g2, int cardTop) {
-        int shadowOffset = selected ? 8 : (hovered ? 6 : 3);
-        int shadowAlpha  = selected ? 120 : (hovered ? 100 : 70);
+    /** Multi-layer drop shadow */
+    private void paintShadow(Graphics2D g2, int cardTop) {
+        int offset = selected ? 8 : (hovered ? 6 : 3);
+        int alpha  = selected ? 100 : (hovered ? 80 : 60);
 
-        for (int i = shadowOffset; i > 0; i--) {
-            float alpha = shadowAlpha * ((float) (shadowOffset - i + 1) / shadowOffset);
-            g2.setColor(new Color(0, 0, 0, (int) alpha));
+        for (int i = offset; i > 0; i--) {
+            float a = alpha * ((float) (offset - i + 1) / offset);
+            g2.setColor(new Color(0, 0, 0, (int) a));
             g2.fill(new RoundRectangle2D.Float(i, cardTop + i, CARD_W, CARD_H,
                     CORNER_RADIUS, CORNER_RADIUS));
         }
     }
 
-    /** Draw card background (solid or gradient) */
-    private void paintCardBackground(Graphics2D g2, int cardTop) {
+    /** Card background with gradient */
+    private void paintBackground(Graphics2D g2, int cardTop) {
         Shape shape = new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
                 CORNER_RADIUS, CORNER_RADIUS);
 
-        // Wild cards use a rainbow gradient
         if ("WILD".equals(colorKey)) {
             float[] fractions = {0f, 0.33f, 0.66f, 1f};
-            Color[] colors    = {
-                    new Color(0xFF6B6B),  // Red
-                    new Color(0xFFD93D),  // Yellow
-                    new Color(0x6BCB77),  // Green
-                    new Color(0x4D96FF)   // Blue
+            Color[] colors = {
+                    new Color(0xFF6B6B), new Color(0xFFD93D),
+                    new Color(0x6BCB77), new Color(0x4D96FF)
             };
             g2.setPaint(new LinearGradientPaint(0, cardTop, CARD_W, cardTop + CARD_H,
                     fractions, colors));
         } else {
-            CardPalette palette = resolvePalette();
-            if (palette != null && palette.gradient != null) {
-                // Top-to-bottom gradient
-                g2.setPaint(new GradientPaint(0, cardTop, palette.bg,
-                        0, cardTop + CARD_H, palette.gradient));
-            } else if (palette != null) {
-                g2.setPaint(palette.bg);  // Solid color
+            CardPalette p = resolvePalette();
+            if (p != null && p.gradient != null) {
+                g2.setPaint(new GradientPaint(0, cardTop, p.bg,
+                        0, cardTop + CARD_H, p.gradient));
+            } else if (p != null) {
+                g2.setPaint(p.bg);
             } else {
-                g2.setPaint(Color.GRAY);  // Fallback gray
+                g2.setPaint(Color.GRAY);
             }
         }
         g2.fill(shape);
+
+        // Subtle top shine
+        g2.setColor(new Color(255, 255, 255, 18));
+        g2.fillRoundRect(2, cardTop + 2, CARD_W - 4, (int)(CARD_H * 0.35f),
+                CORNER_RADIUS - 2, CORNER_RADIUS - 2);
     }
 
-    /** Draw selection glow effect (gold radial gradient) */
+    /** Selection gold glow */
     private void paintSelectionGlow(Graphics2D g2, int cardTop) {
         RadialGradientPaint glow = new RadialGradientPaint(
                 new Point2D.Float(CARD_W / 2f, cardTop + CARD_H / 2f),
                 CARD_W * 0.7f,
                 new float[]{0f, 1f},
-                new Color[]{new Color(255, 215, 0, 60), new Color(255, 215, 0, 0)}
+                new Color[]{new Color(255, 215, 0, 70), new Color(255, 215, 0, 0)}
         );
         g2.setPaint(glow);
         g2.fill(new RoundRectangle2D.Float(0, cardTop, CARD_W, CARD_H,
                 CORNER_RADIUS, CORNER_RADIUS));
     }
 
-    /** Draw the top-left type badge (e.g. "ACTION") */
+    /** Type badge: small rounded pill top-left */
     private void paintTypeBadge(Graphics2D g2, int cardTop) {
         String label = cardType;
         Font font = new Font("SansSerif", Font.BOLD, 8);
         g2.setFont(font);
         FontMetrics fm = g2.getFontMetrics();
         int tw = fm.stringWidth(label);
-        int bx = 5, by = cardTop + 5;
-        int bw = tw + 8, bh = fm.getHeight() + 2;
-        // Semi-transparent black rounded background
-        g2.setColor(new Color(0, 0, 0, 100));
-        g2.fill(new RoundRectangle2D.Float(bx, by, bw, bh, 6, 6));
-        g2.setColor(Color.WHITE);
-        g2.drawString(label, bx + 4, by + fm.getAscent() + 1);
-    }
+        int px = 5, py = cardTop + 5;
+        int pw = tw + 10, ph = fm.getHeight() + 3;
 
-    /** Draw the central type icon (emoji) */
-    private void paintIcon(Graphics2D g2, int cardTop) {
-        String icon = TYPE_ICONS.getOrDefault(cardType, "");  // Default playing card icon
-        Font emojiFont = new Font("Segoe UI Emoji", Font.PLAIN, 28);
-        g2.setFont(emojiFont);
-        FontMetrics fm = g2.getFontMetrics();
-        int x = (CARD_W - fm.stringWidth(icon)) / 2;
-        int y = cardTop + 30 + fm.getAscent();
-        // Icon with shadow
+        // Shadow
         g2.setColor(new Color(0, 0, 0, 80));
-        g2.drawString(icon, x + 1, y + 2);
+        g2.fillRoundRect(px + 1, py + 1, pw, ph, 6, 6);
+
+        // Background
+        g2.setColor(new Color(0, 0, 0, 100));
+        g2.fillRoundRect(px, py, pw, ph, 6, 6);
+
+        // Border
+        g2.setColor(new Color(255, 255, 255, 60));
+        g2.setStroke(new BasicStroke(0.5f));
+        g2.drawRoundRect(px, py, pw, ph, 6, 6);
+
+        // Text
         g2.setColor(Color.WHITE);
-        g2.drawString(icon, x, y);
+        g2.drawString(label, px + 5, py + fm.getAscent() + 1);
     }
 
-    /** Draw card name (supports auto line wrap) */
-    private void paintName(Graphics2D g2, int cardTop) {
-        CardPalette palette = resolvePalette();
-        g2.setColor(palette != null ? palette.text : Color.WHITE);
-        // Auto-adjust font size based on name length
+    /** Large central icon drawn with Graphics2D */
+    private void paintCenterIcon(Graphics2D g2, int cardTop) {
+        int cx = CARD_W / 2;
+        int cy = cardTop + CARD_H / 2 - 4;
+        int s = 26;
+
+        // Icon shadow
+        g2.setColor(new Color(0, 0, 0, 40));
+        g2.translate(1, 2);
+        drawIcon(g2, cx, cy, s, true);
+        g2.translate(-1, -2);
+
+        // Main icon
+        g2.setColor(new Color(255, 255, 255, 180));
+        drawIcon(g2, cx, cy, s, false);
+    }
+
+    private void drawIcon(Graphics2D g2, int cx, int cy, int s, boolean shadow) {
+        g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+        switch (cardType) {
+            case "MONEY":    drawMoneyIcon(g2, cx, cy, s); break;
+            case "PROPERTY": drawHouseIcon(g2, cx, cy, s); break;
+            case "ACTION":   drawBoltIcon(g2, cx, cy, s); break;
+            case "RENT":     drawDiamondIcon(g2, cx, cy, s); break;
+            default:         drawDiamondIcon(g2, cx, cy, s); break;
+        }
+    }
+
+    private void drawMoneyIcon(Graphics2D g2, int cx, int cy, int s) {
+        // Circle with $
+        g2.drawOval(cx - s/2, cy - s/2, s, s);
+        g2.setFont(new Font("SansSerif", Font.BOLD, s - 4));
+        FontMetrics fm = g2.getFontMetrics();
+        g2.drawString("$", cx - fm.stringWidth("$") / 2,
+                cy + (fm.getAscent() - fm.getDescent()) / 2);
+    }
+
+    private void drawHouseIcon(Graphics2D g2, int cx, int cy, int s) {
+        int hw = s * 3 / 5;
+        int hh = s * 2 / 5;
+        int[] rx = {cx - hw, cx, cx + hw};
+        int[] ry = {cy, cy - s/2, cy};
+        g2.fillPolygon(rx, ry, 3);
+        g2.fillRect(cx - hw/2, cy, hw, hh);
+        // Door
+        g2.setColor(new Color(0, 0, 0, 50));
+        g2.fillRect(cx - hw/6, cy + hh/3, hw/3, hh * 2/3);
+    }
+
+    private void drawBoltIcon(Graphics2D g2, int cx, int cy, int s) {
+        int hs = s / 2;
+        Path2D.Float bolt = new Path2D.Float();
+        bolt.moveTo(cx + hs * 0.2f, cy - hs);
+        bolt.lineTo(cx - hs * 0.3f, cy - hs * 0.1f);
+        bolt.lineTo(cx + hs * 0.1f, cy - hs * 0.1f);
+        bolt.lineTo(cx - hs * 0.2f, cy + hs);
+        bolt.lineTo(cx + hs * 0.4f, cy + hs * 0.1f);
+        bolt.lineTo(cx + hs * 0.1f, cy + hs * 0.1f);
+        bolt.closePath();
+        g2.fill(bolt);
+    }
+
+    private void drawDiamondIcon(Graphics2D g2, int cx, int cy, int s) {
+        int[] dx = {cx, cx - s/2, cx, cx + s/2};
+        int[] dy = {cy - s/2, cy, cy + s/2, cy};
+        g2.fillPolygon(dx, dy, 4);
+        g2.setColor(new Color(0, 0, 0, 40));
+        g2.setFont(new Font("SansSerif", Font.BOLD, s/2));
+        FontMetrics fm = g2.getFontMetrics();
+        g2.drawString("$", cx - fm.stringWidth("$") / 2,
+                cy + (fm.getAscent() - fm.getDescent()) / 2);
+    }
+
+    /** Card name centered at bottom */
+    private void paintCardName(Graphics2D g2, int cardTop) {
+        CardPalette p = resolvePalette();
+        g2.setColor(p != null ? p.text : Color.WHITE);
+
         int fontSize = cardName.length() > 12 ? 9 : (cardName.length() > 8 ? 10 : 11);
         g2.setFont(new Font("SansSerif", Font.BOLD, fontSize));
         FontMetrics fm = g2.getFontMetrics();
-        String[] lines = wrapText(cardName, fm, CARD_W - 10);
+
+        String[] lines = wrapText(cardName, fm, CARD_W - 12);
         int lineH = fm.getHeight();
         int totalH = lines.length * lineH;
-        int startY = cardTop + CARD_H - (value > 0 ? 32 : 16) - totalH;
+
+        int startY;
+        if (value > 0) {
+            startY = cardTop + CARD_H - 36 - totalH;
+        } else {
+            startY = cardTop + CARD_H - 14 - totalH;
+        }
+
         for (String line : lines) {
             int x = (CARD_W - fm.stringWidth(line)) / 2;
-            // Text with shadow
-            g2.setColor(new Color(0, 0, 0, 100));
+            g2.setColor(new Color(0, 0, 0, 80));
             g2.drawString(line, x + 1, startY + 1);
-            g2.setColor(palette != null ? palette.text : Color.WHITE);
+            g2.setColor(p != null ? p.text : Color.WHITE);
             g2.drawString(line, x, startY);
             startY += lineH;
         }
     }
 
-    /** Draw bottom value badge (money cards only, e.g. "$5M") */
+    /** Value badge (money cards) */
     private void paintValueBadge(Graphics2D g2, int cardTop) {
         String label = "$" + value + "M";
         Font font = new Font("SansSerif", Font.BOLD, 12);
@@ -441,40 +469,42 @@ public class CardRenderer extends JPanel {
         int bh = fm.getHeight() + 4;
         int bx = (CARD_W - bw) / 2;
         int by = cardTop + CARD_H - bh - 6;
-        // Semi-transparent black rounded background + gold text
-        g2.setColor(new Color(0, 0, 0, 160));
+
+        g2.setColor(new Color(0, 0, 0, 150));
         g2.fill(new RoundRectangle2D.Float(bx, by, bw, bh, 8, 8));
+
         g2.setColor(new Color(0xFFD700));
         g2.drawString(label, bx + 7, by + fm.getAscent() + 2);
     }
 
-    /** Draw card border (selected=gold glow, default=dark border) */
+    /** Card border */
     private void paintBorder(Graphics2D g2, int cardTop) {
         RoundRectangle2D.Float border = new RoundRectangle2D.Float(
                 0.5f, cardTop + 0.5f, CARD_W - 1f, CARD_H - 1f,
                 CORNER_RADIUS, CORNER_RADIUS);
 
         if (selected) {
-            // Multi-layer gold glow border
             for (int i = 3; i > 0; i--) {
-                g2.setColor(new Color(255, 215, 0, 60 * i));
+                g2.setColor(new Color(255, 215, 0, 50 * i));
                 g2.setStroke(new BasicStroke(i * 2 + 1f));
                 g2.draw(border);
             }
             g2.setColor(new Color(0xFFD700));
             g2.setStroke(new BasicStroke(2.5f));
         } else {
-            CardPalette palette = resolvePalette();
-            g2.setColor(palette != null ? palette.border.darker() : Color.GRAY);
+            CardPalette p = resolvePalette();
+            Color borderColor = p != null ? p.bg.darker() : Color.GRAY;
+            // Inner thin highlight
+            g2.setColor(new Color(255, 255, 255, 15));
+            g2.setStroke(new BasicStroke(0.5f));
+            g2.draw(new RoundRectangle2D.Float(1.5f, cardTop + 1.5f,
+                    CARD_W - 3f, CARD_H - 3f, CORNER_RADIUS - 1, CORNER_RADIUS - 1));
+            g2.setColor(borderColor);
             g2.setStroke(new BasicStroke(1.5f));
         }
         g2.draw(border);
     }
 
-    /**
-     * Resolve the current card's color palette.
-     * Priority: colorKey → cardType → fallback gray.
-     */
     private CardPalette resolvePalette() {
         CardPalette p = PALETTES.get(colorKey);
         if (p == null) p = PALETTES.get(cardType);
@@ -482,13 +512,7 @@ public class CardRenderer extends JPanel {
         return p;
     }
 
-    /**
-     * Text wrapping utility — splits a long name into at most two lines.
-     * @param text original text
-     * @param fm font metrics
-     * @param maxWidth maximum width (pixels)
-     * @return array of split lines (1-2 lines)
-     */
+    /** Text wrapping: max 2 lines */
     private static String[] wrapText(String text, FontMetrics fm, int maxWidth) {
         if (fm.stringWidth(text) <= maxWidth) return new String[]{text};
         String[] words = text.split(" ");
@@ -514,24 +538,20 @@ public class CardRenderer extends JPanel {
                 new String[]{line1.toString(), line2.toString()};
     }
 
-    // ==================== Static factory methods (convenience constructors) ====================
+    // ==================== Static factory methods ====================
 
-    /** Create a money card renderer */
     public static CardRenderer money(String cardId, int value) {
         return new CardRenderer(cardId, value + "M", "MONEY", "MONEY", value);
     }
 
-    /** Create a property card renderer */
     public static CardRenderer property(String cardId, String name, String colorKey) {
         return new CardRenderer(cardId, name, "PROPERTY", colorKey, 0);
     }
 
-    /** Create an action card renderer */
     public static CardRenderer action(String cardId, String name) {
         return new CardRenderer(cardId, name, "ACTION", "ACTION", 0);
     }
 
-    /** Create a rent card renderer */
     public static CardRenderer rent(String cardId, String name, String colorKey) {
         return new CardRenderer(cardId, name, "RENT", colorKey, 0);
     }

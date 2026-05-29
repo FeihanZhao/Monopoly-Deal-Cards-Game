@@ -11,35 +11,24 @@ import com.monopolydeal.model.CardColor;
 /**
  * Property set panel — displays a player's property groupings as compact colored badges.
  *
- * Replaces the original propertyPanel in PlayerPanel with a more intuitive property display.
  * Each badge shows:
  * - Color dot (represents the property color)
  * - Count text (current/required, e.g. "2/3")
- * - House/hotel icon (if built)
- *
- * Visual effects:
- * - Complete sets have a gold border glow
- * - Incomplete sets show a normal colored background
- * - Badge background colors match CardColor definitions
- *
- * JSON data format (from GameState.PlayerState):
- * {
- *   "propertyColorCounts": { "RED": 2, "GREEN": 3, ... },
- *   "completeSets": 1
- * }
+ * - Complete set: gold border glow
+ * - Incomplete sets: normal colored background
  */
 public class PropertySetPanel extends JPanel {
 
     /** Badge height */
-    private static final int BADGE_H   = 22;
+    private static final int BADGE_H   = 24;
     /** Badge corner radius */
-    private static final int BADGE_ARC = 6;
+    private static final int BADGE_ARC = 8;
     /** Color dot diameter */
-    private static final int DOT_SIZE  = 10;
+    private static final int DOT_SIZE  = 12;
     /** Horizontal gap between badges */
-    private static final int H_GAP     = 4;
+    private static final int H_GAP     = 6;
 
-    /** Dark text color mapping for light backgrounds (white text is unreadable on light colors) */
+    /** Dark text color mapping for light backgrounds */
     private static final Map<String, Color> TEXT_COLORS = Map.of(
             "LIGHT_BLUE",  new Color(0x1A1A1A),
             "YELLOW",      new Color(0x1A1A1A),
@@ -55,25 +44,21 @@ public class PropertySetPanel extends JPanel {
     /** Whether each property color has a hotel */
     private final Map<String, Boolean> hasHotel = new HashMap<>();
 
-    /** Constructor — initializes a fixed-height transparent panel */
+    /** Constructor */
     public PropertySetPanel() {
         setOpaque(false);
-        setPreferredSize(new Dimension(300, BADGE_H + 6));
-        setMinimumSize(new Dimension(0, BADGE_H + 6));
+        setPreferredSize(new Dimension(300, BADGE_H + 8));
+        setMinimumSize(new Dimension(0, BADGE_H + 8));
     }
 
     /**
      * Update badge state from server JSON data.
-     * Called by PlayerPanel.updateFromJson().
-     *
-     * @param playerData JSON data for a single player
      */
     public void updateFromJson(JsonObject playerData) {
         colorCounts.clear();
         hasHouse.clear();
         hasHotel.clear();
 
-        // Parse property card counts per color
         if (playerData.has("propertyColorCounts")) {
             JsonObject counts = playerData.getAsJsonObject("propertyColorCounts");
             for (String key : counts.keySet()) {
@@ -84,7 +69,6 @@ public class PropertySetPanel extends JPanel {
             }
         }
 
-        // Parse house info (optional field, backend may not provide it yet)
         if (playerData.has("houseColors")) {
             JsonObject houses = playerData.getAsJsonObject("houseColors");
             for (String key : houses.keySet()) {
@@ -92,7 +76,6 @@ public class PropertySetPanel extends JPanel {
             }
         }
 
-        // Parse hotel info (optional field)
         if (playerData.has("hotelColors")) {
             JsonObject hotels = playerData.getAsJsonObject("hotelColors");
             for (String key : hotels.keySet()) {
@@ -104,9 +87,7 @@ public class PropertySetPanel extends JPanel {
     }
 
     /**
-     * Get the required card count for a complete set of the given color from the CardColor enum.
-     * @param colorKey color name (e.g. "BROWN", "RED")
-     * @return required card count, falls back to 3 on parse failure
+     * Get the required card count for a complete set.
      */
     private int getSetSize(String colorKey) {
         try {
@@ -118,7 +99,6 @@ public class PropertySetPanel extends JPanel {
 
     /**
      * Custom painting — horizontally arranged colored badges.
-     * Each badge contains: color dot + count text (current/required) + house/hotel icon.
      */
     @Override
     protected void paintComponent(Graphics g) {
@@ -132,7 +112,7 @@ public class PropertySetPanel extends JPanel {
                 RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
 
         int x   = 2;
-        int top = (getHeight() - BADGE_H) / 2;  // Vertical center
+        int top = (getHeight() - BADGE_H) / 2;
 
         for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
             String colorKey = entry.getKey();
@@ -142,7 +122,7 @@ public class PropertySetPanel extends JPanel {
             boolean house    = hasHouse.getOrDefault(colorKey, false);
             boolean hotel    = hasHotel.getOrDefault(colorKey, false);
 
-            // Build badge text: count/required + house/hotel icon
+            // Build badge text
             String countText = count + "/" + required;
             String extraText = hotel ? " H" : house ? " h" : "";
             String fullText  = countText + extraText;
@@ -150,50 +130,64 @@ public class PropertySetPanel extends JPanel {
             g2.setFont(new Font("SansSerif", Font.BOLD, 11));
             FontMetrics fm = g2.getFontMetrics();
             int textW  = fm.stringWidth(fullText);
-            int badgeW = DOT_SIZE + 4 + textW + 10;  // Dot + gap + text + padding
+            int badgeW = DOT_SIZE + 5 + textW + 12;
 
             Color bg = AppTheme.PROPERTY_COLORS.getOrDefault(colorKey, Color.GRAY);
 
-            // Complete set: draw a gold glow outer border
+            // Complete set: gold glow outer border
             if (complete) {
-                g2.setColor(new Color(255, 215, 0, 80));
-                g2.setStroke(new BasicStroke(3f));
+                // Outer glow
+                g2.setColor(new Color(255, 215, 0, 30));
+                g2.setStroke(new BasicStroke(4f));
                 g2.draw(new RoundRectangle2D.Float(
                         x - 1, top - 1, badgeW + 2, BADGE_H + 2,
                         BADGE_ARC + 2, BADGE_ARC + 2));
+                // Inner gold border
+                g2.setColor(new Color(255, 215, 0, 80));
+                g2.setStroke(new BasicStroke(2f));
+                g2.draw(new RoundRectangle2D.Float(
+                        x, top, badgeW, BADGE_H,
+                        BADGE_ARC, BADGE_ARC));
             }
 
             // Badge background
             g2.setPaint(bg);
             g2.fill(new RoundRectangle2D.Float(x, top, badgeW, BADGE_H, BADGE_ARC, BADGE_ARC));
 
-            // Badge border (complete=gold, incomplete=dark)
-            g2.setStroke(new BasicStroke(1.2f));
-            g2.setColor(complete ? new Color(255, 215, 0) : bg.darker());
-            g2.draw(new RoundRectangle2D.Float(
-                    x + 0.6f, top + 0.6f, badgeW - 1.2f, BADGE_H - 1.2f,
+            // Subtle inner shine at top of badge
+            g2.setColor(new Color(255, 255, 255, 30));
+            g2.fill(new RoundRectangle2D.Float(
+                    x + 2, top + 1, badgeW - 4, BADGE_H / 2 - 1,
                     BADGE_ARC, BADGE_ARC));
 
+            // Badge border
+            if (!complete) {
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.setColor(bg.darker());
+                g2.draw(new RoundRectangle2D.Float(
+                        x + 0.6f, top + 0.6f, badgeW - 1.2f, BADGE_H - 1.2f,
+                        BADGE_ARC, BADGE_ARC));
+            }
+
             // Color dot
-            int dotX = x + 5;
+            int dotX = x + 6;
             int dotY = top + (BADGE_H - DOT_SIZE) / 2;
-            g2.setColor(bg.brighter());
+            g2.setColor(bg.brighter().brighter());
             g2.fillOval(dotX, dotY, DOT_SIZE, DOT_SIZE);
-            g2.setColor(bg.darker().darker());
-            g2.setStroke(new BasicStroke(0.8f));
+            g2.setColor(new Color(0, 0, 0, 40));
+            g2.setStroke(new BasicStroke(1f));
             g2.drawOval(dotX, dotY, DOT_SIZE, DOT_SIZE);
 
             // Count text
             Color textColor = TEXT_COLORS.getOrDefault(colorKey, Color.WHITE);
             g2.setColor(textColor);
             g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-            int tx = dotX + DOT_SIZE + 4;
+            int tx = dotX + DOT_SIZE + 5;
             int ty = top + (BADGE_H + fm.getAscent() - fm.getDescent()) / 2 - 1;
             g2.drawString(fullText, tx, ty);
 
             x += badgeW + H_GAP;
 
-            // Stop drawing if exceeding panel width
             if (x + 40 > getWidth()) break;
         }
 

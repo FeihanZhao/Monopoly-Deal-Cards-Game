@@ -54,7 +54,7 @@ public class MainFrame extends JFrame {
      * Create CardLayout container, add LobbyPanel and GamePanel, default to showing lobby.
      */
     private void initializeUI() {
-        setTitle("Monopoly Deal Cards Game");
+        setTitle("MONOPOLY DEAL ★ Premium Card Game");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);  // Exit program on window close
         setSize(1280, 800);
         setMinimumSize(new Dimension(1024, 768));

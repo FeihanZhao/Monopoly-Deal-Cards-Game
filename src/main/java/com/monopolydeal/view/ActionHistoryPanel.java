@@ -2,8 +2,8 @@ package com.monopolydeal.view;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import com.google.gson.JsonArray;
@@ -14,21 +14,14 @@ import com.google.gson.JsonObject;
  *
  * Each record is shown as a single line containing:
  * - Gray timestamp (HH:mm:ss)
- * - Colored player nickname (each player gets a fixed color)
+ * - Colored player nickname
  * - White action description
- *
- * Auto-scrolls to the latest record, but won't force-scroll when the user has manually
- * scrolled up to review history.
  */
 public class ActionHistoryPanel extends JPanel {
 
-    /** List data model */
     private final DefaultListModel<ActionEntry> listModel;
-    /** Action record list */
     private final JList<ActionEntry> actionList;
-    /** Player color cache (assigns colors by player nickname) */
     private final Map<String, Color> playerColors;
-    /** Color wheel */
     private static final Color[] COLORS = {
             new Color(255, 140, 100),
             new Color(100, 255, 140),
@@ -39,12 +32,8 @@ public class ActionHistoryPanel extends JPanel {
     };
     private int colorIndex;
 
-    /** Time formatter */
     private final SimpleDateFormat timeFormat;
 
-    // ==================== Inner data class ====================
-
-    /** A single action record */
     private static class ActionEntry {
         final String timeStr;
         final String nickname;
@@ -57,9 +46,6 @@ public class ActionHistoryPanel extends JPanel {
         }
     }
 
-    // ==================== Custom renderer ====================
-
-    /** Action record list item renderer — gray time + colored player name + white description */
     private class ActionRenderer extends JPanel implements ListCellRenderer<ActionEntry> {
         private final JLabel label;
 
@@ -69,7 +55,7 @@ public class ActionHistoryPanel extends JPanel {
             label = new JLabel();
             label.setOpaque(false);
             label.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            label.setBorder(new EmptyBorder(1, 4, 1, 4));
+            label.setBorder(new EmptyBorder(2, 6, 2, 6));
             add(label, BorderLayout.CENTER);
         }
 
@@ -83,11 +69,10 @@ public class ActionHistoryPanel extends JPanel {
                 return this;
             }
 
-            // Build color-coded text: time(gray) | nickname(colored) : action(white)
             Color playerColor = getPlayerColor(value.nickname);
             String html = String.format(
-                    "<html><span style='color:#999999'>[%s]</span> "
-                            + "<span style='color:rgb(%d,%d,%d)'>%s</span>"
+                    "<html><span style='color:#888888'>[%s]</span> "
+                            + "<span style='color:rgb(%d,%d,%d)'><b>%s</b></span>"
                             + "<span style='color:#CCCCCC'>: %s</span></html>",
                     value.timeStr,
                     playerColor.getRed(), playerColor.getGreen(), playerColor.getBlue(),
@@ -100,25 +85,51 @@ public class ActionHistoryPanel extends JPanel {
             return this;
         }
 
-        /** Escape HTML special characters */
         private String escapeHtml(String text) {
             return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
         }
     }
 
-    // ==================== Constructor ====================
-
     public ActionHistoryPanel() {
         setLayout(new BorderLayout());
-        setBackground(new Color(30, 35, 42));
-        setBorder(new TitledBorder(
-                BorderFactory.createLineBorder(new Color(60, 65, 75)),
-                "Action Log",
-                TitledBorder.LEFT,
-                TitledBorder.TOP,
-                new Font("SansSerif", Font.BOLD, 12),
-                new Color(200, 200, 200)
-        ));
+        setBackground(new Color(28, 33, 42));
+
+        // Custom title bar
+        JPanel titleBar = new JPanel(new BorderLayout());
+        titleBar.setOpaque(false);
+        titleBar.setBorder(new EmptyBorder(10, 12, 8, 12));
+
+        JLabel titleIcon = new JLabel("⚡");
+        titleIcon.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        titleIcon.setForeground(AppTheme.GOLD);
+
+        JLabel titleLabel = new JLabel("Action Log");
+        titleLabel.setForeground(new Color(200, 200, 200));
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+
+        JPanel titleContent = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        titleContent.setOpaque(false);
+        titleContent.add(titleIcon);
+        titleContent.add(titleLabel);
+        titleBar.add(titleContent, BorderLayout.WEST);
+
+        // Separator line below title
+        JPanel separator = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                g.setColor(new Color(60, 65, 75));
+                g.fillRect(0, 0, getWidth(), 1);
+            }
+        };
+        separator.setOpaque(false);
+        separator.setPreferredSize(new Dimension(0, 1));
+
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setOpaque(false);
+        headerPanel.add(titleBar, BorderLayout.CENTER);
+        headerPanel.add(separator, BorderLayout.SOUTH);
+        add(headerPanel, BorderLayout.NORTH);
 
         playerColors = new HashMap<>();
         colorIndex   = 0;
@@ -127,27 +138,41 @@ public class ActionHistoryPanel extends JPanel {
         listModel  = new DefaultListModel<>();
         actionList = new JList<>(listModel);
         actionList.setCellRenderer(new ActionRenderer());
-        actionList.setBackground(new Color(30, 35, 42));
+        actionList.setBackground(new Color(28, 33, 42));
         actionList.setSelectionBackground(new Color(60, 70, 90));
         actionList.setSelectionForeground(Color.WHITE);
-        actionList.setFixedCellHeight(18);
+        actionList.setFixedCellHeight(20);
         actionList.setVisibleRowCount(0);
 
         JScrollPane scrollPane = new JScrollPane(actionList);
         scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(new Color(30, 35, 42));
+        scrollPane.getViewport().setBackground(new Color(28, 33, 42));
+
+        scrollPane.getVerticalScrollBar().setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+            @Override
+            protected void configureScrollBarColors() {
+                this.thumbColor = new Color(60, 65, 75);
+                this.trackColor = new Color(28, 33, 42);
+            }
+            @Override
+            protected JButton createDecreaseButton(int orientation) {
+                return createZeroButton();
+            }
+            @Override
+            protected JButton createIncreaseButton(int orientation) {
+                return createZeroButton();
+            }
+            private JButton createZeroButton() {
+                JButton b = new JButton();
+                b.setPreferredSize(new Dimension(0, 0));
+                return b;
+            }
+        });
 
         add(scrollPane, BorderLayout.CENTER);
     }
 
-    // ==================== Public API ====================
-
-    /**
-     * Update action history — called by GamePanel on every GAME_STATE_UPDATE.
-     * @param actions action record JSON array
-     */
     public void updateActions(JsonArray actions) {
-        // Determine whether the user is currently viewing history (not at bottom = scrolled up)
         boolean autoScroll = isScrolledToBottom();
 
         listModel.clear();
@@ -170,13 +195,11 @@ public class ActionHistoryPanel extends JPanel {
             listModel.addElement(new ActionEntry(timeStr, nickname, actionDesc));
         }
 
-        // Auto-scroll to bottom (only if user was already at bottom)
         if (autoScroll && listModel.getSize() > 0) {
             actionList.ensureIndexIsVisible(listModel.getSize() - 1);
         }
     }
 
-    /** Check whether the scrollbar is at the bottom */
     private boolean isScrolledToBottom() {
         JScrollPane sp = null;
         Container parent = actionList.getParent();
@@ -192,8 +215,6 @@ public class ActionHistoryPanel extends JPanel {
         return current + extent >= max - extent;
     }
 
-    // ==================== Player color assignment ====================
-
     private Color getPlayerColor(String nickname) {
         return playerColors.computeIfAbsent(nickname, k -> {
             Color c = COLORS[colorIndex % COLORS.length];
@@ -201,8 +222,6 @@ public class ActionHistoryPanel extends JPanel {
             return c;
         });
     }
-
-    // ==================== Action description formatting ====================
 
     private String formatAction(String actionType, String target, int amount) {
         switch (actionType) {
@@ -215,13 +234,13 @@ public class ActionHistoryPanel extends JPanel {
             case "RENT_ALL":      return "charged all players " + amount + "M rent";
             case "DEBT_COLLECTOR": return "collected " + amount + "M from " + target;
             case "BIRTHDAY":       return "everyone pays " + amount + "M";
-            case "DEAL_BREAKER":   return "stole " + target + "'s complete property set";
+            case "DEAL_BREAKER":   return "stole " + target + "'s complete set";
             case "PASS_GO":        return "drew 2 extra cards";
             case "DOUBLE_RENT":    return "next rent is doubled";
             case "HOUSE":          return "built a house";
             case "HOTEL":          return "built a hotel";
             case "FORCED_DEAL":    return "swapped property with " + target;
-            case "SLY_DEAL":       return "stole " + target + "'s property card";
+            case "SLY_DEAL":       return "stole " + target + "'s property";
             case "JUST_SAY_NO":    return "used Just Say No";
             case "PAY":            return "paid " + amount + "M to " + target;
             case "PARTIAL_PAY":    return "paid " + amount + "M (partial) to " + target;

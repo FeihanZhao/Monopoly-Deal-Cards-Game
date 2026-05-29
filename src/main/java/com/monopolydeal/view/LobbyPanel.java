@@ -3,6 +3,8 @@ package com.monopolydeal.view;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.BufferedImage;
 import com.monopolydeal.client.GameClient;
 import com.monopolydeal.model.GameConstants;
 import com.monopolydeal.util.MessageProtocol;
@@ -14,159 +16,308 @@ import com.google.gson.JsonElement;
 /**
  * Lobby panel — room management interface shown before the game starts.
  *
- * Provides two view modes:
- * 1. Login view (loginPanel) — enter nickname, create or join a room
- * 2. Room view (roomPanel) — show room code, player list, ready button
- *
- * Flow:
- * 1. Enter nickname → click "Create Room" or "Join Room" (requires room code)
- * 2. Auto-switch to room view after successfully joining a room
- * 3. Click "Ready" button to mark self as ready
- * 4. When all players are ready (≥2 people), the server auto-starts the game
- * 5. MainFrame switches to GamePanel when it receives GAME_STATE_UPDATE
- *
- * UI style: dark theme (deep purple-blue gradient background), gold title, rounded gradient buttons
+ * UI style: luxury dark theme with rich animated gradient background,
+ * decorative card fan art, glowing title, premium gradient buttons.
  */
 public class LobbyPanel extends JPanel {
-    /** Game client connection */
     private final GameClient client;
 
-    /** Nickname input field */
     private JTextField nicknameField;
-    /** Room code input field (used when joining a room) */
     private JTextField roomCodeField;
-    /** Create room button */
     private JButton createRoomButton;
-    /** Join room button */
     private JButton joinRoomButton;
-    /** Ready/unready button */
     private JButton readyButton;
-    /** Leave room button */
     private JButton leaveButton;
-    /** Start game button (only visible to host) */
     private JButton startGameButton;
-    /** Whether the current player is the room host */
     private boolean amICreator = false;
-    /** Player list component */
     private JList<String> playerList;
-    /** Player list data model */
     private DefaultListModel<String> playerListModel;
-    /** Room code label */
     private JLabel roomCodeLabel;
-    /** Status hint label */
     private JLabel statusLabel;
-    /** Room view panel */
     private JPanel roomPanel;
-    /** Login view panel */
     private JPanel loginPanel;
 
-    /** Whether currently in a room */
     private boolean isInRoom;
-    /** Whether currently ready */
     private boolean isReady;
 
-    /**
-     * Constructor — initialize the lobby UI.
-     * @param client connected GameClient instance
-     */
+    /** Decorative card positions for background art */
+    private static final double[][] CARD_POSITIONS = {
+            {0.08, 0.15, -15}, {0.92, 0.12, 12}, {0.15, 0.78, 8}, {0.85, 0.82, -10},
+            {0.05, 0.50, -20}, {0.95, 0.48, 18}, {0.50, 0.10, 0}, {0.50, 0.92, 5}
+    };
+
     public LobbyPanel(GameClient client) {
         this.client = client;
         this.isInRoom = false;
         this.isReady = false;
 
         setLayout(new BorderLayout());
-        setBackground(new Color(20, 20, 40));  // Dark background
+        setBackground(new Color(10, 8, 28));
 
-        createLoginPanel();   // Build login view
-        createRoomPanel();    // Build room view
+        createLoginPanel();
+        createRoomPanel();
 
-        add(loginPanel, BorderLayout.CENTER);  // Default to login view
+        add(loginPanel, BorderLayout.CENTER);
     }
 
     /**
-     * Create the login view panel — contains title, nickname input, room code input, and action buttons.
-     * Uses GridBagLayout with a deep purple-blue gradient background.
+     * Create the login view panel — luxurious dark theme with rich decorative elements.
      */
     private void createLoginPanel() {
         loginPanel = new JPanel(new GridBagLayout()) {
+            private BufferedImage cardArtCache = null;
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                // Top-left to bottom-right deep purple-blue gradient background
-                GradientPaint gradient = new GradientPaint(0, 0, new Color(15, 12, 35),
-                        getWidth(), getHeight(), new Color(35, 30, 60));
-                g2d.setPaint(gradient);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth(), h = getHeight();
+
+                // 1. Deep luxurious gradient background (diagonal two-tone)
+                GradientPaint bgGrad = new GradientPaint(0f, 0f, new Color(12, 8, 32),
+                        w, h, new Color(26, 18, 55));
+                g2.setPaint(bgGrad);
+                g2.fillRect(0, 0, w, h);
+
+                // 2. Rich radial glow (center spotlight)
+                RadialGradientPaint centerGlow = new RadialGradientPaint(
+                        w / 2f, h / 2f, Math.max(w, h) * 0.6f,
+                        new float[]{0f, 0.5f, 1f},
+                        new Color[]{new Color(60, 40, 120, 30), new Color(40, 25, 90, 15), new Color(0, 0, 0, 0)});
+                g2.setPaint(centerGlow);
+                g2.fillRect(0, 0, w, h);
+
+                // 3. Corner decorative light beams
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.06f));
+                // Top-left beam
+                g2.setColor(new Color(150, 100, 255));
+                g2.fill(new Polygon(new int[]{0, w/4, 0}, new int[]{0, 0, h/3}, 3));
+                // Bottom-right beam
+                g2.setColor(new Color(100, 200, 255));
+                g2.fill(new Polygon(new int[]{w, w*3/4, w}, new int[]{h, h, h*2/3}, 3));
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+
+                // 4. Decorative floating card silhouettes
+                drawFloatingCards(g2, w, h);
+
+                // 5. Sparkle / star particles
+                drawSparkles(g2, w, h);
+            }
+
+            /** Draw decorative card silhouettes around the edges */
+            private void drawFloatingCards(Graphics2D g2, int w, int h) {
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.07f));
+                g2.setColor(new Color(200, 180, 255));
+                g2.setStroke(new BasicStroke(1f));
+
+                for (double[] pos : CARD_POSITIONS) {
+                    int cx = (int) (w * pos[0]);
+                    int cy = (int) (h * pos[1]);
+                    double angle = Math.toRadians(pos[2]);
+                    int cw = 50, ch = 70;
+
+                    g2.rotate(angle, cx, cy);
+                    // Card outline
+                    g2.drawRoundRect(cx - cw/2, cy - ch/2, cw, ch, 8, 8);
+                    // Card inner detail
+                    g2.drawLine(cx - cw/3, cy - ch/4, cx + cw/3, cy - ch/4);
+                    g2.drawLine(cx - cw/3, cy, cx + cw/3, cy);
+                    g2.drawLine(cx - cw/3, cy + ch/4, cx + cw/3, cy + ch/4);
+                    // Diamond center
+                    int ds = 8;
+                    g2.drawPolygon(new int[]{cx, cx-ds, cx, cx+ds}, new int[]{cy-ds, cy, cy+ds, cy}, 4);
+                    g2.rotate(-angle, cx, cy);
+                }
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+            }
+
+            /** Draw sparkle particles */
+            private void drawSparkles(Graphics2D g2, int w, int h) {
+                int[][] sparkles = {
+                        {w/10, h/4, 3}, {w*9/10, h/5, 4}, {w/6, h*3/4, 3},
+                        {w*5/6, h*2/3, 2}, {w/3, h/5, 2}, {w*8/9, h*3/4, 3},
+                        {w/4, h/2, 4}, {w*3/4, h/2, 2}
+                };
+
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.12f));
+                g2.setColor(new Color(255, 230, 180));
+
+                for (int[] s : sparkles) {
+                    int size = s[2];
+                    g2.setStroke(new BasicStroke(1f));
+                    g2.drawLine(s[0] - size, s[1], s[0] + size, s[1]);
+                    g2.drawLine(s[0], s[1] - size, s[0], s[1] + size);
+                    // Small diamond center
+                    g2.drawPolygon(new int[]{s[0], s[0]+1, s[0], s[0]-1},
+                                   new int[]{s[1]-1, s[1], s[1]+1, s[1]}, 4);
+                }
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
             }
         };
-        loginPanel.setBorder(new EmptyBorder(60, 60, 60, 60));
+        loginPanel.setBorder(new EmptyBorder(50, 70, 50, 70));
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(15, 15, 15, 15);  // Component spacing
+        gbc.insets = new Insets(10, 15, 10, 15);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // ===== Title =====
-        JLabel titleLabel = new JLabel("Monopoly Deal");
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 52));
-        titleLabel.setForeground(new Color(255, 215, 0));  // Gold
-        titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        // ===================================================================
+        // TITLE SECTION — glowing gold title with shadow layers
+        // ===================================================================
+        JPanel titlePanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // Don't paint background — just a container for positioning
+            }
+        };
+        titlePanel.setOpaque(false);
+        titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
+
+        // Main title (MONOPOLY) with glow effect via layered JLabels
+        JPanel glowPanel = new JPanel(new GridBagLayout());
+        glowPanel.setOpaque(false);
+
+        // Multi-layer title: outer glow, inner glow, main text
+        JLabel titleGlowOuter = new JLabel("MONOPOLY");
+        titleGlowOuter.setFont(new Font("SansSerif", Font.BOLD, 56));
+        titleGlowOuter.setForeground(new Color(255, 200, 50, 40));
+        titleGlowOuter.setHorizontalAlignment(SwingConstants.CENTER);
+
+        JLabel titleGlowInner = new JLabel("MONOPOLY");
+        titleGlowInner.setFont(new Font("SansSerif", Font.BOLD, 56));
+        titleGlowInner.setForeground(new Color(255, 230, 100, 80));
+        titleGlowInner.setHorizontalAlignment(SwingConstants.CENTER);
+
+        JLabel titleMain = new JLabel("MONOPOLY");
+        titleMain.setFont(new Font("SansSerif", Font.BOLD, 56));
+        titleMain.setForeground(new Color(255, 215, 0));
+        titleMain.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // Stack them using layered layout
+        JLayeredPane layeredTitle = new JLayeredPane();
+        layeredTitle.setPreferredSize(new Dimension(400, 70));
+        layeredTitle.setMinimumSize(new Dimension(400, 70));
+
+        titleGlowOuter.setBounds(0, 0, 400, 70);
+        titleGlowInner.setBounds(0, 0, 400, 70);
+        titleMain.setBounds(0, 0, 400, 70);
+
+        layeredTitle.add(titleGlowOuter, JLayeredPane.DEFAULT_LAYER);
+        layeredTitle.add(titleGlowInner, JLayeredPane.PALETTE_LAYER);
+        layeredTitle.add(titleMain, JLayeredPane.MODAL_LAYER);
+
+        glowPanel.add(layeredTitle);
+        titlePanel.add(glowPanel);
+
+        // "DEAL" subtitle with gold color
+        JLabel dealLabel = new JLabel("DEAL");
+        dealLabel.setFont(new Font("SansSerif", Font.BOLD, 42));
+        dealLabel.setForeground(new Color(255, 200, 80));
+        dealLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        dealLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titlePanel.add(dealLabel);
+
+        // Decorative divider line
+        JPanel divider = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+                // Gold gradient line
+                LinearGradientPaint gp = new LinearGradientPaint(0f, 0f, w, 0f,
+                        new float[]{0f, 0.5f, 1f},
+                        new Color[]{new Color(255, 215, 0, 0),
+                                    new Color(255, 215, 0, 180),
+                                    new Color(255, 215, 0, 0)});
+                g2.setPaint(gp);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawLine(0, h/2, w, h/2);
+                // Center diamond ornament
+                g2.setColor(new Color(255, 215, 0, 200));
+                g2.fillPolygon(new int[]{w/2, w/2-5, w/2, w/2+5},
+                               new int[]{h/2-5, h/2, h/2+5, h/2}, 4);
+            }
+        };
+        divider.setOpaque(false);
+        divider.setPreferredSize(new Dimension(400, 16));
+        divider.setMaximumSize(new Dimension(Short.MAX_VALUE, 16));
+        divider.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titlePanel.add(divider);
+
+        // Premium tagline
+        JLabel subtitleLabel = new JLabel("★ Premium Card Game ★");
+        subtitleLabel.setFont(new Font("SansSerif", Font.ITALIC, 18));
+        subtitleLabel.setForeground(new Color(200, 180, 255));
+        subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        subtitleLabel.setBorder(new EmptyBorder(0, 0, 15, 0));
+        titlePanel.add(subtitleLabel);
+
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
-        loginPanel.add(titleLabel, gbc);
+        gbc.anchor = GridBagConstraints.CENTER;
+        loginPanel.add(titlePanel, gbc);
 
-        // ===== Subtitle =====
-        JLabel subtitleLabel = new JLabel("Premium Card Game");
-        subtitleLabel.setFont(new Font("SansSerif", Font.ITALIC, 24));
-        subtitleLabel.setForeground(new Color(180, 180, 220));
-        subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        gbc.gridy = 1;
-        loginPanel.add(subtitleLabel, gbc);
-
-        // ===== Nickname input row =====
+        // ===================================================================
+        // INPUT SECTION
+        // ===================================================================
+        gbc.anchor = GridBagConstraints.EAST;
         gbc.gridwidth = 1;
+
+        // Nickname
         gbc.gridy = 2;
         gbc.gridx = 0;
-        JLabel nicknameLabel = new JLabel("Nickname:");
-        nicknameLabel.setForeground(new Color(220, 220, 255));
-        nicknameLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
+        gbc.insets = new Insets(8, 15, 8, 8);
+        JLabel nicknameLabel = new JLabel("👤 Nickname");
+        nicknameLabel.setForeground(new Color(200, 190, 230));
+        nicknameLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
         loginPanel.add(nicknameLabel, gbc);
 
         gbc.gridx = 1;
+        gbc.insets = new Insets(8, 8, 8, 15);
         nicknameField = new JTextField(20);
-        nicknameField.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        // Generate random default nickname
-        nicknameField.setText("Player" + (int)(Math.random() * 1000));
+        nicknameField.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        nicknameField.setText("Player" + (int)(Math.random() * 9000 + 1000));
         styleTextField(nicknameField);
         loginPanel.add(nicknameField, gbc);
 
-        // ===== Room code input row =====
+        // Room Code
         gbc.gridy = 3;
         gbc.gridx = 0;
-        JLabel roomLabel = new JLabel("Room Code:");
-        roomLabel.setForeground(new Color(220, 220, 255));
-        roomLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
+        gbc.insets = new Insets(8, 15, 8, 8);
+        JLabel roomLabel = new JLabel("🔑 Room Code");
+        roomLabel.setForeground(new Color(200, 190, 230));
+        roomLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
         loginPanel.add(roomLabel, gbc);
 
         gbc.gridx = 1;
+        gbc.insets = new Insets(8, 8, 8, 15);
         roomCodeField = new JTextField(20);
-        roomCodeField.setFont(new Font("SansSerif", Font.PLAIN, 18));
+        roomCodeField.setFont(new Font("SansSerif", Font.PLAIN, 16));
         styleTextField(roomCodeField);
         loginPanel.add(roomCodeField, gbc);
 
-        // ===== Button panel =====
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 15));
+        // ===================================================================
+        // ACTION BUTTONS
+        // ===================================================================
+        gbc.gridy = 4;
+        gbc.gridx = 0;
+        gbc.gridwidth = 2;
+        gbc.insets = new Insets(18, 15, 8, 15);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 5));
         buttonPanel.setOpaque(false);
 
-        // Create room button (green gradient)
-        createRoomButton = createGradientButton("Create Room",
-                new Color(34, 186, 157), new Color(27, 156, 133));
-        // Join room button (blue gradient)
-        joinRoomButton = createGradientButton("Join Room",
-                new Color(72, 133, 237), new Color(58, 112, 207));
+        createRoomButton = createPremiumButton("🎮 Create Room",
+                new Color(34, 186, 157), new Color(20, 150, 125),
+                new Color(50, 220, 180), new Color(30, 170, 140));
+        joinRoomButton = createPremiumButton("🚀 Join Room",
+                new Color(72, 133, 237), new Color(50, 100, 200),
+                new Color(100, 160, 255), new Color(65, 120, 220));
 
         createRoomButton.addActionListener(e -> createRoom());
         joinRoomButton.addActionListener(e -> joinRoom());
@@ -174,90 +325,93 @@ public class LobbyPanel extends JPanel {
         buttonPanel.add(createRoomButton);
         buttonPanel.add(joinRoomButton);
 
-        gbc.gridy = 4;
-        gbc.gridx = 0;
-        gbc.gridwidth = 2;
         loginPanel.add(buttonPanel, gbc);
 
-        // ===== Status hint label =====
+        // ===================================================================
+        // RULES BUTTON + STATUS
+        // ===================================================================
         gbc.gridy = 5;
-        statusLabel = new JLabel("Enter nickname to start");
-        statusLabel.setForeground(new Color(180, 180, 200));
-        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 16));
-        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        loginPanel.add(statusLabel, gbc);
+        gbc.insets = new Insets(5, 15, 5, 15);
 
-        // ===== Rules button =====
-        gbc.gridy = 5;
-        gbc.gridx = 0;
-        gbc.gridwidth = 2;
-        JButton rulesButton = new JButton("Rules");
-        rulesButton.setFont(new Font("SansSerif", Font.BOLD, 14));
-        rulesButton.setForeground(new Color(200, 200, 255));
-        rulesButton.setBackground(new Color(60, 55, 100));
-        rulesButton.setFocusPainted(false);
-        rulesButton.setBorder(BorderFactory.createLineBorder(new Color(120, 110, 180), 2, true));
-        rulesButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        rulesButton.setPreferredSize(new Dimension(160, 40));
+        JPanel bottomRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 5));
+        bottomRow.setOpaque(false);
+
+        JButton rulesButton = createBorderButton("📖 Game Rules",
+                new Color(180, 170, 220), new Color(80, 70, 130));
         rulesButton.addActionListener(e -> showRulesDialog());
-        loginPanel.add(rulesButton, gbc);
+        bottomRow.add(rulesButton);
 
-// ===== Status hint label (shifted to row 6) =====
+        loginPanel.add(bottomRow, gbc);
+
+        // Status
         gbc.gridy = 6;
-        statusLabel = new JLabel("Enter nickname to start");
-        statusLabel.setForeground(new Color(180, 180, 200));
-        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 16));
+        gbc.insets = new Insets(5, 15, 5, 15);
+        statusLabel = new JLabel("✨ Enter a nickname to begin");
+        statusLabel.setForeground(new Color(180, 180, 220));
+        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 14));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         loginPanel.add(statusLabel, gbc);
     }
 
     /**
-     * Create the room view panel — shown after entering a room.
-     * Contains room code, player list, ready/leave buttons.
+     * Create the room view panel — matching luxury style.
      */
     private void createRoomPanel() {
-        roomPanel = new JPanel(new BorderLayout()) {
+        roomPanel = new JPanel(new BorderLayout(0, 15)) {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                GradientPaint gradient = new GradientPaint(0, 0, new Color(25, 20, 45),
-                        getWidth(), getHeight(), new Color(40, 35, 70));
-                g2d.setPaint(gradient);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                // Rich gradient
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(18, 14, 40),
+                        getWidth(), getHeight(), new Color(35, 28, 65));
+                g2.setPaint(gradient);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                // Decorative corner glow
+                g2.setColor(new Color(255, 215, 0, 8));
+                g2.fillOval(-50, -50, 200, 200);
+                g2.fillOval(getWidth() - 150, getHeight() - 150, 200, 200);
             }
         };
         roomPanel.setBorder(new EmptyBorder(30, 30, 30, 30));
 
         // ===== Top info bar =====
-        JPanel topPanel = new JPanel(new BorderLayout());
+        JPanel topPanel = new JPanel(new BorderLayout(20, 0));
         topPanel.setOpaque(false);
 
-        // Room code label (large gold text)
-        roomCodeLabel = new JLabel("Room: -----");
-        roomCodeLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
-        roomCodeLabel.setForeground(new Color(255, 215, 0));
-        topPanel.add(roomCodeLabel, BorderLayout.WEST);
+        // Room code with decorative icon
+        JLabel roomIcon = new JLabel("🏠");
+        roomIcon.setFont(new Font("SansSerif", Font.PLAIN, 24));
 
-        // Ready/Leave buttons
-        JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        roomCodeLabel = new JLabel("Room: -----");
+        roomCodeLabel.setFont(new Font("SansSerif", Font.BOLD, 26));
+        roomCodeLabel.setForeground(new Color(255, 215, 0));
+
+        JPanel roomTitlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        roomTitlePanel.setOpaque(false);
+        roomTitlePanel.add(roomIcon);
+        roomTitlePanel.add(roomCodeLabel);
+        topPanel.add(roomTitlePanel, BorderLayout.WEST);
+
+        // Buttons
+        JPanel topButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
         topButtonPanel.setOpaque(false);
 
-        // Ready button (green gradient)
-        readyButton = createGradientButton("Ready",
-                new Color(46, 204, 113), new Color(39, 174, 96));
-        readyButton.addActionListener(e -> toggleReady());
-
-        // Start game button (host only, gold gradient, hidden by default)
-        startGameButton = createGradientButton("Start Game",
-                new Color(255, 193, 7), new Color(255, 152, 0));
+        startGameButton = createPremiumButton("▶ Start Game",
+                new Color(255, 193, 7), new Color(220, 160, 0),
+                new Color(255, 220, 50), new Color(240, 180, 10));
         startGameButton.addActionListener(e -> requestStartGame());
         startGameButton.setVisible(false);
 
-        // Leave button (red gradient)
-        leaveButton = createGradientButton("Leave Room",
-                new Color(231, 76, 60), new Color(192, 57, 43));
+        readyButton = createPremiumButton("✅ Ready",
+                new Color(46, 204, 113), new Color(30, 160, 85),
+                new Color(70, 230, 140), new Color(50, 190, 100));
+        readyButton.addActionListener(e -> toggleReady());
+
+        leaveButton = createPremiumButton("🚪 Leave",
+                new Color(200, 60, 50), new Color(160, 40, 35),
+                new Color(230, 80, 70), new Color(185, 50, 42));
         leaveButton.addActionListener(e -> leaveRoom());
 
         topButtonPanel.add(startGameButton);
@@ -276,81 +430,185 @@ public class LobbyPanel extends JPanel {
                 setOpaque(false);
             }
         };
-        playerList.setBackground(new Color(60, 55, 100, 180));  // Semi-transparent background
+        playerList.setBackground(new Color(60, 50, 100, 180));
         playerList.setForeground(Color.WHITE);
         playerList.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        playerList.setFixedCellHeight(48);
-        playerList.setSelectionBackground(new Color(100, 90, 160));
+        playerList.setFixedCellHeight(55);
+        playerList.setSelectionBackground(new Color(100, 85, 160));
         playerList.setSelectionForeground(Color.WHITE);
+
+        // Custom cell renderer with player icons
+        playerList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                    int index, boolean isSelected, boolean cellHasFocus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus);
+                label.setBorder(new EmptyBorder(10, 18, 10, 18));
+                String text = value != null ? value.toString() : "";
+                // Add player number indicators
+                String prefix = "👤";
+                if (text.contains("[Host]")) prefix = "👑";
+                text = prefix + " " + text;
+                label.setText(text);
+                return label;
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(playerList);
         scrollPane.setOpaque(false);
         scrollPane.getViewport().setOpaque(false);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(120, 110, 180), 2, true));
+        scrollPane.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(120, 100, 180), 2, true),
+                new EmptyBorder(2, 2, 2, 2)));
         roomPanel.add(scrollPane, BorderLayout.CENTER);
+
+        // Status bottom
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        bottomPanel.setOpaque(false);
+        statusLabel = new JLabel("⏳ Waiting for players...");
+        statusLabel.setForeground(new Color(180, 180, 220));
+        statusLabel.setFont(new Font("SansSerif", Font.ITALIC, 14));
+        bottomPanel.add(statusLabel);
+        roomPanel.add(bottomPanel, BorderLayout.SOUTH);
     }
 
     /**
-     * Create a button with a gradient background.
-     * The button uses custom painting for gradient background, rounded corners, and hover scale effect.
-     *
-     * @param text button text
-     * @param start gradient start color
-     * @param end gradient end color
-     * @return custom-painted button
+     * Create a premium button with gradient, glow hover, and rich styling.
      */
-    private JButton createGradientButton(String text, Color start, Color end) {
+    private JButton createPremiumButton(String text, Color start, Color end,
+                                        Color hoverStart, Color hoverEnd) {
         JButton button = new JButton(text) {
             @Override
             protected void paintComponent(Graphics g) {
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Draw gradient background (supports runtime color change via client property)
-                Color s = (Color) getClientProperty("gradientStart");
-                Color e = (Color) getClientProperty("gradientEnd");
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+                int w = getWidth(), h = getHeight();
+
+                // Determine colors based on state
+                boolean hover = getModel().isRollover() && isEnabled();
+                boolean pressed = getModel().isPressed() && isEnabled();
+
+                Color s = hover ? hoverStart : (Color) getClientProperty("gradientStart");
+                Color e = hover ? hoverEnd : (Color) getClientProperty("gradientEnd");
                 if (s == null) s = start;
                 if (e == null) e = end;
-                GradientPaint gradient = new GradientPaint(0, 0, s, 0, getHeight(), e);
-                g2d.setPaint(gradient);
-                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
-                // Draw white text
-                g2d.setColor(Color.WHITE);
-                g2d.setFont(getFont());
-                FontMetrics fm = g2d.getFontMetrics();
-                int x = (getWidth() - fm.stringWidth(getText())) / 2;
-                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-                g2d.drawString(getText(), x, y);
+
+                if (pressed) {
+                    s = s.darker();
+                    e = e.darker();
+                }
+
+                // Outer glow on hover
+                if (hover) {
+                    g2.setColor(new Color(255, 255, 255, 25));
+                    g2.setStroke(new BasicStroke(3f));
+                    g2.drawRoundRect(2, 2, w - 4, h - 4, 20, 20);
+                }
+
+                // Main gradient fill
+                GradientPaint gp = new GradientPaint(0, 0, s, 0, h, e);
+                g2.setPaint(gp);
+                g2.fillRoundRect(0, 0, w, h, 18, 18);
+
+                // Top shine highlight
+                if (!pressed) {
+                    g2.setColor(new Color(255, 255, 255, 35));
+                    g2.fillRoundRect(4, 3, w - 8, h / 2 - 3, 16, 16);
+                }
+
+                // Border
+                g2.setColor(new Color(255, 255, 255, 60));
+                g2.setStroke(new BasicStroke(1f));
+                g2.drawRoundRect(1, 1, w - 2, h - 2, 18, 18);
+
+                // Text with shadow
+                g2.setColor(new Color(0, 0, 0, 60));
+                g2.setFont(getFont());
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(getText(), (w - fm.stringWidth(getText())) / 2 + 1,
+                        (h + fm.getAscent() - fm.getDescent()) / 2 + 1);
+
+                g2.setColor(Color.WHITE);
+                g2.drawString(getText(), (w - fm.stringWidth(getText())) / 2,
+                        (h + fm.getAscent() - fm.getDescent()) / 2);
+                g2.dispose();
             }
         };
 
-        button.setFont(new Font("SansSerif", Font.BOLD, 16));
-        button.setFocusPainted(false);       // Don't paint focus indicator
-        button.setBorderPainted(false);      // Don't paint border
-        button.setContentAreaFilled(false);  // Don't fill default background
-        button.setPreferredSize(new Dimension(180, 50));
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));  // Hand cursor on hover
+        button.setFont(new Font("SansSerif", Font.BOLD, 15));
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setPreferredSize(new Dimension(190, 52));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        // Slightly enlarge button on mouse hover
+        button.putClientProperty("gradientStart", start);
+        button.putClientProperty("gradientEnd", end);
+
+        // Subtle hover scale effect
         button.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setPreferredSize(new Dimension(190, 52));
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                button.setPreferredSize(new Dimension(195, 54));
                 button.revalidate();
             }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setPreferredSize(new Dimension(180, 50));
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                button.setPreferredSize(new Dimension(190, 52));
                 button.revalidate();
             }
         });
 
-        button.putClientProperty("gradientStart", start);
-        button.putClientProperty("gradientEnd", end);
         return button;
     }
 
     /**
-     * Update a gradient button's color and text (without creating a new button instance).
-     * Used by toggleReady() and leaveRoom() for dynamic button color switching.
+     * Create a bordered outline button (for secondary actions like Rules).
      */
+    private JButton createBorderButton(String text, Color textColor, Color borderColor) {
+        JButton button = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int w = getWidth(), h = getHeight();
+
+                boolean hover = getModel().isRollover() && isEnabled();
+
+                // Background (subtle on hover)
+                if (hover) {
+                    g2.setColor(new Color(255, 255, 255, 20));
+                    g2.fillRoundRect(0, 0, w, h, 15, 15);
+                }
+
+                // Border
+                g2.setColor(hover ? textColor : borderColor);
+                g2.setStroke(new BasicStroke(hover ? 2f : 1.5f));
+                g2.drawRoundRect(1, 1, w - 2, h - 2, 15, 15);
+
+                // Text
+                g2.setColor(hover ? textColor.brighter() : textColor);
+                g2.setFont(getFont());
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(getText(), (w - fm.stringWidth(getText())) / 2,
+                        (h + fm.getAscent() - fm.getDescent()) / 2);
+                g2.dispose();
+            }
+        };
+
+        button.setFont(new Font("SansSerif", Font.BOLD, 13));
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setForeground(textColor);
+        button.setPreferredSize(new Dimension(180, 44));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
     private void updateGradientButton(JButton button, Color start, Color end, String text) {
         button.setText(text);
         button.putClientProperty("gradientStart", start);
@@ -358,23 +616,36 @@ public class LobbyPanel extends JPanel {
         button.repaint();
     }
 
-    /** Apply uniform styling to text fields (dark background, white text, rounded border) */
     private void styleTextField(JTextField field) {
-        field.setBackground(new Color(50, 45, 80));
+        field.setBackground(new Color(40, 35, 70, 200));
         field.setForeground(Color.WHITE);
-        field.setCaretColor(Color.WHITE);  // Cursor color
+        field.setCaretColor(new Color(255, 215, 0));
         field.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(100, 90, 150), 2, true),
-                BorderFactory.createEmptyBorder(8, 10, 8, 10)
+                BorderFactory.createLineBorder(new Color(130, 110, 190), 2, true),
+                BorderFactory.createEmptyBorder(12, 14, 12, 14)
         ));
         field.setOpaque(true);
+        // Focus listener for border highlight
+        field.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                field.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(255, 215, 0), 2, true),
+                        BorderFactory.createEmptyBorder(12, 14, 12, 14)));
+            }
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                field.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(130, 110, 190), 2, true),
+                        BorderFactory.createEmptyBorder(12, 14, 12, 14)));
+            }
+        });
     }
 
-    /** Handle create room button click — validate nickname then send CREATE_ROOM to server */
     private void createRoom() {
         String nickname = nicknameField.getText().trim();
         if (nickname.isEmpty()) {
-            setStatus("Please enter a nickname", Color.RED);
+            setStatus("❌ Please enter a nickname", Color.RED);
             return;
         }
 
@@ -382,20 +653,19 @@ public class LobbyPanel extends JPanel {
         payload.addProperty("nickname", nickname);
         amICreator = true;
         client.sendMessage(MessageProtocol.MessageType.CREATE_ROOM, payload.toString());
-        setStatus("Creating room...", new Color(255, 200, 0));
+        setStatus("🎲 Creating room...", new Color(255, 200, 0));
     }
 
-    /** Handle join room button click — validate nickname and room code then send JOIN_ROOM to server */
     private void joinRoom() {
         String nickname = nicknameField.getText().trim();
-        String roomCode = roomCodeField.getText().trim().toUpperCase();  // Auto-uppercase room code
+        String roomCode = roomCodeField.getText().trim().toUpperCase();
 
         if (nickname.isEmpty()) {
-            setStatus("Please enter a nickname", Color.RED);
+            setStatus("❌ Please enter a nickname", Color.RED);
             return;
         }
         if (roomCode.isEmpty()) {
-            setStatus("Please enter room code", Color.RED);
+            setStatus("❌ Please enter room code", Color.RED);
             return;
         }
 
@@ -404,24 +674,22 @@ public class LobbyPanel extends JPanel {
         payload.addProperty("roomCode", roomCode);
         amICreator = false;
         client.sendMessage(MessageProtocol.MessageType.JOIN_ROOM, payload.toString());
-        setStatus("Joining room...", new Color(255, 200, 0));
+        setStatus("🔗 Joining room...", new Color(255, 200, 0));
     }
 
-    /** Host requests to start the game */
     private void requestStartGame() {
         client.sendMessage(MessageProtocol.MessageType.REQUEST_START_GAME, "{}");
-        setStatus("Starting game...", new Color(255, 200, 0));
+        setStatus("🚀 Starting game...", new Color(255, 200, 0));
     }
 
-    /** Toggle ready state — switches between "Ready" and "Unready" */
     private void toggleReady() {
         isReady = !isReady;
         if (isReady) {
             updateGradientButton(readyButton,
-                    new Color(231, 76, 60), new Color(192, 57, 43), "Unready");
+                    new Color(200, 60, 50), new Color(160, 40, 35), "❌ Unready");
         } else {
             updateGradientButton(readyButton,
-                    new Color(46, 204, 113), new Color(39, 174, 96), "Ready");
+                    new Color(46, 204, 113), new Color(30, 160, 85), "✅ Ready");
         }
 
         JsonObject payload = new JsonObject();
@@ -429,53 +697,44 @@ public class LobbyPanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.PLAYER_READY, payload.toString());
     }
 
-    /** Leave current room — send LEAVE_ROOM and return to login view */
     private void leaveRoom() {
         client.sendMessage(MessageProtocol.MessageType.LEAVE_ROOM, "{}");
         isInRoom = false;
         isReady = false;
         updateGradientButton(readyButton,
-                new Color(46, 204, 113), new Color(39, 174, 96), "Ready");
+                new Color(46, 204, 113), new Color(30, 160, 85), "✅ Ready");
         showLoginPanel();
     }
 
-    /**
-     * Update room state — called by MainFrame when receiving ROOM_UPDATE messages.
-     * Parses server-returned room and player info and updates the UI.
-     *
-     * @param jsonPayload ROOM_UPDATE message JSON payload
-     */
     public void updateRoom(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
                 JsonObject payload = JsonParser.parseString(jsonPayload).getAsJsonObject();
                 String roomCode = payload.get("roomCode").getAsString();
-                roomCodeLabel.setText("Room: " + roomCode);
+                roomCodeLabel.setText("🏠 Room: " + roomCode);
 
-                // Parse player list
                 JsonArray players = payload.getAsJsonArray("players");
                 playerListModel.clear();
 
+                int playerNum = 0;
                 for (JsonElement elem : players) {
                     JsonObject player = elem.getAsJsonObject();
                     String nickname = player.get("nickname").getAsString();
                     boolean ready = player.get("ready").getAsBoolean();
                     boolean isCreator = player.get("isCreator").getAsBoolean();
+                    playerNum++;
 
-                    // Build display text: nickname + host indicator + ready state
                     String displayText = nickname;
-                    if (isCreator) displayText += " Host";
-                    displayText += ready ? " Ready" : " Not Ready";
+                    if (isCreator) displayText += " [Host]";
+                    displayText += ready ? "  ● Ready" : "  ○ Waiting";
                     playerListModel.addElement(displayText);
                 }
 
-                // Switch to room view on first entry
                 if (!isInRoom) {
                     isInRoom = true;
                     showRoomPanel();
                 }
 
-                // Control start game button visibility: host + all ready + at least 2 players
                 int totalPlayers = players.size();
                 long readyCount = 0;
                 for (JsonElement elem : players) {
@@ -484,15 +743,14 @@ public class LobbyPanel extends JPanel {
                 boolean allReady = readyCount == totalPlayers && totalPlayers >= GameConstants.MIN_PLAYERS;
                 startGameButton.setVisible(amICreator && allReady);
 
-                setStatus("Room: " + roomCode + " | Players: " + players.size(),
+                setStatus("👥 Room: " + roomCode + " | Players: " + players.size(),
                         new Color(46, 204, 113));
             } catch (Exception e) {
-                setStatus("Failed to update room info", Color.RED);
+                setStatus("⚠️ Failed to update room info", Color.RED);
             }
         });
     }
 
-    /** Switch to room view */
     private void showRoomPanel() {
         remove(loginPanel);
         add(roomPanel, BorderLayout.CENTER);
@@ -500,16 +758,14 @@ public class LobbyPanel extends JPanel {
         repaint();
     }
 
-    /** Switch back to login view */
     private void showLoginPanel() {
         remove(roomPanel);
         add(loginPanel, BorderLayout.CENTER);
         revalidate();
         repaint();
-        setStatus("Enter nickname to start", new Color(180, 180, 200));
+        setStatus("✨ Enter a nickname to begin", new Color(180, 180, 220));
     }
 
-    /** Set the status bar hint text and color */
     private void setStatus(String message, Color color) {
         if (statusLabel != null) {
             statusLabel.setText(message);
@@ -589,5 +845,10 @@ public class LobbyPanel extends JPanel {
                 "Game Rules - Monopoly Deal",
                 JOptionPane.PLAIN_MESSAGE
         );
+    }
+
+    @Override
+    public void setVisible(boolean aFlag) {
+        super.setVisible(aFlag);
     }
 }

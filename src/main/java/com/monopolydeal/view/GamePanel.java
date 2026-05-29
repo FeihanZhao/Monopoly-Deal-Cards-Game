@@ -28,11 +28,6 @@ import com.google.gson.JsonElement;
  * - On every GAME_STATE_UPDATE message, updateGameState() rebuilds the entire interface
  * - Parses all player states, hand info (only own cards visible), and action history from JSON
  * - Activates hand interaction and countdown when it becomes the local player's turn
- *
- * Player interaction flow:
- * 1. Click hand card → show action option bar (play/bank)
- * 2. Wild property card → show color picker dialog
- * 3. Wild rent card → show color picker dialog
  */
 public class GamePanel extends JPanel {
     /** Game client connection */
@@ -45,9 +40,9 @@ public class GamePanel extends JPanel {
     private JPanel handPanel;
     /** Sidebar panel */
     private JPanel sidePanel;
-    /** Phase label (displays current game phase: DRAW/PLAY/END, etc.) */
+    /** Phase label */
     private JLabel phaseLabel;
-    /** Current turn label (displays the active player's nickname) */
+    /** Current turn label */
     private JLabel turnLabel;
     /** Countdown progress bar panel */
     private TimerBarPanel timerBarPanel;
@@ -55,35 +50,24 @@ public class GamePanel extends JPanel {
     private JLabel drawPileLabel;
     /** End turn button */
     private JButton endTurnButton;
-    /** Player panel container (vertical list of all PlayerPanels) */
+    /** Player panel container */
     private JPanel playerPanelsContainer;
     /** Player panel map key=playerId, value=PlayerPanel */
     private Map<String, PlayerPanel> playerPanels;
-    /** Hand card panel (horizontal arrangement of CardRenderer components) */
+    /** Hand card panel */
     private JPanel handCardsPanel;
     /** Action history panel */
     private ActionHistoryPanel actionHistoryPanel;
-    /** Card selection action bar (floating above hand area) */
+    /** Card selection action bar */
     private CardSelectionBar cardSelectionBar;
     /** Local player ID */
     private String localPlayerId;
     /** Whether it is the local player's turn */
     private boolean isMyTurn;
-    /** Countdown timer (fires once per second) */
+    /** Countdown timer */
     private javax.swing.Timer countdownTimer;
-    /** View model of the clicked card (for use by the action dialog) */
+    /** View model of the clicked card */
     private CardViewModel cardDataForClicked;
-
-    // ==================== UI color constants ====================
-
-    private static final Color DARK_BG = new Color(18, 22, 28);         // Main dark background
-    private static final Color DARKER_BG = new Color(14, 17, 22);       // Darker background
-    private static final Color GOLD = new Color(255, 215, 0);           // Gold (highlight elements)
-    private static final Color RED_GLOW = new Color(220, 50, 50);       // Red glow
-    private static final Color GREEN_TABLE = new Color(25, 70, 40);     // Green table color
-    private static final Color GREEN_DARK = new Color(15, 50, 28);      // Dark green table
-    private static final Color TEXT_LIGHT = new Color(220, 220, 220);   // Light text
-    private static final Color TEXT_DIM = new Color(150, 150, 150);     // Dimmed text
 
     /**
      * Constructor — create the four main areas of the game interface.
@@ -95,12 +79,12 @@ public class GamePanel extends JPanel {
         this.isMyTurn = false;
 
         setLayout(new BorderLayout());
-        setBackground(DARK_BG);
+        setBackground(AppTheme.BG_DARK);
 
-        createTopBar();        // Create top bar
-        createMainGameArea();  // Create main game area
-        createHandPanel();     // Create hand area
-        createSidePanel();     // Create sidebar
+        createTopBar();
+        createMainGameArea();
+        createHandPanel();
+        createSidePanel();
 
         // Create CardSelectionBar and set callback
         cardSelectionBar = new CardSelectionBar();
@@ -131,11 +115,11 @@ public class GamePanel extends JPanel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 // Top-to-bottom dark gradient background
                 GradientPaint gp = new GradientPaint(0, 0, new Color(25, 30, 40),
-                        0, getHeight(), new Color(18, 22, 28));
+                        0, getHeight(), AppTheme.BG_DARK);
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // Bottom separator line (subtle gold)
-                g2.setColor(new Color(255, 215, 0, 40));
+                // Bottom separator line (gold)
+                g2.setColor(AppTheme.GOLD_DIM);
                 g2.fillRect(0, getHeight() - 2, getWidth(), 2);
                 g2.dispose();
             }
@@ -148,12 +132,12 @@ public class GamePanel extends JPanel {
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 25, 0));
         leftPanel.setOpaque(false);
 
-        // Game phase label (gold)
+        // Game phase label
         phaseLabel = new JLabel("Phase: Waiting");
-        phaseLabel.setForeground(GOLD);
+        phaseLabel.setForeground(AppTheme.GOLD);
         phaseLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
 
-        // Current turn label (white)
+        // Current turn label
         turnLabel = new JLabel("Turn: -");
         turnLabel.setForeground(Color.WHITE);
         turnLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
@@ -167,27 +151,25 @@ public class GamePanel extends JPanel {
 
         // Draw pile count label
         drawPileLabel = new JLabel("Deck: 0");
-        drawPileLabel.setForeground(TEXT_LIGHT);
+        drawPileLabel.setForeground(AppTheme.TEXT_PRIMARY);
         drawPileLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
         timerBarPanel = new TimerBarPanel(30);
 
-        // End turn button (red rounded, with press and hover effects)
+        // End turn button
         endTurnButton = new JButton("End Turn") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Choose background color based on state: pressed > hover > normal > disabled
                 if (getModel().isPressed()) {
                     g2.setColor(new Color(140, 20, 20));
                 } else if (getModel().isRollover() && isEnabled()) {
                     g2.setColor(new Color(200, 40, 40));
                 } else {
-                    g2.setColor(isEnabled() ? RED_GLOW : new Color(80, 80, 80));
+                    g2.setColor(isEnabled() ? AppTheme.RED_DANGER : new Color(80, 80, 80));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
-                // Draw white text
                 g2.setColor(new Color(255, 255, 255, 200));
                 g2.setFont(new Font("SansSerif", Font.BOLD, 12));
                 FontMetrics fm = g2.getFontMetrics();
@@ -201,7 +183,7 @@ public class GamePanel extends JPanel {
         endTurnButton.setContentAreaFilled(false);
         endTurnButton.setFocusPainted(false);
         endTurnButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        endTurnButton.setEnabled(false);  // Initially disabled
+        endTurnButton.setEnabled(false);
         endTurnButton.addActionListener(e -> endTurn());
 
         rightPanel.add(drawPileLabel);
@@ -220,16 +202,17 @@ public class GamePanel extends JPanel {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Green gradient table from dark to light
-                GradientPaint gp = new GradientPaint(0, 0, GREEN_DARK,
-                        getWidth(), getHeight(), GREEN_TABLE);
+                // Green gradient table
+                GradientPaint gp = new GradientPaint(0, 0, AppTheme.TABLE_GREEN_DARK,
+                        getWidth(), getHeight(), AppTheme.TABLE_GREEN);
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // Decorative oval texture (poker table style)
-                g2.setColor(new Color(255, 255, 255, 3));
-                for (int x = 0; x < getWidth(); x += 60) {
-                    for (int y = 0; y < getHeight(); y += 60) {
-                        g2.drawOval(x, y, 40, 40);
+                // Subtle felt texture
+                g2.setColor(new Color(255, 255, 255, 4));
+                int step = 40;
+                for (int x = 0; x < getWidth(); x += step) {
+                    for (int y = 0; y < getHeight(); y += step) {
+                        g2.drawOval(x, y, 30, 30);
                     }
                 }
                 g2.dispose();
@@ -237,7 +220,6 @@ public class GamePanel extends JPanel {
         };
         mainGamePanel.setOpaque(false);
 
-        // Vertical arrangement container for player panels
         playerPanelsContainer = new JPanel();
         playerPanelsContainer.setLayout(new BoxLayout(playerPanelsContainer, BoxLayout.Y_AXIS));
         playerPanelsContainer.setOpaque(false);
@@ -252,7 +234,7 @@ public class GamePanel extends JPanel {
         mainGamePanel.add(scrollPane, BorderLayout.CENTER);
     }
 
-    /** Create the hand area — bottom horizontally-scrollable card display area */
+    /** Create the hand area — bottom card display area */
     private void createHandPanel() {
         handPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -265,8 +247,8 @@ public class GamePanel extends JPanel {
                         0, getHeight(), new Color(16, 19, 24));
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // Top separator line (subtle gold glow)
-                g2.setColor(new Color(GOLD.getRed(), GOLD.getGreen(), GOLD.getBlue(), 60));
+                // Top separator line (gold glow)
+                g2.setColor(AppTheme.GOLD_GLOW);
                 g2.fillRect(0, 0, getWidth(), 2);
                 g2.dispose();
             }
@@ -275,13 +257,23 @@ public class GamePanel extends JPanel {
         handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
         handPanel.setPreferredSize(new Dimension(0, 210));
 
-        // "Your Hand" label
-        JLabel handLabel = new JLabel("Your Hand");
-        handLabel.setForeground(GOLD);
-        handLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
-        handPanel.add(handLabel, BorderLayout.NORTH);
+        // "Your Hand" label with card count
+        JPanel handHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        handHeader.setOpaque(false);
 
-        // Card panel (wrap layout, cards wrap to next row when width is insufficient)
+        JLabel handIcon = new JLabel("♠"); // Spade symbol
+        handIcon.setForeground(AppTheme.GOLD);
+        handIcon.setFont(new Font("SansSerif", Font.BOLD, 16));
+
+        JLabel handLabel = new JLabel("Your Hand");
+        handLabel.setForeground(AppTheme.GOLD);
+        handLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+
+        handHeader.add(handIcon);
+        handHeader.add(handLabel);
+        handPanel.add(handHeader, BorderLayout.NORTH);
+
+        // Card panel (wrap layout)
         handCardsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 10, 8));
         handCardsPanel.setOpaque(false);
 
@@ -291,7 +283,7 @@ public class GamePanel extends JPanel {
         handScrollPane.setBorder(null);
         handScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         handScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        handScrollPane.setPreferredSize(new Dimension(0, 170));
+        handScrollPane.setPreferredSize(new Dimension(0, 180));
 
         handPanel.add(handScrollPane, BorderLayout.CENTER);
     }
@@ -299,8 +291,8 @@ public class GamePanel extends JPanel {
     /** Create the sidebar — right-side action history panel */
     private void createSidePanel() {
         sidePanel = new JPanel(new BorderLayout());
-        sidePanel.setBackground(DARKER_BG);
-        sidePanel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(50, 55, 65)));
+        sidePanel.setBackground(AppTheme.BG_DARKER);
+        sidePanel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, AppTheme.BG_BORDER));
         sidePanel.setPreferredSize(new Dimension(260, 0));
         actionHistoryPanel = new ActionHistoryPanel();
         sidePanel.add(actionHistoryPanel, BorderLayout.CENTER);
@@ -308,16 +300,13 @@ public class GamePanel extends JPanel {
 
     /**
      * Update game state — called on every GAME_STATE_UPDATE message.
-     * Parses the complete game state JSON and updates all UI components.
-     *
-     * @param jsonPayload GAME_STATE_UPDATE message JSON payload
      */
     public void updateGameState(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
             try {
                 JsonObject gameState = JsonParser.parseString(jsonPayload).getAsJsonObject();
 
-                // Update local player ID (viewerId assigned by server)
+                // Update local player ID
                 if (gameState.has("viewerId")) {
                     String myId = gameState.get("viewerId").getAsString();
                     if (!myId.equals(localPlayerId)) {
@@ -358,9 +347,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Handle Just Say No reaction request.
-     * Server payload format:
-     * {"resolutionId":"...","actionType":"RENT|DEBT_COLLECTOR|...",
-     *  "initiatorName":"PlayerName","initiatorId":"...","cardName":"...","timeoutSeconds":5}
      */
     public void handleReactionRequired(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
@@ -372,7 +358,7 @@ public class GamePanel extends JPanel {
                 String cardName = req.has("cardName") ? req.get("cardName").getAsString() : "";
                 int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 5;
 
-                // If no Just Say No card in hand, auto-pass without showing the dialog
+                // If no Just Say No card in hand, auto-pass
                 String jsnCardId = findJustSayNoCardInHand();
                 if (jsnCardId == null) {
                     client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
@@ -382,9 +368,6 @@ public class GamePanel extends JPanel {
                 String msg = initiatorName + " used " + cardName + " (" + actionType + ") on you!\nPlay Just Say No?";
                 String[] options = new String[]{"Play Just Say No", "Pass"};
 
-                // Modal dialog + independent thread timeout timer
-                // Key: keep modal (don't call setModal(false)); setVisible blocks EDT waiting for user input
-                // Use java.util.Timer (non-EDT thread) to dispose the dialog on timeout
                 JOptionPane pane = new JOptionPane(msg, JOptionPane.QUESTION_MESSAGE,
                         JOptionPane.YES_NO_OPTION, null, options, options[1]);
                 JDialog dialog = pane.createDialog(GamePanel.this, "React");
@@ -393,17 +376,14 @@ public class GamePanel extends JPanel {
                 timeoutTimer.schedule(new java.util.TimerTask() {
                     @Override
                     public void run() {
-                        dialog.dispose();   // Window.dispose() is thread-safe
+                        dialog.dispose();
                     }
                 }, timeout * 1000L);
 
-                dialog.setVisible(true);    // Block EDT until user clicks or timer disposes
-                timeoutTimer.cancel();      // Clear timer
+                dialog.setVisible(true);
+                timeoutTimer.cancel();
 
                 Object selected = pane.getValue();
-                // selected == null → timeout (dialog disposed by timer)
-                // selected == 1 → user clicked "Pass"
-                // selected == 0 → user clicked "Play Just Say No"
                 if (selected == null || Integer.valueOf(1).equals(selected)) {
                     client.sendMessage(MessageProtocol.MessageType.PASS_REACTION, "{}");
                 } else if (Integer.valueOf(0).equals(selected)) {
@@ -437,9 +417,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Handle payment request.
-     * Server payload format:
-     * {"creditorName":"Receiver","creditorId":"...","amount":5,"totalBank":10,
-     *  "bankCards":[{"cardId":"...","cardName":"...","value":5,...},...]}
      */
     public void handlePaymentRequired(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
@@ -449,7 +426,6 @@ public class GamePanel extends JPanel {
                 int amount = req.get("amount").getAsInt();
                 JsonArray bankCardsArr = req.getAsJsonArray("bankCards");
 
-                // Build option list
                 int n = bankCardsArr.size();
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
@@ -459,7 +435,6 @@ public class GamePanel extends JPanel {
                     cardDescriptions[i] = name + " (" + value + "M)";
                 }
 
-                // Multi-select list for player to choose cards to pay
                 JList<String> cardList = new JList<>(cardDescriptions);
                 cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
                 cardList.setVisibleRowCount(Math.min(8, n));
@@ -472,7 +447,6 @@ public class GamePanel extends JPanel {
                 JLabel totalLabel = new JLabel("Selected: 0 M / Required: " + amount + " M");
                 panel.add(totalLabel, BorderLayout.SOUTH);
 
-                // Listen for selection changes, show real-time selected total
                 cardList.addListSelectionListener(e -> {
                     if (e.getValueIsAdjusting()) return;
                     int total = 0;
@@ -497,7 +471,6 @@ public class GamePanel extends JPanel {
                     client.sendMessage(MessageProtocol.MessageType.SUBMIT_PAYMENT,
                             submitPayload.toString());
                 }
-                // Cancel: let server handle via timeout
 
             } catch (Exception e) {
                 System.err.println("Error handling PAYMENT_REQUIRED: " + e.getMessage());
@@ -506,10 +479,7 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * Handle discard request (hand exceeds limit at end of turn).
-     * Server payload format:
-     * {"handCards":[{"cardId":"...","cardName":"Rent Card","cardType":"RENT","color":"RED","value":0},...],
-     *  "discardCount":2, "timeoutSeconds":15}
+     * Handle discard request.
      */
     public void handleDiscardRequired(String jsonPayload) {
         SwingUtilities.invokeLater(() -> {
@@ -519,7 +489,6 @@ public class GamePanel extends JPanel {
                 int timeout = req.has("timeoutSeconds") ? req.get("timeoutSeconds").getAsInt() : 15;
                 JsonArray handCardsArr = req.getAsJsonArray("handCards");
 
-                // Build card description list
                 int n = handCardsArr.size();
                 String[] cardDescriptions = new String[n];
                 for (int i = 0; i < n; i++) {
@@ -529,37 +498,31 @@ public class GamePanel extends JPanel {
                     cardDescriptions[i] = name + " [" + type + "]";
                 }
 
-                // Hand card multi-select list
                 JList<String> cardList = new JList<>(cardDescriptions);
                 cardList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
                 cardList.setVisibleRowCount(Math.min(10, n));
                 JScrollPane scrollPane = new JScrollPane(cardList);
 
-                // Info label (with countdown)
                 JLabel infoLabel = new JLabel("Hand limit exceeded! Select " + discardCount + " cards to discard (" + timeout + "s remaining)");
                 infoLabel.setForeground(new Color(255, 200, 100));
                 JLabel countLabel = new JLabel("Selected: 0 / Need: " + discardCount);
 
-                // Selection change listener: update selected count in real-time
                 cardList.addListSelectionListener(e -> {
                     if (e.getValueIsAdjusting()) return;
                     countLabel.setText("Selected: " + cardList.getSelectedIndices().length + " / Need: " + discardCount);
                 });
 
-                // Assemble panel
                 JPanel panel = new JPanel(new BorderLayout(0, 10));
                 panel.setPreferredSize(new Dimension(350, 280));
                 panel.add(infoLabel, BorderLayout.NORTH);
                 panel.add(scrollPane, BorderLayout.CENTER);
                 panel.add(countLabel, BorderLayout.SOUTH);
 
-                // Confirm/cancel buttons
                 String[] options = new String[]{"Confirm Discard", "Cancel (auto-discard)"};
                 JOptionPane pane = new JOptionPane(panel, JOptionPane.PLAIN_MESSAGE,
                         JOptionPane.OK_CANCEL_OPTION, null, options, options[0]);
                 JDialog dialog = pane.createDialog(GamePanel.this, "Discard");
 
-                // Countdown timer (non-EDT thread, disposes dialog on timeout)
                 java.util.Timer countdownTimer = new java.util.Timer();
                 final int[] remaining = {timeout};
                 countdownTimer.scheduleAtFixedRate(new java.util.TimerTask() {
@@ -575,15 +538,12 @@ public class GamePanel extends JPanel {
                     }
                 }, 1000L, 1000L);
 
-                dialog.setVisible(true);  // Block EDT until user clicks or timer disposes
+                dialog.setVisible(true);
                 countdownTimer.cancel();
 
                 Object selected = pane.getValue();
-
-                // Build list of selected card IDs
                 JsonArray selectedIds = new JsonArray();
                 if (selected != null && selected.equals(options[0])) {
-                    // User clicked "Confirm Discard"
                     if (cardList.getSelectedIndices().length < discardCount) {
                         JOptionPane.showMessageDialog(GamePanel.this,
                                 "Still need " + (discardCount - cardList.getSelectedIndices().length) + " cards!\nAuto-discard from hand start will be used.",
@@ -594,7 +554,6 @@ public class GamePanel extends JPanel {
                         selectedIds.add(c.get("cardId").getAsString());
                     }
                 }
-                // Timeout or cancel: selectedIds is empty array; server auto-backfills
 
                 JsonObject submitPayload = new JsonObject();
                 submitPayload.add("cardIds", selectedIds);
@@ -609,7 +568,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Update all PlayerPanels from player state JSON.
-     * Auto-creates panels for new players, removes panels for departed players.
      */
     private void updatePlayerPanelsFromStates(JsonObject playerStates, String activePlayerId) {
         Set<String> existingIds = new HashSet<>(playerPanels.keySet());
@@ -618,7 +576,6 @@ public class GamePanel extends JPanel {
             JsonObject playerData = entry.getValue().getAsJsonObject();
             existingIds.remove(playerId);
 
-            // Create or get PlayerPanel
             PlayerPanel panel = playerPanels.get(playerId);
             if (panel == null) {
                 panel = new PlayerPanel(playerId);
@@ -626,7 +583,6 @@ public class GamePanel extends JPanel {
                 playerPanelsContainer.add(panel);
             }
 
-            // Parse player data
             boolean isActive = playerData.has("isActivePlayer") &&
                     playerData.get("isActivePlayer").getAsBoolean();
             String nickname = playerData.has("nickname") ?
@@ -642,7 +598,6 @@ public class GamePanel extends JPanel {
             boolean connected = !playerData.has("isConnected") ||
                     playerData.get("isConnected").getAsBoolean();
 
-            // Parse property counts per color
             Map<String, Integer> propertyColorCounts = new LinkedHashMap<>();
             if (playerData.has("propertyColorCounts")) {
                 JsonObject colorCounts = playerData.getAsJsonObject("propertyColorCounts");
@@ -651,7 +606,6 @@ public class GamePanel extends JPanel {
                 }
             }
 
-            // Build simplified update data
             JsonObject simplified = new JsonObject();
             simplified.addProperty("nickname", nickname);
             simplified.addProperty("isActive", isActive);
@@ -663,13 +617,12 @@ public class GamePanel extends JPanel {
             panel.updateFromJson(simplified, propertyColorCounts);
         }
 
-        // Remove departed players' panels
         for (String removedId : existingIds) {
             PlayerPanel panel = playerPanels.remove(removedId);
             if (panel != null) playerPanelsContainer.remove(panel);
         }
 
-        // Sync opponent player info to CardSelectionBar
+        // Sync opponent info to CardSelectionBar
         if (cardSelectionBar != null && localPlayerId != null && playerStates != null) {
             Map<String, String> opponents = new LinkedHashMap<>();
             for (Map.Entry<String, JsonElement> entry : playerStates.entrySet()) {
@@ -684,7 +637,6 @@ public class GamePanel extends JPanel {
             }
             cardSelectionBar.updatePlayers(opponents);
 
-            // Extract property card details for CardSelectionBar (Sly Deal / Forced Deal)
             Map<String, List<String[]>> opponentProps = new LinkedHashMap<>();
             List<String[]> myProps = new ArrayList<>();
 
@@ -717,7 +669,7 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * Update turn info — detect if it's the local player's turn, update active player nickname display.
+     * Update turn info.
      */
     private void updateTurnInfo(String activePlayerId, JsonObject playerStates) {
         if (localPlayerId == null) return;
@@ -725,7 +677,6 @@ public class GamePanel extends JPanel {
         boolean wasMyTurn = isMyTurn;
         isMyTurn = activePlayerId.equals(localPlayerId);
 
-        // Update current turn player nickname
         String activeNickname = "Unknown";
         if (playerStates.has(activePlayerId)) {
             JsonObject activeData = playerStates.getAsJsonObject(activePlayerId);
@@ -734,26 +685,21 @@ public class GamePanel extends JPanel {
         }
         turnLabel.setText("Turn: " + activeNickname);
 
-        // Update UI state on turn switch
         if (isMyTurn && !wasMyTurn) {
-            // Just became local player's turn: start countdown, enable buttons, highlight hand area
             startCountdown();
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(2, 0, 0, 0, GOLD),
+                    BorderFactory.createMatteBorder(2, 0, 0, 0, AppTheme.GOLD),
                     new EmptyBorder(8, 15, 12, 15)));
         } else if (isMyTurn && wasMyTurn) {
-            // Still local player's turn
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
-            // Just ended local player's turn: stop countdown, disable buttons
             stopCountdown();
             endTurnButton.setEnabled(false);
             cardSelectionBar.dismiss();
             handPanel.setBorder(new EmptyBorder(10, 15, 12, 15));
         }
 
-        // Sync hand card interactivity state
         for (Component comp : handCardsPanel.getComponents()) {
             if (comp instanceof CardRenderer) {
                 comp.setEnabled(isMyTurn);
@@ -761,7 +707,7 @@ public class GamePanel extends JPanel {
         }
     }
 
-    /** Start countdown — create a Swing Timer that fires once per second */
+    /** Start countdown */
     private void startCountdown() {
         stopCountdown();
         timerBarPanel.start(30);
@@ -791,7 +737,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Update the local player's hand display.
-     * Extracts own hand cards from playerStates (matching viewerId).
      */
     private void updateLocalHand(JsonObject playerStates) {
         handCardsPanel.removeAll();
@@ -818,7 +763,6 @@ public class GamePanel extends JPanel {
                 CardRenderer card = new CardRenderer(vm);
                 card.setEnabled(isMyTurn);
 
-                // Set card click callback
                 card.setPlayListener(id -> {
                     cardDataForClicked = vm;
                     onCardClicked(id, vm.getCardType());
@@ -831,10 +775,7 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * Handle card click event — show the CardSelectionBar action bar.
-     *
-     * @param cardId clicked card's ID
-     * @param cardType card type (MONEY/PROPERTY/RENT/ACTION)
+     * Handle card click event.
      */
     private void onCardClicked(String cardId, String cardType) {
         if (!isMyTurn) {
@@ -849,42 +790,33 @@ public class GamePanel extends JPanel {
     }
 
     /**
-     * CardSelectionBar confirm callback — builds and sends the PLAY_CARD message.
-     * Reads target and property selections from CardSelectionBar getters.
-     *
-     * @param cardId card ID
-     * @param action action type (PLAY_MONEY/PLAY_PROPERTY/PLAY_RENT/PLAY_ACTION)
+     * CardSelectionBar confirm callback.
      */
     private void onCardActionConfirmed(String cardId, String action) {
         JsonObject payload = new JsonObject();
         payload.addProperty("cardId", cardId);
         payload.addProperty("action", action);
 
-        // Attach target player ID (rent cards, action cards need a target)
         String targetId = cardSelectionBar.getSelectedTargetId();
         if (targetId != null && !targetId.isEmpty()) {
             payload.addProperty("targetPlayerId", targetId);
         }
 
-        // Sly Deal: property card to steal from target
         String targetCardId = cardSelectionBar.getSelectedTargetCardId();
         if (targetCardId != null && !targetCardId.isEmpty()) {
             payload.addProperty("targetCardId", targetCardId);
         }
 
-        // Forced Deal: own property to give up
         String myPropId = cardSelectionBar.getSelectedMyPropertyId();
         if (myPropId != null && !myPropId.isEmpty()) {
             payload.addProperty("myPropertyId", myPropId);
         }
 
-        // Forced Deal: their property to take
         String theirPropId = cardSelectionBar.getSelectedTheirPropertyId();
         if (theirPropId != null && !theirPropId.isEmpty()) {
             payload.addProperty("theirPropertyId", theirPropId);
         }
 
-        // Wild card color selection: show color picker after action confirmed
         if (cardDataForClicked != null) {
             String colorStr = cardDataForClicked.getColor();
             String cardName = cardDataForClicked.getCardName();
@@ -909,10 +841,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Show the wild property color picker dialog.
-     * Provides different selectable color lists based on the specific wild card type (multi-color/dual-color).
-     *
-     * @param cardName wild card name
-     * @return selected color name (null if cancelled)
      */
     private String showWildColorPicker(String cardName) {
         String[] colors = AppTheme.WILD_COLOR_OPTIONS.get(cardName);
@@ -928,7 +856,6 @@ public class GamePanel extends JPanel {
 
     /**
      * Show a generic color picker dialog (for wild rent cards).
-     * @return selected color name
      */
     private String showColorPicker() {
         String[] colors = {"BROWN", "LIGHT_BLUE", "PINK", "ORANGE", "RED",
@@ -940,7 +867,7 @@ public class GamePanel extends JPanel {
                 null, colors, colors[0]);
     }
 
-    /** End turn — stop countdown and send END_TURN message */
+    /** End turn */
     private void endTurn() {
         stopCountdown();
         cardSelectionBar.dismiss();
