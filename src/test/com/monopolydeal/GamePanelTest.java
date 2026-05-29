@@ -1,15 +1,12 @@
-package com.monopolydeal.test;
+package com.monopolydeal;
 
 import com.monopolydeal.client.GameClient;
 import com.monopolydeal.view.GamePanel;
 import com.monopolydeal.util.MessageProtocol;
-import com.monopolydeal.view.CardViewModel;
-import com.monopolydeal.view.CardRenderer;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 
 import javax.swing.*;
-import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
