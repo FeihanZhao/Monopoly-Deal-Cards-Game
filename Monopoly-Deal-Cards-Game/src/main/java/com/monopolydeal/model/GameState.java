@@ -176,12 +176,12 @@ public class GameState {
         private int playsUsed;                 // Plays used this turn
         private int remainingPlays;            // Remaining plays this turn
         private boolean doubleRentActive;      // Whether double rent effect is active
+        private Map<String, Boolean> houseColors ; // Colors that have a house
+        private Map<String, Boolean> hotelColors ; // Colors that have a hotel
         private List<CardInfo> handCards;      // Hand card details (only visible to this player)
         private List<CardInfo> propertyCards; // Property zone details (public info for all players)
+        private List<CardInfo> bankCards;      // Bank card details (public to all players)
         private String avatar;                 // Avatar identifier
-        private List<String> completeSetColors;  // Colors with complete sets
-        private Map<String, Boolean> houseColors; // Colors that have a house
-        private Map<String, Boolean> hotelColors; // Colors that have a hotel
 
         /** Constructor — initializes defaults */
         public PlayerState() {
@@ -197,12 +197,12 @@ public class GameState {
             this.completeSets = 0;
             this.propertyColorCounts = new HashMap<>();
             this.playsUsed = 0;
-            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;
+            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;  // Initially 3 plays per turn
             this.doubleRentActive = false;
             this.handCards = new ArrayList<>();
+            this.bankCards = new ArrayList<>();
             this.propertyCards = new ArrayList<>();
             this.avatar = "";
-            this.completeSetColors = new ArrayList<>();
             this.houseColors = new HashMap<>();
             this.hotelColors = new HashMap<>();
         }
@@ -268,6 +268,13 @@ public class GameState {
             this.handCards = new ArrayList<>(handCards);
         }
 
+        public List<CardInfo> getBankCards() {
+            return Collections.unmodifiableList(bankCards);
+        }
+        public void setBankCards(List<CardInfo> bankCards) {
+            this.bankCards = new ArrayList<>(bankCards);
+        }
+
         public List<CardInfo> getPropertyCards() {
             return Collections.unmodifiableList(propertyCards);
         }
@@ -278,25 +285,17 @@ public class GameState {
         public String getAvatar() { return avatar; }
         public void setAvatar(String avatar) { this.avatar = avatar; }
 
-        public List<String> getCompleteSetColors() {
-            return Collections.unmodifiableList(completeSetColors);
-        }
-        public void setCompleteSetColors(List<String> colors) {
-            this.completeSetColors = new ArrayList<>(colors);
-        }
-
         public Map<String, Boolean> getHouseColors() {
             return Collections.unmodifiableMap(houseColors);
         }
-        public void setHouseColors(Map<String, Boolean> colors) {
-            this.houseColors = new HashMap<>(colors);
+        public void setHouseColors(Map<String, Boolean> houseColors) {
+            this.houseColors = new HashMap<>(houseColors);
         }
-
         public Map<String, Boolean> getHotelColors() {
             return Collections.unmodifiableMap(hotelColors);
         }
-        public void setHotelColors(Map<String, Boolean> colors) {
-            this.hotelColors = new HashMap<>(colors);
+        public void setHotelColors(Map<String, Boolean> hotelColors) {
+            this.hotelColors = new HashMap<>(hotelColors);
         }
     }
 

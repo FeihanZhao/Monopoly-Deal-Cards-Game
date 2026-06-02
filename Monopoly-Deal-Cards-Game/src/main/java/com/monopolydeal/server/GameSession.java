@@ -68,8 +68,12 @@ public class GameSession {
     private ResolutionItem pendingMultiTargetResolution;
     /** Game start timestamp in milliseconds */
     private long gameStartTime;
+    /** Current turn start timestamp in milliseconds */
+    private long turnStartTime = 0;
     /** Gson serializer instance */
     private final Gson gson;
+    /** Whether a payment submission is currently being processed (prevents duplicate submission) */
+    private boolean paymentProcessing = false;
 
     /**
      * Constructor.
@@ -150,6 +154,7 @@ public class GameSession {
                 "drew " + drawnCards.size() + " cards");
 
         phase = GamePhase.PLAY;
+        turnStartTime = System.currentTimeMillis();
         broadcastGameState();
         startTurnTimer();  // Start 30-second turn timer
     }
@@ -374,12 +379,12 @@ public class GameSession {
             if (!targetId.isEmpty()) {
                 allTargets.add(targetId);
             } else {
-                for (Player p : players) {
-                    if (!p.equals(activePlayer)) {
-                        allTargets.add(p.getId());
-                        break;
-                    }
-                }
+                // Wild Rent must have a target; reject if none provided
+                sendError(activePlayer.getId(),
+                        "Wild Rent requires a target player selection");
+                // Refund: put card back to hand
+                activePlayer.addCardToHand(card);
+                return false;
             }
         } else {
             for (Player p : players) {
@@ -432,9 +437,6 @@ public class GameSession {
         if (!card.isActionCard()) return false;
 
         String actionName = card.getName();
-
-        // Just Say No cannot be played from hand — only used reactively
-        if (actionName.contains("Just Say No")) return false;
 
         // === Step 1: self-targeting actions — execute immediately (discard only after validation) ===
         if (actionName.contains("Pass Go")) {
@@ -688,8 +690,9 @@ public class GameSession {
                 initiatorId, responderId, sourceCard, actionPayload);
         resolutionStack.push(item);
 
-        // Enter waiting-for-reaction phase (turn timer keeps running independently)
+        // Enter waiting-for-reaction phase, pause the turn
         phase = GamePhase.WAITING_FOR_REACTION;
+        cancelTimer();
 
         // Notify the responder
         sendReactionRequired(responderId, item);
@@ -875,6 +878,7 @@ public class GameSession {
 
         // No pending payment and no pending multi-target → directly resume play phase
         phase = GamePhase.PLAY;
+        startTurnTimer();
         broadcastGameState();
 
         if (activePlayer != null && activePlayer.getRemainingPlays() <= 0) {
@@ -1146,29 +1150,15 @@ public class GameSession {
             return;
         }
 
-        // Cannot afford the full debt — auto-pay everything immediately (no choice to make)
-        if (debtor.getBank().getTotal() < amount) {
-            List<Card> allCards = debtor.getBank().removeAllCards();
-            int totalPaid = 0;
-            for (Card c : allCards) {
-                totalPaid += c.getValue();
-                creditor.getBank().deposit(c.transferCopy());
-            }
-            recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_MADE",
-                    creditor.getNickname(), totalPaid,
-                    "paid all " + totalPaid + "M (could not afford " + amount + "M)");
-            broadcastGameState();
-            return;
-        }
+        int actualAmount = Math.min(amount, debtor.getBank().getTotal());
 
-        // Can afford — ask player to select which cards to pay
         if (pendingPaymentDebtorId != null) {
             pendingPaymentQueue.add(new String[]{
-                    debtor.getId(), creditor.getId(), String.valueOf(amount)});
+                    debtor.getId(), creditor.getId(), String.valueOf(actualAmount)});
             return;
         }
 
-        sendPaymentRequest(debtor, creditor, amount);
+        sendPaymentRequest(debtor, creditor, actualAmount);
     }
 
     /** Send a payment request message to the specified debtor */
@@ -1191,8 +1181,9 @@ public class GameSession {
         room.sendToPlayer(debtor.getId(), MessageProtocol.MessageType.PAYMENT_REQUIRED,
                 paymentReq.toString());
 
-        // Enter payment waiting phase (turn timer keeps running independently)
+        // Pause turn: enter payment waiting phase, cancel turn timer to prevent active player timeout
         phase = GamePhase.WAITING_FOR_PAYMENT;
+        cancelTimer();
 
         // 30-second timeout fallback
         final int capturedAmount = amount;
@@ -1209,24 +1200,17 @@ public class GameSession {
             return;
         }
 
-        List<Card> payment;
-        if (debtor.getBank().getTotal() < pendingPaymentAmount) {
-            payment = debtor.getBank().removeAllCards();
-        } else {
-            try {
-                payment = debtor.getBank().removeCardsFallback(pendingPaymentAmount);
-            } catch (Bank.InsufficientFundsException e) {
-                payment = debtor.getBank().removeAllCards();
+        try {
+            List<Card> payment = debtor.getBank().removeCardsFallback(pendingPaymentAmount);
+            int actualPaid = 0;
+            for (Card moneyCard : payment) {
+                actualPaid += moneyCard.getValue();
+                creditor.getBank().deposit(moneyCard.transferCopy());
             }
-        }
-        int actualPaid = 0;
-        for (Card moneyCard : payment) {
-            actualPaid += moneyCard.getValue();
-            creditor.getBank().deposit(moneyCard.transferCopy());
-        }
-        recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
-                creditor.getNickname(), actualPaid,
-                "auto-paid on timeout " + actualPaid + "M");
+            recordAction(debtor.getId(), debtor.getNickname(), "PAYMENT_TIMEOUT",
+                    creditor.getNickname(), actualPaid,
+                    "auto-paid on timeout " + actualPaid + "M");
+        } catch (Bank.InsufficientFundsException ignored) {}
 
         clearPendingPayment();
         broadcastGameState();
@@ -1245,10 +1229,16 @@ public class GameSession {
             sendError(playerId, "No pending payment request");
             return;
         }
+        if (paymentProcessing) {
+            sendError(playerId, "Payment is already being processed, please wait");
+            return;
+        }
+        paymentProcessing = true;
 
         Player debtor = findPlayer(playerId);
         Player creditor = findPlayer(pendingPaymentCreditorId);
         if (debtor == null || creditor == null) {
+            paymentProcessing = false;
             clearPendingPayment();
             return;
         }
@@ -1269,6 +1259,7 @@ public class GameSession {
                     creditor.getNickname(), totalPaid,
                     "paid " + totalPaid + "M (required " + pendingPaymentAmount + "M)");
         } catch (IllegalArgumentException e) {
+            paymentProcessing = false;
             sendError(playerId, e.getMessage());
             return;
         }
@@ -1276,12 +1267,14 @@ public class GameSession {
         if (paymentTimeoutTask != null) {
             paymentTimeoutTask.cancel(false);
         }
+        paymentProcessing = false;
         clearPendingPayment();
         broadcastGameState();
     }
 
     /** Clear current pending payment state and dequeue the next payment request */
     private void clearPendingPayment() {
+        paymentProcessing = false;
         pendingPaymentDebtorId = null;
         pendingPaymentCreditorId = null;
         pendingPaymentAmount = 0;
@@ -1293,7 +1286,7 @@ public class GameSession {
             Player nextCreditor = findPlayer(next[1]);
             int nextAmount = Integer.parseInt(next[2]);
             if (nextDebtor != null && nextCreditor != null) {
-                requirePayment(nextDebtor, nextCreditor, nextAmount);
+                sendPaymentRequest(nextDebtor, nextCreditor, nextAmount);
             } else {
                 // Next payment invalid (player disconnected, etc.), skip and continue
                 clearPendingPayment();
@@ -1313,6 +1306,7 @@ public class GameSession {
 
         // All targets processed, restore play phase
         phase = GamePhase.PLAY;
+        startTurnTimer();
         broadcastGameState();
 
         // Auto-end turn if active player has no remaining plays
@@ -1704,6 +1698,7 @@ public class GameSession {
         state.setDiscardPileSize(deck.getDiscardPileSize());
         state.setGameStarted(gameRunning);
         state.setGameStartTime(gameStartTime);
+        state.setTurnStartTime(turnStartTime);
         state.setViewerId(viewerId);
 
         // Populate state snapshot for each player
@@ -1738,6 +1733,18 @@ public class GameSession {
                     colorCounts.put(entry.getKey().name(), entry.getValue().size());
             }
             playerState.setPropertyColorCounts(colorCounts);
+            // Building status per color
+            Map<String, Boolean> houseMap = new HashMap<>();
+            Map<String, Boolean> hotelMap = new HashMap<>();
+            for (CardColor color : CardColor.values()) {
+                if (!color.isPropertyColor()) continue;
+                int houses = player.getPropertyZone().getHouseCount(color);
+                boolean hotel = player.getPropertyZone().getHasHotel(color);
+                if (houses > 0) houseMap.put(color.name(), true);
+                if (hotel) hotelMap.put(color.name(), true);
+            }
+            playerState.setHouseColors(houseMap);
+            playerState.setHotelColors(hotelMap);
 
             // Property zone details — public info, all players see these
             List<CardColor> completeSetColors = player.getPropertyZone().getCompleteSets();
@@ -1751,25 +1758,13 @@ public class GameSession {
             }
             playerState.setPropertyCards(propertyCards);
 
-            // Complete set colors
-            List<String> completeColorNames = new ArrayList<>();
-            for (CardColor c : completeSetColors) {
-                completeColorNames.add(c.name());
+            // Bank cards are public information — all players can see everyone's bank details
+            List<GameState.CardInfo> bankCards = new ArrayList<>();
+            for (Card card : player.getBank().getAllMoneyCards()) {
+                bankCards.add(new GameState.CardInfo(card));
             }
-            playerState.setCompleteSetColors(completeColorNames);
+            playerState.setBankCards(bankCards);
 
-            // House/hotel data
-            Map<String, Boolean> houseMap = new HashMap<>();
-            Map<String, Boolean> hotelMap = new HashMap<>();
-            for (CardColor color : CardColor.values()) {
-                if (color.isPropertyColor()) {
-                    int hc = player.getPropertyZone().getHouseCount(color);
-                    if (hc > 0) houseMap.put(color.name(), true);
-                    if (player.getPropertyZone().hasHotel(color)) hotelMap.put(color.name(), true);
-                }
-            }
-            playerState.setHouseColors(houseMap);
-            playerState.setHotelColors(hotelMap);
 
             // Privacy: only the viewer sees their own hand card details
             if (player.getId().equals(viewerId)) {

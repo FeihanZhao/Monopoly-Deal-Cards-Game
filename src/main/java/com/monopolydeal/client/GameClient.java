@@ -144,23 +144,33 @@ public class GameClient {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
-                String host = args.length > 0 ? args[0] : GameConstants.DEFAULT_HOST;
-                int port = args.length > 1 ? Integer.parseInt(args[1]) : GameConstants.SERVER_PORT;
+                String host = GameConstants.DEFAULT_HOST;
+                int port = GameConstants.SERVER_PORT;
 
+                if (args.length >= 1) {
+                    if (args[0].equals("--client")) {
+                        host = args.length >= 2 ? args[1] : GameConstants.DEFAULT_HOST;
+                        port = args.length >= 3 ? Integer.parseInt(args[2]) : GameConstants.SERVER_PORT;
+                    } else {
+                        host = args[0];
+                        port = args.length >= 2 ? Integer.parseInt(args[1]) : GameConstants.SERVER_PORT;
+                    }
+                }
+
+                System.out.println("Connecting to " + host + ":" + port);
                 GameClient client = new GameClient(host, port);
                 MainFrame frame = new MainFrame(client);
+                frame.setTitle("Monopoly Deal Cards Game - " + host + ":" + port);
                 frame.setVisible(true);
             } catch (Exception e) {
-                System.err.println("Failed to connect to server: " + e.getMessage());
+                String host = args.length >= 2 ? args[1] : "unknown";
+                String port = args.length >= 3 ? args[2] : String.valueOf(GameConstants.SERVER_PORT);
                 JOptionPane.showMessageDialog(null,
-                        "Unable to connect to server " +
-                                (args.length > 0 ? args[0] : "localhost") + ":" +
-                                GameConstants.SERVER_PORT +
-                                "\nPlease ensure the server is running.",
-                        "Connection Error",
-                        JOptionPane.ERROR_MESSAGE);
+                        "Cannot connect to server at " + host + ":" + port +
+                                "\nMake sure the server is running first.",
+                        "Connection Error", JOptionPane.ERROR_MESSAGE);
             }
         });
-    }   
+    }
 
 }
