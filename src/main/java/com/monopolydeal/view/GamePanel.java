@@ -9,6 +9,7 @@ import java.util.*;
 import java.util.List;
 import java.util.Map;
 import com.monopolydeal.client.GameClient;
+import com.monopolydeal.model.GameState;
 import com.monopolydeal.util.MessageProtocol;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -340,7 +341,9 @@ public class GamePanel extends JPanel {
                         gameState.getAsJsonObject("playerStates") : null;
                 if (playerStates != null) {
                     updatePlayerPanelsFromStates(playerStates, activePlayerId);
-                    updateTurnInfo(activePlayerId, playerStates);
+                    long turnStartTime = gameState.has("turnStartTime") ?
+                            gameState.get("turnStartTime").getAsLong() : 0;
+                    updateTurnInfo(activePlayerId, playerStates, turnStartTime);
                     updateLocalHand(playerStates);
                 }
 
@@ -725,7 +728,20 @@ public class GamePanel extends JPanel {
                 simplified.add("hotelColors", playerData.getAsJsonObject("hotelColors"));
             }
 
-            panel.updateFromJson(simplified, propertyColorCounts);
+            // Pass bank card details to PlayerPanel
+            List<GameState.CardInfo> bankCardList = new ArrayList<>();
+            if (playerData.has("bankCards")) {
+                JsonArray bankArr = playerData.getAsJsonArray("bankCards");
+                for (JsonElement bElem : bankArr) {
+                    JsonObject bc = bElem.getAsJsonObject();
+                    GameState.CardInfo ci = new GameState.CardInfo();
+                    ci.setCardId(bc.has("cardId") ? bc.get("cardId").getAsString() : "");
+                    ci.setCardName(bc.has("cardName") ? bc.get("cardName").getAsString() : "");
+                    ci.setValue(bc.has("value") ? bc.get("value").getAsInt() : 0);
+                    bankCardList.add(ci);
+                }
+            }
+            panel.updateFromJson(simplified, propertyColorCounts, bankCardList);
         }
 
         // Remove departed players' panels
@@ -813,7 +829,7 @@ public class GamePanel extends JPanel {
     /**
      * Update turn info — detect if it's the local player's turn, update active player nickname display.
      */
-    private void updateTurnInfo(String activePlayerId, JsonObject playerStates) {
+    private void updateTurnInfo(String activePlayerId, JsonObject playerStates, long turnStartTime) {
         if (localPlayerId == null) return;
 
         boolean wasMyTurn = isMyTurn;
@@ -830,14 +846,22 @@ public class GamePanel extends JPanel {
 
         // Update UI state on turn switch
         if (isMyTurn && !wasMyTurn) {
+            int elapsed = turnStartTime > 0 ?
+                    (int)((System.currentTimeMillis() - turnStartTime) / 1000) : 0;
+            int remaining = Math.max(1, 30 - elapsed);
             // Just became local player's turn: start countdown, enable buttons, highlight hand area
-            startCountdown();
+            startCountdown(remaining);
             endTurnButton.setEnabled(true);
             handPanel.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(2, 0, 0, 0, GOLD),
                     new EmptyBorder(8, 15, 12, 15)));
         } else if (isMyTurn && wasMyTurn) {
             // Still local player's turn
+            if (turnStartTime > 0 && countdownTimer != null) {
+                int elapsed = (int)((System.currentTimeMillis() - turnStartTime) / 1000);
+                int remaining = Math.max(0, 30 - elapsed);
+                timerBarPanel.syncTo(remaining);
+            }
             endTurnButton.setEnabled(true);
         } else if (!isMyTurn && wasMyTurn) {
             // Just ended local player's turn: stop countdown, disable buttons
@@ -856,9 +880,9 @@ public class GamePanel extends JPanel {
     }
 
     /** Start countdown — create a Swing Timer that fires once per second */
-    private void startCountdown() {
+    private void startCountdown(int initialSeconds) {
         stopCountdown();
-        timerBarPanel.start(30);
+        timerBarPanel.start(initialSeconds);
 
         countdownTimer = new javax.swing.Timer(1000, new ActionListener() {
             @Override

@@ -1,12 +1,14 @@
 package com.monopolydeal.view;
 
 import com.google.gson.JsonObject;
+import com.monopolydeal.model.GameState;
 
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
 import java.util.*;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -48,6 +50,8 @@ public class PlayerPanel extends JPanel {
     private Map<String, Boolean> currentHotelFlags;
     /** Current nickname (for avatar) */
     private String currentNickname;
+    /** Add this field near other fields*/
+    private List<GameState.CardInfo> cachedBankCards = new ArrayList<>();
 
     /** Avatar size */
     private static final int AVATAR_SIZE = 44;
@@ -143,9 +147,17 @@ public class PlayerPanel extends JPanel {
         JPanel statsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         statsRow.setOpaque(false);
 
-        bankTotalLabel = new JLabel("Bank: 0M");
+        bankTotalLabel = new JLabel("Bank: 0M 🔍");
         bankTotalLabel.setForeground(new Color(255, 215, 0));
         bankTotalLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        bankTotalLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        bankTotalLabel.setToolTipText("Click to view bank details");
+        bankTotalLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                showBankDetails();
+            }
+        });
 
         setsLabel = new JLabel("Sets: 0/3");
         setsLabel.setForeground(new Color(100, 255, 100));
@@ -190,6 +202,43 @@ public class PlayerPanel extends JPanel {
         return colors[Math.abs(hash) % colors.length];
     }
 
+    /** Show the information of a player's bank details*/
+    private void showBankDetails() {
+        if (cachedBankCards.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Bank is empty", "Bank Details", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // Group by denomination for display
+        java.util.Map<Integer, Integer> denomCounts = new java.util.TreeMap<>(
+                java.util.Collections.reverseOrder());
+        int total = 0;
+        for (GameState.CardInfo card : cachedBankCards) {
+            denomCounts.merge(card.getValue(), 1, Integer::sum);
+            total += card.getValue();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(currentNickname).append("'s Bank — Total: ").append(total).append("M\n\n");
+        for (java.util.Map.Entry<Integer, Integer> entry : denomCounts.entrySet()) {
+            sb.append("  $").append(entry.getKey()).append("M  ×  ")
+                    .append(entry.getValue()).append("\n");
+        }
+
+        JTextArea area = new JTextArea(sb.toString());
+        area.setEditable(false);
+        area.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        area.setBackground(new Color(30, 35, 45));
+        area.setForeground(new Color(255, 215, 0));
+
+        JOptionPane.showMessageDialog(
+                SwingUtilities.getWindowAncestor(this),
+                area,
+                currentNickname + "'s Bank",
+                JOptionPane.PLAIN_MESSAGE);
+    }
+
     /** Create right property display area */
     private void createPropertyArea() {
         JPanel rightWrapper = new JPanel(new BorderLayout());
@@ -212,7 +261,7 @@ public class PlayerPanel extends JPanel {
     /**
      * Update the player panel display from JSON data.
      */
-    public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts) {
+    public void updateFromJson(JsonObject data, Map<String, Integer> propertyColorCounts, List<GameState.CardInfo> bankCards) {
         String nickname = data.has("nickname") ? data.get("nickname").getAsString() : "Player";
         boolean isActive = data.has("isActive") && data.get("isActive").getAsBoolean();
         boolean connected = !data.has("connected") || data.get("connected").getAsBoolean();
@@ -275,6 +324,9 @@ public class PlayerPanel extends JPanel {
         }
 
         updatePropertyDisplay(propertyColorCounts, houseFlags, hotelFlags);
+        if (bankCards != null) {
+            this.cachedBankCards = new ArrayList<>(bankCards);
+        }
         revalidate();
         repaint();
     }

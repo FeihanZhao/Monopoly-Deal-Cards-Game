@@ -54,6 +54,8 @@ public class GameSession {
     private String pendingPaymentCreditorId;
     /** Pending payment request: amount */
     private int pendingPaymentAmount;
+    /** Whether a payment submission is currently being processed */
+    private boolean paymentProcessing = false;
     /** Pending payment queue (FIFO for multi-debtor scenarios): [debtorId, creditorId, amount] */
     private final Queue<String[]> pendingPaymentQueue = new LinkedList<>();
     /** Payment timeout future handle (cancelled on manual submit to avoid races) */
@@ -68,6 +70,8 @@ public class GameSession {
     private ResolutionItem pendingMultiTargetResolution;
     /** Game start timestamp in milliseconds */
     private long gameStartTime;
+    /** Current turn start timestamp in milliseconds */
+    private long turnStartTime = 0;
     /** Gson serializer instance */
     private final Gson gson;
 
@@ -150,6 +154,7 @@ public class GameSession {
                 "drew " + drawnCards.size() + " cards");
 
         phase = GamePhase.PLAY;
+        turnStartTime = System.currentTimeMillis();
         broadcastGameState();
         startTurnTimer();  // Start 30-second turn timer
     }
@@ -1246,6 +1251,12 @@ public class GameSession {
             return;
         }
 
+        if (paymentProcessing) {
+            sendError(playerId, "Payment is already being processed, please wait");
+            return;
+        }
+        paymentProcessing = true;
+
         Player debtor = findPlayer(playerId);
         Player creditor = findPlayer(pendingPaymentCreditorId);
         if (debtor == null || creditor == null) {
@@ -1269,6 +1280,7 @@ public class GameSession {
                     creditor.getNickname(), totalPaid,
                     "paid " + totalPaid + "M (required " + pendingPaymentAmount + "M)");
         } catch (IllegalArgumentException e) {
+            paymentProcessing = false;
             sendError(playerId, e.getMessage());
             return;
         }
@@ -1282,6 +1294,7 @@ public class GameSession {
 
     /** Clear current pending payment state and dequeue the next payment request */
     private void clearPendingPayment() {
+        paymentProcessing = false;
         pendingPaymentDebtorId = null;
         pendingPaymentCreditorId = null;
         pendingPaymentAmount = 0;
@@ -1704,6 +1717,7 @@ public class GameSession {
         state.setDiscardPileSize(deck.getDiscardPileSize());
         state.setGameStarted(gameRunning);
         state.setGameStartTime(gameStartTime);
+        state.setTurnStartTime(turnStartTime);
         state.setViewerId(viewerId);
 
         // Populate state snapshot for each player
@@ -1770,6 +1784,13 @@ public class GameSession {
             }
             playerState.setHouseColors(houseMap);
             playerState.setHotelColors(hotelMap);
+
+            // Bank cards are public information — all players can see everyone's bank details
+            List<GameState.CardInfo> bankCards = new ArrayList<>();
+            for (Card card : player.getBank().getAllMoneyCards()) {
+                bankCards.add(new GameState.CardInfo(card));
+            }
+            playerState.setBankCards(bankCards);
 
             // Privacy: only the viewer sees their own hand card details
             if (player.getId().equals(viewerId)) {

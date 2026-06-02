@@ -176,6 +176,7 @@ public class GameState {
         private int playsUsed;                 // Plays used this turn
         private int remainingPlays;            // Remaining plays this turn
         private boolean doubleRentActive;      // Whether double rent effect is active
+        private List<CardInfo> bankCards;      // Bank card details (public to all players)
         private List<CardInfo> handCards;      // Hand card details (only visible to this player)
         private List<CardInfo> propertyCards; // Property zone details (public info for all players)
         private String avatar;                 // Avatar identifier
@@ -199,6 +200,7 @@ public class GameState {
             this.playsUsed = 0;
             this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;
             this.doubleRentActive = false;
+            this.bankCards = new ArrayList<>();
             this.handCards = new ArrayList<>();
             this.propertyCards = new ArrayList<>();
             this.avatar = "";
@@ -259,6 +261,14 @@ public class GameState {
         public boolean isDoubleRentActive() { return doubleRentActive; }
         public void setDoubleRentActive(boolean doubleRentActive) {
             this.doubleRentActive = doubleRentActive;
+        }
+
+
+        public List<CardInfo> getBankCards() {
+            return Collections.unmodifiableList(bankCards);
+        }
+        public void setBankCards(List<CardInfo> bankCards) {
+            this.bankCards = new ArrayList<>(bankCards);
         }
 
         public List<CardInfo> getHandCards() {
