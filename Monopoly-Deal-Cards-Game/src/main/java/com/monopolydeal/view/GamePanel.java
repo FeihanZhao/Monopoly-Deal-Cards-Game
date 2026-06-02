@@ -898,4 +898,13 @@ public class GamePanel extends JPanel {
         client.sendMessage(MessageProtocol.MessageType.END_TURN, "{}");
         endTurnButton.setEnabled(false);
     }
+
+    /** Package-visible accessors for testing */
+    public String getLocalPlayerId() {return localPlayerId; }
+    public boolean getIsMyTurn() { return isMyTurn; }
+    public String getPhaseLabelText() { return phaseLabel.getText(); }
+    public String getDrawPileLabelText() { return drawPileLabel.getText(); }
+    public boolean isEndTurnEnabled() { return endTurnButton.isEnabled(); }
+    public int getHandCardCount() { return handCardsPanel.getComponentCount(); }
+    public int getPlayerPanelCount() { return playerPanelsContainer.getComponentCount(); }
 }
