@@ -50,6 +50,12 @@ public class CardSelectionBar extends JPanel {
                     "Sly Deal", "Forced Deal"
             ));
 
+    /** Card names that need a complete set color selection (House/Hotel) */
+    private static final java.util.Set<String> NEEDS_SET_SELECTION =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    "House", "Hotel"
+            ));
+
     // ==================== State fields ====================
 
     private String selectedCardId   = null;
@@ -59,10 +65,14 @@ public class CardSelectionBar extends JPanel {
     private String selectedTargetCardId = null;
     private String selectedMyPropertyId = null;
     private String selectedTheirPropertyId = null;
+    private String selectedHouseColor = null;
+    private String selectedHotelColor = null;
 
     private final Map<String, String> opponentMap = new LinkedHashMap<>();
     private final Map<String, List<String[]>> opponentPropertyMap = new LinkedHashMap<>();
     private final List<String[]> myPropertyList = new ArrayList<>();
+    private List<String> houseEligibleColors = new ArrayList<>();
+    private List<String> hotelEligibleColors = new ArrayList<>();
 
     private BiConsumer<String, String> playCallback;
 
@@ -75,12 +85,14 @@ public class CardSelectionBar extends JPanel {
     private JPanel    targetRow;
     private JPanel    myPropRow;
     private JPanel    theirPropRow;
+    private JPanel    setRow;
     private JButton   confirmButton;
     private JButton   bankButton;
     private JButton   cancelButton;
     private final Map<String, JButton> targetButtons = new LinkedHashMap<>();
     private final Map<String, JButton> myPropButtons = new LinkedHashMap<>();
     private final Map<String, JButton> theirPropButtons = new LinkedHashMap<>();
+    private final Map<String, JButton> setButtons = new LinkedHashMap<>();
 
     // ==================== Constructor ====================
 
@@ -121,6 +133,8 @@ public class CardSelectionBar extends JPanel {
         this.selectedTargetCardId = null;
         this.selectedMyPropertyId = null;
         this.selectedTheirPropertyId = null;
+        this.selectedHouseColor = null;
+        this.selectedHotelColor = null;
 
         cardNameLabel.setText(cardName);
         cardTypeLabel.setText(cardType);
@@ -128,8 +142,10 @@ public class CardSelectionBar extends JPanel {
         configureActionButtons(cardType, cardName);
         configureTargetRow(cardType, cardName);
         configurePropertyRows(cardName);
+        configureSetRow(cardName);
         resetTargetSelection();
         resetPropertySelections();
+        resetSetSelection();
         updateHeight();
 
         setVisible(true);
@@ -146,6 +162,8 @@ public class CardSelectionBar extends JPanel {
         selectedTargetCardId = null;
         selectedMyPropertyId = null;
         selectedTheirPropertyId = null;
+        selectedHouseColor = null;
+        selectedHotelColor = null;
         setVisible(false);
     }
 
@@ -155,6 +173,8 @@ public class CardSelectionBar extends JPanel {
     public String getSelectedTargetCardId() { return selectedTargetCardId; }
     public String getSelectedMyPropertyId() { return selectedMyPropertyId; }
     public String getSelectedTheirPropertyId() { return selectedTheirPropertyId; }
+    public String getSelectedHouseColor() { return selectedHouseColor; }
+    public String getSelectedHotelColor() { return selectedHotelColor; }
 
     // ==================== UI construction ====================
 
@@ -241,10 +261,16 @@ public class CardSelectionBar extends JPanel {
         theirPropRow.setOpaque(false);
         theirPropRow.setVisible(false);
 
+        // Set selection row (House/Hotel)
+        setRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        setRow.setOpaque(false);
+        setRow.setVisible(false);
+
         centrePanel.add(actionRow);
         centrePanel.add(targetRow);
         centrePanel.add(myPropRow);
         centrePanel.add(theirPropRow);
+        centrePanel.add(setRow);
 
         innerPanel.add(infoPanel,   BorderLayout.WEST);
         innerPanel.add(centrePanel, BorderLayout.CENTER);
@@ -301,6 +327,7 @@ public class CardSelectionBar extends JPanel {
         if (targetRow.isVisible()) rows++;
         if (myPropRow.isVisible()) rows++;
         if (theirPropRow.isVisible()) rows++;
+        if (setRow.isVisible()) rows++;
         int h = BASE_HEIGHT + (rows - 1) * PROP_ROW_HEIGHT;
         setPreferredSize(new Dimension(0, h));
     }
@@ -320,8 +347,13 @@ public class CardSelectionBar extends JPanel {
                 break;
             case "ACTION":
             case "RENT":
-                confirmButton.setText("Play");
-                confirmButton.setVisible(true);
+                // Just Say No cannot be played from hand — only banked as money
+                if ("Just Say No".equals(cardName)) {
+                    confirmButton.setVisible(false);
+                } else {
+                    confirmButton.setText("Play");
+                    confirmButton.setVisible(true);
+                }
                 bankButton.setVisible(true);
                 break;
             default:
@@ -512,6 +544,72 @@ public class CardSelectionBar extends JPanel {
         selectedTheirPropertyId = null;
     }
 
+    private void resetSetSelection() {
+        selectedHouseColor = null;
+        selectedHotelColor = null;
+        setButtons.values().forEach(b -> b.setBackground(BTN_PROP_IDLE));
+    }
+
+    // ==================== Set selection (House/Hotel) ====================
+
+    public void updateEligibleSets(List<String> houseColors, List<String> hotelColors) {
+        this.houseEligibleColors = houseColors != null ? houseColors : new ArrayList<>();
+        this.hotelEligibleColors = hotelColors != null ? hotelColors : new ArrayList<>();
+    }
+
+    private void configureSetRow(String cardName) {
+        setButtons.values().forEach(setRow::remove);
+        setButtons.clear();
+        setRow.removeAll();
+
+        if (cardName == null || !NEEDS_SET_SELECTION.contains(cardName)) {
+            setRow.setVisible(false);
+            return;
+        }
+
+        boolean isHotel = cardName.contains("Hotel");
+        List<String> colors = isHotel ? hotelEligibleColors : houseEligibleColors;
+
+        String label = isHotel ? "Build Hotel on:" : "Build House on:";
+        JLabel setLabel = new JLabel(label);
+        setLabel.setForeground(AppTheme.TEXT_DIM);
+        setLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+        setRow.add(setLabel);
+
+        if (colors.isEmpty()) {
+            JLabel noSets = new JLabel(isHotel ? "(no eligible sets — need a house first)"
+                    : "(no eligible sets — need a complete set)");
+            noSets.setForeground(new Color(255, 120, 120));
+            noSets.setFont(new Font("SansSerif", Font.ITALIC, 11));
+            setRow.add(noSets);
+            setRow.setVisible(true);
+            return;
+        }
+
+        for (String colorName : colors) {
+            Color swatch = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
+            JButton btn = makeButton(colorName, swatch.darker());
+            btn.addActionListener(e -> selectSetColor(colorName, btn, isHotel));
+            setButtons.put(colorName, btn);
+            setRow.add(btn);
+        }
+
+        setRow.setVisible(true);
+        setRow.revalidate();
+        setRow.repaint();
+    }
+
+    private void selectSetColor(String colorName, JButton btn, boolean isHotel) {
+        if (isHotel) {
+            selectedHotelColor = colorName;
+        } else {
+            selectedHouseColor = colorName;
+        }
+        setButtons.values().forEach(b -> b.setBackground(BTN_PROP_IDLE));
+        btn.setBackground(BTN_PROP_SEL);
+        updateConfirmState();
+    }
+
     // ==================== Confirm state ====================
 
     private void updateConfirmState() {
@@ -534,6 +632,11 @@ public class CardSelectionBar extends JPanel {
             boolean myOk = !needMy || selectedMyPropertyId != null;
             boolean theirOk = !needTheir || selectedTheirPropertyId != null;
             confirmButton.setEnabled(myOk && theirOk);
+        } else if (selectedCardName != null && NEEDS_SET_SELECTION.contains(selectedCardName) && setRow.isVisible() && !setButtons.isEmpty()) {
+            boolean isHotel = selectedCardName.contains("Hotel");
+            confirmButton.setEnabled(isHotel ? selectedHotelColor != null : selectedHouseColor != null);
+        } else if (selectedCardName != null && NEEDS_SET_SELECTION.contains(selectedCardName) && setRow.isVisible()) {
+            confirmButton.setEnabled(false);  // No eligible sets
         } else {
             confirmButton.setEnabled(true);
         }
@@ -569,6 +672,18 @@ public class CardSelectionBar extends JPanel {
             if (theirPropRow.isVisible() && !theirPropButtons.isEmpty()
                     && selectedTheirPropertyId == null) {
                 flashMessage("Select their property to trade");
+                return;
+            }
+        }
+        if (selectedCardName != null && NEEDS_SET_SELECTION.contains(selectedCardName)
+                && setRow.isVisible() && !setButtons.isEmpty()) {
+            boolean isHotel = selectedCardName.contains("Hotel");
+            if (isHotel && selectedHotelColor == null) {
+                flashMessage("Select a set to build a hotel on");
+                return;
+            }
+            if (!isHotel && selectedHouseColor == null) {
+                flashMessage("Select a set to build a house on");
                 return;
             }
         }

@@ -42,6 +42,10 @@ public class PlayerPanel extends JPanel {
     private JPanel propertyPanel;
     /** Current property card counts per color */
     private Map<String, Integer> currentPropertyCounts;
+    /** Current house status per color */
+    private Map<String, Boolean> currentHouseFlags;
+    /** Current hotel status per color */
+    private Map<String, Boolean> currentHotelFlags;
     /** Current nickname (for avatar) */
     private String currentNickname;
 
@@ -55,6 +59,8 @@ public class PlayerPanel extends JPanel {
     public PlayerPanel(String playerId) {
         this.playerId = playerId;
         this.currentPropertyCounts = new LinkedHashMap<>();
+        this.currentHouseFlags = new HashMap<>();
+        this.currentHotelFlags = new HashMap<>();
         this.currentNickname = "?";
 
         setLayout(new BorderLayout(12, 0));
@@ -252,7 +258,23 @@ public class PlayerPanel extends JPanel {
                     new EmptyBorder(10, 15, 10, 15)));
         }
 
-        updatePropertyDisplay(propertyColorCounts);
+        // Parse house/hotel data
+        Map<String, Boolean> houseFlags = new HashMap<>();
+        Map<String, Boolean> hotelFlags = new HashMap<>();
+        if (data.has("houseColors")) {
+            com.google.gson.JsonObject houseObj = data.getAsJsonObject("houseColors");
+            for (String key : houseObj.keySet()) {
+                houseFlags.put(key, houseObj.get(key).getAsBoolean());
+            }
+        }
+        if (data.has("hotelColors")) {
+            com.google.gson.JsonObject hotelObj = data.getAsJsonObject("hotelColors");
+            for (String key : hotelObj.keySet()) {
+                hotelFlags.put(key, hotelObj.get(key).getAsBoolean());
+            }
+        }
+
+        updatePropertyDisplay(propertyColorCounts, houseFlags, hotelFlags);
         revalidate();
         repaint();
     }
@@ -260,21 +282,28 @@ public class PlayerPanel extends JPanel {
     /**
      * Update the property display area with stacked card visuals.
      */
-    private void updatePropertyDisplay(Map<String, Integer> colorCounts) {
+    private void updatePropertyDisplay(Map<String, Integer> colorCounts,
+                                       Map<String, Boolean> houseFlags,
+                                       Map<String, Boolean> hotelFlags) {
         if (colorCounts == null) colorCounts = new LinkedHashMap<>();
+        if (houseFlags == null) houseFlags = new HashMap<>();
+        if (hotelFlags == null) hotelFlags = new HashMap<>();
 
         // Update cache
-        for (String color : colorCounts.keySet()) {
-            currentPropertyCounts.put(color, colorCounts.get(color));
-        }
-        Map<String, Integer> finalColorCounts = colorCounts;
-        currentPropertyCounts.keySet().removeIf(k -> !finalColorCounts.containsKey(k));
+        currentPropertyCounts.clear();
+        currentPropertyCounts.putAll(colorCounts);
+        currentHouseFlags.clear();
+        currentHouseFlags.putAll(houseFlags);
+        currentHotelFlags.clear();
+        currentHotelFlags.putAll(hotelFlags);
 
         propertyPanel.removeAll();
 
         for (Map.Entry<String, Integer> entry : colorCounts.entrySet()) {
             String colorName = entry.getKey();
             int count = entry.getValue();
+            boolean hasHouse = houseFlags.getOrDefault(colorName, false);
+            boolean hasHotel = hotelFlags.getOrDefault(colorName, false);
             Color color = AppTheme.PROPERTY_COLORS.getOrDefault(colorName, Color.GRAY);
 
             // Create custom-drawn stacked card panel
@@ -315,6 +344,16 @@ public class PlayerPanel extends JPanel {
                         }
                     }
 
+                    // Draw house/hotel icon on top card
+                    if (count > 0) {
+                        int maxOffset = (count - 1) * 3;
+                        if (hasHotel) {
+                            drawHotelIcon(g2, maxOffset);
+                        } else if (hasHouse) {
+                            drawHouseIcon(g2, maxOffset);
+                        }
+                    }
+
                     // Draw count badge on top layer
                     if (count > 0) {
                         int maxOffset = (count - 1) * 3;
@@ -331,13 +370,57 @@ public class PlayerPanel extends JPanel {
                     }
                     g2.dispose();
                 }
+
+                private void drawHouseIcon(Graphics2D g2, int offset) {
+                    int bx = offset + 6;
+                    int by = offset + 6;
+                    // House body
+                    g2.setColor(new Color(255, 215, 0, 220));
+                    g2.fillRect(bx + 2, by + 5, 12, 9);
+                    // Roof (triangle)
+                    int[] xPoints = {bx + 1, bx + 8, bx + 15};
+                    int[] yPoints = {by + 5, by, by + 5};
+                    g2.fillPolygon(xPoints, yPoints, 3);
+                    // Border
+                    g2.setColor(new Color(180, 140, 0));
+                    g2.setStroke(new BasicStroke(0.8f));
+                    g2.drawRect(bx + 2, by + 5, 12, 9);
+                    g2.drawPolygon(xPoints, yPoints, 3);
+                    // Door
+                    g2.setColor(new Color(180, 140, 0));
+                    g2.fillRect(bx + 7, by + 9, 3, 5);
+                }
+
+                private void drawHotelIcon(Graphics2D g2, int offset) {
+                    int bx = offset + 4;
+                    int by = offset + 4;
+                    // Hotel body (taller)
+                    g2.setColor(new Color(255, 80, 60, 220));
+                    g2.fillRect(bx + 2, by + 4, 14, 12);
+                    // Roof
+                    int[] xPoints = {bx + 1, bx + 9, bx + 17};
+                    int[] yPoints = {by + 4, by, by + 4};
+                    g2.fillPolygon(xPoints, yPoints, 3);
+                    // Border
+                    g2.setColor(new Color(160, 40, 30));
+                    g2.setStroke(new BasicStroke(0.8f));
+                    g2.drawRect(bx + 2, by + 4, 14, 12);
+                    g2.drawPolygon(xPoints, yPoints, 3);
+                    // Windows
+                    g2.setColor(new Color(255, 255, 200));
+                    g2.fillRect(bx + 5, by + 6, 3, 3);
+                    g2.fillRect(bx + 10, by + 6, 3, 3);
+                    g2.fillRect(bx + 5, by + 10, 3, 3);
+                    g2.fillRect(bx + 10, by + 10, 3, 3);
+                }
             };
             pilePanel.setOpaque(false);
             // Calculate size based on count (each card offset by 3px, max visible width)
             int maxOffset = Math.max(0, (count - 1) * 3);
             pilePanel.setPreferredSize(new Dimension(50 + maxOffset, 64 + maxOffset));
             pilePanel.setMinimumSize(pilePanel.getPreferredSize());
-            pilePanel.setToolTipText(colorName + ": " + count + " cards");
+            pilePanel.setToolTipText(colorName + ": " + count + " cards"
+                    + (hasHotel ? " [Hotel]" : hasHouse ? " [House]" : ""));
 
             // Also show color name label below the pile
             JPanel pileWithLabel = new JPanel(new BorderLayout());

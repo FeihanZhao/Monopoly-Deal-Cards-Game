@@ -161,6 +161,6 @@ public class GameClient {
                         JOptionPane.ERROR_MESSAGE);
             }
         });
-    }
+    }   
 
 }

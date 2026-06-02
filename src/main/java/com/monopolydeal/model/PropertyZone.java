@@ -265,6 +265,16 @@ public class PropertyZone {
                 || hasHotel.getOrDefault(color, false);
     }
 
+    /** Get the house count for a given color */
+    public int getHouseCount(CardColor color) {
+        return houseCount.getOrDefault(color, 0);
+    }
+
+    /** Check whether the given color has a hotel */
+    public boolean hasHotel(CardColor color) {
+        return hasHotel.getOrDefault(color, false);
+    }
+
     /** Clear the property zone (remove all property cards, houses, and hotels) */
     public void clear() {
         propertyGroups.values().forEach(List::clear);

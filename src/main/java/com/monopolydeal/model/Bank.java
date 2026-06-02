@@ -105,7 +105,7 @@ public class Bank {
         int totalValue = selected.stream().mapToInt(Card::getValue).sum();
         if (totalValue < amount) {
             throw new IllegalArgumentException(
-                "Insufficient payment. Need at least " + amount + "M, but only selected " + totalValue + "M");
+                    "Insufficient payment. Need at least " + amount + "M, but only selected " + totalValue + "M");
         }
 
         for (Card card : selected) {
@@ -156,6 +156,20 @@ public class Bank {
                 .filter(c -> c.getId().equals(cardId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Remove ALL money cards from the bank (used when player cannot afford the full debt).
+     * No validation — unconditionally takes everything.
+     * @return all cards that were in the bank
+     */
+    public List<Card> removeAllCards() {
+        List<Card> all = new ArrayList<>(allMoneyCards);
+        allMoneyCards.clear();
+        for (List<Card> list : moneyCards.values()) {
+            list.clear();
+        }
+        return all;
     }
 
     /**

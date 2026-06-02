@@ -179,6 +179,9 @@ public class GameState {
         private List<CardInfo> handCards;      // Hand card details (only visible to this player)
         private List<CardInfo> propertyCards; // Property zone details (public info for all players)
         private String avatar;                 // Avatar identifier
+        private List<String> completeSetColors;  // Colors with complete sets
+        private Map<String, Boolean> houseColors; // Colors that have a house
+        private Map<String, Boolean> hotelColors; // Colors that have a hotel
 
         /** Constructor — initializes defaults */
         public PlayerState() {
@@ -194,11 +197,14 @@ public class GameState {
             this.completeSets = 0;
             this.propertyColorCounts = new HashMap<>();
             this.playsUsed = 0;
-            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;  // Initially 3 plays per turn
+            this.remainingPlays = GameConstants.MAX_PLAYS_PER_TURN;
             this.doubleRentActive = false;
             this.handCards = new ArrayList<>();
             this.propertyCards = new ArrayList<>();
             this.avatar = "";
+            this.completeSetColors = new ArrayList<>();
+            this.houseColors = new HashMap<>();
+            this.hotelColors = new HashMap<>();
         }
 
         // ==================== Getters/Setters ====================
@@ -271,6 +277,27 @@ public class GameState {
 
         public String getAvatar() { return avatar; }
         public void setAvatar(String avatar) { this.avatar = avatar; }
+
+        public List<String> getCompleteSetColors() {
+            return Collections.unmodifiableList(completeSetColors);
+        }
+        public void setCompleteSetColors(List<String> colors) {
+            this.completeSetColors = new ArrayList<>(colors);
+        }
+
+        public Map<String, Boolean> getHouseColors() {
+            return Collections.unmodifiableMap(houseColors);
+        }
+        public void setHouseColors(Map<String, Boolean> colors) {
+            this.houseColors = new HashMap<>(colors);
+        }
+
+        public Map<String, Boolean> getHotelColors() {
+            return Collections.unmodifiableMap(hotelColors);
+        }
+        public void setHotelColors(Map<String, Boolean> colors) {
+            this.hotelColors = new HashMap<>(colors);
+        }
     }
 
     // ==================== Inner Class: Card Info (Lightweight Transport Object) ====================
