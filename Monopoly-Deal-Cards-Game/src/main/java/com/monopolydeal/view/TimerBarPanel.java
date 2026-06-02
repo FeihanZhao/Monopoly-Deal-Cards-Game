@@ -112,6 +112,16 @@ public class TimerBarPanel extends JPanel {
     }
 
     /**
+     * Sync remaining seconds from server state (prevents client/server drift).
+     * Called on each GAME_STATE_UPDATE during the local player's turn.
+     */
+    public void syncTo(int seconds) {
+        if (!active) return;
+        this.secondsRemaining = seconds;
+        repaint();
+    }
+
+    /**
      * Switch to inactive state (gray).
      * Called when it is not the local player's turn or the game hasn't started.
      */

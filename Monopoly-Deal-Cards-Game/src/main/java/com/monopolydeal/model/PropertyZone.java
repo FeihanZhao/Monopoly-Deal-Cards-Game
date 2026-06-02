@@ -259,20 +259,20 @@ public class PropertyZone {
         return true;
     }
 
-    /** Check whether the given color group has houses or a hotel */
-    private boolean hasBuildings(CardColor color) {
-        return houseCount.getOrDefault(color, 0) > 0
-                || hasHotel.getOrDefault(color, false);
-    }
-
-    /** Get the house count for a given color */
+    /** Get house count for a color (0 or 1) */
     public int getHouseCount(CardColor color) {
         return houseCount.getOrDefault(color, 0);
     }
 
-    /** Check whether the given color has a hotel */
-    public boolean hasHotel(CardColor color) {
+    /** Get hotel status for a color */
+    public boolean getHasHotel(CardColor color) {
         return hasHotel.getOrDefault(color, false);
+    }
+
+    /** Check whether the given color group has houses or a hotel */
+    private boolean hasBuildings(CardColor color) {
+        return houseCount.getOrDefault(color, 0) > 0
+                || hasHotel.getOrDefault(color, false);
     }
 
     /** Clear the property zone (remove all property cards, houses, and hotels) */

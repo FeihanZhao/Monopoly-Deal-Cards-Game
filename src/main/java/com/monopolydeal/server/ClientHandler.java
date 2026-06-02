@@ -9,16 +9,16 @@ import com.google.gson.Gson;
 import java.util.UUID;
 
 /**
- * Client handler - manages all message sending/receiving for a single client connection
+ * Client handler — manages all message sending/receiving for a single client connection.
  *
- * Each connected client has a corresponding ClientHandler instance running in its own thread.
- * Implements Runnable interface, reads messages from the client in a loop within run().
+ * Each connected client corresponds to one ClientHandler instance running on its own thread.
+ * Implements Runnable; the run() method loops to read messages from the client.
  *
- * Message processing flow:
- * 1. Read one line of JSON message from Socket
- * 2. Parse MessageType (CREATE_ROOM/JOIN_ROOM/PLAY_CARD/etc.)
- * 3. Call appropriate handler method based on message type
- * 4. Handler methods find the corresponding GameRoom via GameServer, delegate to GameRoom or GameSession
+ * Message handling flow:
+ * 1. Read a line of JSON from the socket
+ * 2. Parse the MessageType (CREATE_ROOM, JOIN_ROOM, PLAY_CARD, etc.)
+ * 3. Dispatch to the appropriate handler method
+ * 4. The handler locates the GameRoom via GameServer and delegates to GameRoom or GameSession
  *
  * Supported message types:
  * - Room management: CREATE_ROOM, JOIN_ROOM, LEAVE_ROOM, PLAYER_READY
@@ -26,26 +26,26 @@ import java.util.UUID;
  * - Communication: CHAT_MESSAGE, PING
  */
 public class ClientHandler implements Runnable {
-    /** Unique client identifier (assigned by server on connection) */
+    /** Unique client identifier (assigned by the server on connection) */
     private final String clientId;
     /** Client socket connection */
     private final Socket socket;
-    /** Parent game server */
+    /** Owning game server */
     private final GameServer server;
-    /** Output stream - sends messages to client */
+    /** Output stream — sends messages to the client */
     private PrintWriter out;
-    /** Input stream - reads messages from client */
+    /** Input stream — reads messages from the client */
     private BufferedReader in;
-    /** Player nickname (set when creating/joining room) */
+    /** Player nickname (set when creating/joining a room) */
     private String nickname;
     /** Current room code (null if not in any room) */
     private String currentRoom;
 
     /**
-     * Constructor
+     * Constructor.
      * @param clientId unique client identifier
      * @param socket client socket connection
-     * @param server parent game server
+     * @param server owning game server
      */
     public ClientHandler(String clientId, Socket socket, GameServer server) {
         this.clientId = clientId;
@@ -54,8 +54,8 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Main thread method - loops reading client messages
-     * Exits loop and disconnects when connection is closed or IO exception occurs
+     * Thread main method — loops reading client messages.
+     * Exits loop and disconnects on connection close or IO exception.
      */
     @Override
     public void run() {
@@ -65,7 +65,7 @@ public class ClientHandler implements Runnable {
 
             String message;
             while ((message = in.readLine()) != null) {
-                handleMessage(message);  // Process each JSON message line
+                handleMessage(message);  // Process JSON messages line by line
             }
         } catch (IOException e) {
             System.out.println("Client " + clientId.substring(0, 8) + " disconnected");
@@ -75,13 +75,15 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Processes a single JSON message - parses message type and dispatches to appropriate handler
-     * @param jsonMessage complete JSON message string (format: {"type":"MESSAGE_TYPE","payload":{...}})
+     * Handle a single JSON message — parse type and dispatch to the appropriate handler.
+     * @param jsonMessage full JSON message string (format: {"type":"MESSAGE_TYPE","payload":{...}})
      */
     private void handleMessage(String jsonMessage) {
         try {
-            MessageProtocol.MessageType type = MessageProtocol.getType(jsonMessage);
-            JsonObject payload = JsonParser.parseString(MessageProtocol.getPayload(jsonMessage)).getAsJsonObject();
+            JsonObject root = JsonParser.parseString(jsonMessage).getAsJsonObject();
+            MessageProtocol.MessageType type =
+                    MessageProtocol.MessageType.valueOf(root.get("type").getAsString());
+            JsonObject payload = root.getAsJsonObject("payload");
 
             switch (type) {
                 case CREATE_ROOM:
@@ -94,7 +96,10 @@ public class ClientHandler implements Runnable {
                     handleLeaveRoom();             // Leave room request
                     break;
                 case PLAYER_READY:
-                    handlePlayerReady(payload);    // Player ready status toggle
+                    handlePlayerReady(payload);    // Toggle ready status
+                    break;
+                case REQUEST_START_GAME:
+                    handleRequestStartGame(payload); // Host requests game start
                     break;
                 case PLAY_CARD:
                     handlePlayCard(payload);       // Play card request
@@ -103,16 +108,19 @@ public class ClientHandler implements Runnable {
                     handleEndTurn();               // End turn request
                     break;
                 case FLIP_WILD_CARD:
-                    handleFlipWildCard(payload);   // Flip wild property color
+                    handleFlipWildCard(payload);   // Change wild property color
                     break;
                 case SUBMIT_PAYMENT:
                     handleSubmitPayment(payload);  // Submit payment card selection
                     break;
+                case SUBMIT_DISCARD:
+                    handleSubmitDiscard(payload);  // Submit discard selection
+                    break;
                 case PLAY_JUST_SAY_NO:
-                    handlePlayJustSayNo(payload);  // Play Just Say No to cancel action
+                    handlePlayJustSayNo(payload);  // Play Just Say No to counter an action
                     break;
                 case PASS_REACTION:
-                    handlePassReaction(payload);   // Pass reaction (don't play Just Say No)
+                    handlePassReaction(payload);   // Pass on response (don't play Just Say No)
                     break;
                 case PING:
                     sendMessage(MessageProtocol.MessageType.PONG, "{}");
@@ -124,32 +132,32 @@ public class ClientHandler implements Runnable {
                     System.out.println("Unknown message type: " + type);
             }
         } catch (Exception e) {
-            System.err.println("Error processing message: " + e.getMessage());
+            System.err.println("Error handling message: " + e.getMessage());
             e.printStackTrace();
             sendError("Internal server error: " + e.getMessage());
         }
     }
 
-    /** Handles create room request - generates 6-digit room code, creates GameRoom */
+    /** Handle create room request — generate 6-char room code, create GameRoom */
     private void handleCreateRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
-            sendError("Invalid nickname: must be 1-12 characters, no special characters");
+            sendError("Invalid nickname: 1-12 characters, no special characters");
             return;
         }
         this.nickname = rawNickname.trim();
         String roomCode = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         GameRoom room = server.createRoom(roomCode, this);
         this.currentRoom = roomCode;
-        System.out.println("Room created: " + roomCode + ", creator: " + nickname);
-        room.broadcastRoomUpdate();  // Notify all players in room of state update
+        System.out.println("Room created: " + roomCode + ", host: " + nickname);
+        room.broadcastRoomUpdate();  // Notify all players in the room
     }
 
-    /** Handles join room request - finds and joins existing room by room code */
+    /** Handle join room request — look up an existing room by code and join it */
     private void handleJoinRoom(JsonObject payload) {
         String rawNickname = payload.get("nickname").getAsString();
         if (!isValidNickname(rawNickname)) {
-            sendError("Invalid nickname: must be 1-12 characters, no special characters");
+            sendError("Invalid nickname: 1-12 characters, no special characters");
             return;
         }
         this.nickname = rawNickname.trim();
@@ -171,7 +179,7 @@ public class ClientHandler implements Runnable {
         room.broadcastRoomUpdate();
     }
 
-    /** Handles leave room request - removes self from room and notifies other players */
+    /** Handle leave room request — remove self from room and notify other players */
     private void handleLeaveRoom() {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -182,7 +190,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles player ready status toggle - marks "ready" or "not ready" in lobby */
+    /** Handle player ready toggle — mark "ready" or "unready" in the lobby */
     private void handlePlayerReady(JsonObject payload) {
         boolean ready = payload.get("ready").getAsBoolean();
         if (currentRoom != null) {
@@ -193,7 +201,20 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles play card request - delegates to GameSession for game logic execution */
+    /** Handle host request to start the game */
+    private void handleRequestStartGame(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null) {
+                String error = room.requestStartGame(clientId);
+                if (error != null) {
+                    sendError(error);
+                }
+            }
+        }
+    }
+
+    /** Handle play card request — delegate to GameSession for game logic */
     private void handlePlayCard(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -203,7 +224,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles end turn request - delegates to GameSession */
+    /** Handle end turn request — delegate to GameSession */
     private void handleEndTurn() {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -213,7 +234,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles flip wild property color request - delegates to GameSession, does not consume play count */
+    /** Handle wild property color change — delegate to GameSession; does not consume a play */
     private void handleFlipWildCard(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -225,7 +246,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles playing Just Say No - delegates to GameSession */
+    /** Handle play Just Say No — delegate to GameSession */
     private void handlePlayJustSayNo(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -235,7 +256,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles passing reaction (not playing Just Say No) - delegates to GameSession */
+    /** Handle pass reaction — delegate to GameSession */
     private void handlePassReaction(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -245,7 +266,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles submit payment request - delegates to GameSession for payment validation and transfer */
+    /** Handle submit payment request — delegate to GameSession for payment validation and transfer */
     private void handleSubmitPayment(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -255,7 +276,17 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Handles chat message - broadcasts to all players in the room */
+    /** Handle client-submitted discard selection */
+    private void handleSubmitDiscard(JsonObject payload) {
+        if (currentRoom != null) {
+            GameRoom room = server.getRoom(currentRoom);
+            if (room != null && room.getGameSession() != null) {
+                room.getGameSession().handleSubmitDiscard(clientId, payload);
+            }
+        }
+    }
+
+    /** Handle chat message — broadcast to all players in the room */
     private void handleChatMessage(JsonObject payload) {
         if (currentRoom != null) {
             GameRoom room = server.getRoom(currentRoom);
@@ -266,7 +297,7 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Sends a message to this client
+     * Send a message to this client.
      * @param type message type
      * @param payload message payload (JSON string)
      */
@@ -278,7 +309,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Sends error message to client */
+    /** Send an error message to the client */
     private void sendError(String errorMessage) {
         JsonObject error = new JsonObject();
         error.addProperty("message", errorMessage);
@@ -292,7 +323,7 @@ public class ClientHandler implements Runnable {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getCurrentRoom() { return currentRoom; }
 
-    /** Disconnects - leaves room, removes from server, closes socket */
+    /** Disconnect — leave room, remove from server, and close the socket */
     public void disconnect() {
         handleLeaveRoom();
         server.removeClient(clientId);
@@ -301,15 +332,15 @@ public class ClientHandler implements Runnable {
                 socket.close();
             }
         } catch (IOException e) {
-            // Exception during socket close can be ignored
+            // Ignore exceptions when closing the socket
         }
     }
 
-    /** Validates nickname: non-empty, length 1-12, alphanumeric and underscore only */
+    /** Validate nickname: non-empty, 1-12 chars, alphanumeric/Chinese/underscore only */
     private boolean isValidNickname(String nickname) {
         if (nickname == null || nickname.trim().isEmpty()) return false;
         String trimmed = nickname.trim();
         if (trimmed.length() < 1 || trimmed.length() > 12) return false;
-        return trimmed.matches("[a-zA-Z0-9_]+");
+        return trimmed.matches("[\\u4e00-\\u9fa5a-zA-Z0-9_]+");
     }
 }

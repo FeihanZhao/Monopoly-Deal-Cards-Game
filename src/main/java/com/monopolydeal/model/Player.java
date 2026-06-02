@@ -4,52 +4,52 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Player class - Represents a player in the game
+ * Player class — represents a player in the game.
  *
  * Each player has:
- * - Basic info: unique ID, nickname, avatar, ready status
- * - Hand cards: unplayed cards in hand
- * - Bank: stored money cards for payments
- * - Property Zone: played property cards grouped by color
- * - Turn status: played count, active player flag
- * - Special status: double rent effect flag
+ * - Basic info: id (unique), nickname, avatar, ready status
+ * - Hand: list of unplayed cards held
+ * - Bank: holds played money cards, used for payments
+ * - PropertyZone: holds played property cards, grouped by color
+ * - Turn state: playsUsed, isActivePlayer
+ * - Special state: doubleRentActive
  *
  * Design notes:
- * - CopyOnWriteArrayList for thread-safe hand card traversal
- * - Bank and PropertyZone are composite objects
+ * - Uses CopyOnWriteArrayList for hand storage, supporting thread-safe iteration
+ * - Bank and PropertyZone are composite objects owned by Player
  * - equals/hashCode based on player ID
  */
 public class Player {
-    /** Unique player ID (matches client connection ID) */
+    /** Unique player identifier (corresponds to network connection clientId) */
     private final String id;
-    /** Player display name */
+    /** Player nickname (for display) */
     private final String nickname;
     /** Player avatar identifier */
     private String avatar;
-    /** Ready status in game lobby */
+    /** Whether the player has readied up (clicked ready in lobby) */
     private boolean ready;
-    /** Network connection status */
+    /** Whether the player is connected (network connection status) */
     private boolean connected;
 
     // ==================== Game State ====================
 
-    /** Hand cards - unplayed cards held by the player */
+    /** Hand list — unplayed cards held */
     private final List<Card> hand;
-    /** Bank - stores played money cards */
+    /** Bank — holds played money cards */
     private final Bank bank;
-    /** Property zone - stores played property cards */
+    /** PropertyZone — holds played property cards */
     private final PropertyZone propertyZone;
-    /** Number of plays used this turn (max 3 per turn) */
+    /** Number of plays used this turn (max 3 non-action plays per turn) */
     private int playsUsed;
-    /** Whether it's this player's turn to act */
+    /** Whether this is the currently active player (whose turn it is) */
     private boolean isActivePlayer;
-    /** Whether double rent effect is active */
+    /** Whether double rent is active (next rent charge is doubled) */
     private boolean doubleRentActive;
 
     /**
-     * Create a new player
-     * @param id Unique identifier (server-assigned client ID)
-     * @param nickname Player display name
+     * Create a new player.
+     * @param id unique identifier (from server-assigned clientId)
+     * @param nickname player nickname
      */
     public Player(String id, String nickname) {
         this.id = id;
@@ -75,19 +75,19 @@ public class Player {
     public boolean isConnected() { return connected; }
     public void setConnected(boolean connected) { this.connected = connected; }
 
-    // ==================== Hand Card Operations ====================
+    // ==================== Hand Operations ====================
 
-    /** Get read-only hand card list */
+    /** Get read-only view of the hand */
     public List<Card> getHand() { return Collections.unmodifiableList(hand); }
-    /** Get number of cards in hand */
+    /** Get hand size */
     public int getHandCount() { return hand.size(); }
 
-    /** Get player's bank */
+    /** Get the bank */
     public Bank getBank() { return bank; }
-    /** Get player's property zone */
+    /** Get the property zone */
     public PropertyZone getPropertyZone() { return propertyZone; }
 
-    // ==================== Turn Status ====================
+    // ==================== Turn State ====================
 
     public int getPlaysUsed() { return playsUsed; }
     public void setPlaysUsed(int playsUsed) { this.playsUsed = playsUsed; }
@@ -98,17 +98,16 @@ public class Player {
         this.doubleRentActive = doubleRentActive;
     }
 
-    // ==================== Hand Card Management ====================
+    // ==================== Hand Management Methods ====================
 
-    /** Add a card to hand */
+    /** Add a card to the hand */
     public void addCardToHand(Card card) {
         hand.add(card);
     }
 
-    /** Remove a card from hand by object */
+    /** Remove a card from hand by object reference; returns null on failure */
     public Card removeCardFromHand(Card card) {
-        hand.remove(card);
-        return card;
+        return hand.remove(card) ? card : null;
     }
 
     /** Remove a card from hand by index */
@@ -116,17 +115,17 @@ public class Player {
         return hand.remove(index);
     }
 
-    /** Check if hand contains the specified card */
+    /** Check whether the hand contains a specific card (by object equality) */
     public boolean hasCard(Card card) {
         return hand.contains(card);
     }
 
-    /** Check if hand contains a card with the given ID */
+    /** Check whether the hand contains a card with the given ID */
     public boolean hasCardId(String cardId) {
         return hand.stream().anyMatch(c -> c.getId().equals(cardId));
     }
 
-    /** Find a card in hand by ID */
+    /** Find a card in hand by its ID */
     public Card findCardById(String cardId) {
         return hand.stream()
                 .filter(c -> c.getId().equals(cardId))
@@ -134,9 +133,9 @@ public class Player {
                 .orElse(null);
     }
 
-    // ==================== Game Progress ====================
+    // ==================== Game Progress Methods ====================
 
-    /** Get number of complete property sets */
+    /** Get the number of complete property sets (from PropertyZone) */
     public int getCompleteSetsCount() {
         return propertyZone.getCompleteSetsCount();
     }
@@ -146,24 +145,24 @@ public class Player {
         return GameConstants.MAX_PLAYS_PER_TURN;
     }
 
-    /** Get remaining plays for current turn */
+    /** Remaining plays available this turn */
     public int getRemainingPlays() {
         return getMaxPlays() - playsUsed;
     }
 
-    /** Check if player can play a card this turn */
+    /** Whether the player can still play cards this turn */
     public boolean canPlay() {
         return getRemainingPlays() > 0;
     }
 
-    /** Increment used play count by 1 */
+    /** Increment the plays-used counter */
     public void incrementPlaysUsed() {
         this.playsUsed++;
     }
 
     /**
-     * Reset turn state
-     * Called at start of new turn: reset play count and clear double rent
+     * Reset turn state.
+     * Called at the start of a new turn; clears play count and double rent.
      */
     public void resetTurnState() {
         setPlaysUsed(0);
@@ -171,9 +170,9 @@ public class Player {
     }
 
     /**
-     * Check if player needs to discard cards
-     * Hand size exceeds maximum (7) at turn end
-     * @return true = need to discard, false = no need
+     * Whether the player needs to discard.
+     * At end of turn, if hand size exceeds the limit (7), discarding is required.
+     * @return true=needs to discard, false=does not
      */
     public boolean needsToDiscard() {
         return hand.size() > GameConstants.MAX_HAND_SIZE;

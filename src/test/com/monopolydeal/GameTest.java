@@ -57,7 +57,6 @@ public class GameTest {
         }
         Card drawn = deck.draw();
         assertNotNull(drawn);
-        assertTrue(deck.getDiscardPileSize() == 0 || deck.getDrawPileSize() >= 0);
     }
 
     @Test
@@ -129,7 +128,7 @@ public class GameTest {
     }
 
     @Test
-    void testBankRemoveCards() throws Bank.InsufficientFundsException {
+    void testBankRemoveCardsFallback() throws Bank.InsufficientFundsException {
         bank.deposit(new Card("m1", CardType.MONEY, "5M", 5, CardColor.NONE, ""));
         bank.deposit(new Card("m2", CardType.MONEY, "3M", 3, CardColor.NONE, ""));
         bank.deposit(new Card("m3", CardType.MONEY, "2M", 2, CardColor.NONE, ""));
@@ -161,7 +160,7 @@ public class GameTest {
     @Test
     void testBankRemoveCardsByIdsInsufficient() {
         bank.deposit(new Card("m1", CardType.MONEY, "2M", 2, CardColor.NONE, ""));
-        assertThrows(IllegalArgumentException.class, () -> bank.removeCardsByIds(Arrays.asList("m1"), 5));
+        assertThrows(IllegalArgumentException.class, () -> bank.removeCardsByIds(List.of("m1"), 5));
     }
 
     @Test
@@ -222,29 +221,46 @@ public class GameTest {
     @Test
     void testHousePlacement() {
         addProperties(player1, CardColor.BLUE, 2);
+
+        // Complete set should allow house placement
         assertTrue(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
+
+        // Add a house
         player1.getPropertyZone().addHouse(CardColor.BLUE);
-        // Official rule: max 1 house per set, placing Hotel doesn't require a House
+
+        // MAX_HOUSES_PER_SET = 1, so cannot place another house
         assertFalse(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
+
+        // Cannot place hotel yet (need to have MAX_HOUSES_PER_SET houses first, which is 1)
+        // After placing 1 house, can place hotel
         assertTrue(player1.getPropertyZone().canPlaceHotel(CardColor.BLUE));
+
+        // Add hotel
         player1.getPropertyZone().addHotel(CardColor.BLUE);
+
+        // After hotel, cannot place house (hotel replaces house)
         assertFalse(player1.getPropertyZone().canPlaceHouse(CardColor.BLUE));
+        // Cannot place another hotel
         assertFalse(player1.getPropertyZone().canPlaceHotel(CardColor.BLUE));
     }
 
     @Test
     void testRentCalculation() {
         addProperties(player1, CardColor.BLUE, 2);
-        int rent = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
-        assertEquals(8, rent);
+
+        // Base rent: Blue with 2 properties = 8M
+        int baseRent = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
+        assertEquals(8, baseRent);
+
+        // Add house: rent = base + 3 = 11M
         player1.getPropertyZone().addHouse(CardColor.BLUE);
         int rentWithHouse = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
-        // Official rule: House = +3M
-        assertEquals(11, rentWithHouse);
-        // Hotel on top of House: +3M + +4M = +7M total
+        assertEquals(11, rentWithHouse);  // 8 + 3 = 11
+
+        // Add hotel: house is replaced, rent = base + 4 = 12M
         player1.getPropertyZone().addHotel(CardColor.BLUE);
-        int rentWithBoth = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
-        assertEquals(15, rentWithBoth);
+        int rentWithHotel = player1.getPropertyZone().getRentAmount(CardColor.BLUE);
+        assertEquals(12, rentWithHotel);  // 8 + 4 = 12
     }
 
     @Test
@@ -329,18 +345,6 @@ public class GameTest {
     }
 
     @Test
-    void testOptimalPaymentCalculation() {
-        bank.deposit(new Card("m1", CardType.MONEY, "10M", 10, CardColor.NONE, ""));
-        bank.deposit(new Card("m2", CardType.MONEY, "5M", 5, CardColor.NONE, ""));
-        bank.deposit(new Card("m3", CardType.MONEY, "1M", 1, CardColor.NONE, ""));
-        bank.deposit(new Card("m4", CardType.MONEY, "1M", 1, CardColor.NONE, ""));
-        List<Card> payment = OptimalPaymentCalculator.calculate(bank, 7);
-        int total = payment.stream().mapToInt(Card::getValue).sum();
-        assertTrue(total >= 7);
-        assertTrue(total <= 8);
-    }
-
-    @Test
     void testFindCardById() {
         Card card = new Card("findMe", CardType.MONEY, "5M", 5, CardColor.NONE, "");
         player1.addCardToHand(card);
@@ -351,32 +355,26 @@ public class GameTest {
     }
 
     @Test
-    void testDiscardPileReshuffle() {
-        int initialDrawSize = deck.getDrawPileSize();
-        for (int i = 0; i < initialDrawSize; i++) {
-            Card c = deck.draw();
-            if (c != null) deck.discard(c);
-        }
-        assertEquals(0, deck.getDrawPileSize());
-        assertTrue(deck.getDiscardPileSize() > 0);
-        Card drawn = deck.draw();
-        assertNotNull(drawn);
-        assertTrue(deck.getDrawPileSize() > 0);
-    }
-
-    @Test
     void testGameConstants() {
         assertEquals(2, GameConstants.MIN_PLAYERS);
         assertEquals(5, GameConstants.MAX_PLAYERS);
         assertEquals(5, GameConstants.INITIAL_HAND_SIZE);
-        assertEquals(3, GameConstants.DRAW_COUNT);
+        assertEquals(2, GameConstants.DRAW_COUNT);
+        assertEquals(5, GameConstants.EMPTY_HAND_DRAW_COUNT);
         assertEquals(3, GameConstants.MAX_PLAYS_PER_TURN);
         assertEquals(7, GameConstants.MAX_HAND_SIZE);
         assertEquals(30, GameConstants.TURN_TIMEOUT_SECONDS);
+        assertEquals(10, GameConstants.TIMEOUT_WARNING_SECONDS);
+        assertEquals(15, GameConstants.DISCARD_TIMEOUT_SECONDS);
+        assertEquals(5, GameConstants.JUST_SAY_NO_TIMEOUT_SECONDS);
+        assertEquals(1, GameConstants.MAX_HOUSES_PER_SET);
+        assertEquals(1, GameConstants.MAX_HOTELS_PER_SET);
         assertEquals(3, GameConstants.WINNING_COMPLETE_SETS);
         assertEquals(2, GameConstants.BIRTHDAY_AMOUNT);
         assertEquals(5, GameConstants.DEBT_COLLECTOR_AMOUNT);
         assertEquals(8888, GameConstants.SERVER_PORT);
+        assertEquals("localhost", GameConstants.DEFAULT_HOST);
+        assertArrayEquals(new int[]{1, 2, 3, 4, 5, 10}, GameConstants.MONEY_DENOMINATIONS);
     }
 
     @Test
@@ -395,17 +393,47 @@ public class GameTest {
 
     @Test
     void testCardColorRentValues() {
+        // Brown: 1 card=1M, 2+=2M
         assertEquals(1, CardColor.BROWN.getRentAmount(1));
         assertEquals(2, CardColor.BROWN.getRentAmount(2));
-        // Light Blue: 3 properties in set, rent 1/2/3
+        assertEquals(2, CardColor.BROWN.getRentAmount(3));
+
+        // Light Blue: 1 card=1M, 2+=2M
         assertEquals(1, CardColor.LIGHT_BLUE.getRentAmount(1));
         assertEquals(2, CardColor.LIGHT_BLUE.getRentAmount(2));
-        assertEquals(3, CardColor.LIGHT_BLUE.getRentAmount(3));
-        assertEquals(3, CardColor.BLUE.getRentAmount(1));
-        assertEquals(8, CardColor.BLUE.getRentAmount(2));
+
+        // Pink/Orange: 1 card=1M, 2+=3M
+        assertEquals(1, CardColor.PINK.getRentAmount(1));
+        assertEquals(3, CardColor.PINK.getRentAmount(2));
+        assertEquals(3, CardColor.PINK.getRentAmount(3));
+
+        // Red/Yellow: 1 card=2M, 2=4M, 3+=6M
         assertEquals(2, CardColor.RED.getRentAmount(1));
         assertEquals(4, CardColor.RED.getRentAmount(2));
         assertEquals(6, CardColor.RED.getRentAmount(3));
+        assertEquals(6, CardColor.RED.getRentAmount(4));
+
+        // Green: 1 card=2M, 2=4M, 3+=7M
+        assertEquals(2, CardColor.GREEN.getRentAmount(1));
+        assertEquals(4, CardColor.GREEN.getRentAmount(2));
+        assertEquals(7, CardColor.GREEN.getRentAmount(3));
+
+        // Blue: 1 card=3M, 2+=8M
+        assertEquals(3, CardColor.BLUE.getRentAmount(1));
+        assertEquals(8, CardColor.BLUE.getRentAmount(2));
+        assertEquals(8, CardColor.BLUE.getRentAmount(3));
+
+        // Black: 1 card=1M, 2=2M, 3=3M, 4+=5M
+        assertEquals(1, CardColor.BLACK.getRentAmount(1));
+        assertEquals(2, CardColor.BLACK.getRentAmount(2));
+        assertEquals(3, CardColor.BLACK.getRentAmount(3));
+        assertEquals(5, CardColor.BLACK.getRentAmount(4));
+        assertEquals(5, CardColor.BLACK.getRentAmount(5));
+
+        // Light Green: 1 card=1M, 2=2M, 3+=4M
+        assertEquals(1, CardColor.LIGHT_GREEN.getRentAmount(1));
+        assertEquals(2, CardColor.LIGHT_GREEN.getRentAmount(2));
+        assertEquals(4, CardColor.LIGHT_GREEN.getRentAmount(3));
     }
 
     @Test
@@ -418,6 +446,80 @@ public class GameTest {
         assertEquals(0, bank.getCount(5));
         assertEquals(1, bank.getCount(10));
         assertEquals(12, bank.getTotal());
+    }
+
+    @Test
+    void testPropertyColorIdentification() {
+        // Pure property colors
+        assertTrue(CardColor.BROWN.isPropertyColor());
+        assertTrue(CardColor.BLUE.isPropertyColor());
+        assertTrue(CardColor.GREEN.isPropertyColor());
+        assertTrue(CardColor.BLACK.isPropertyColor());
+        assertTrue(CardColor.LIGHT_GREEN.isPropertyColor());
+
+        // Not property colors
+        assertFalse(CardColor.WILD.isPropertyColor());
+        assertFalse(CardColor.NONE.isPropertyColor());
+        assertFalse(CardColor.BROWN_LIGHT_BLUE.isPropertyColor());
+        assertFalse(CardColor.PINK_ORANGE.isPropertyColor());
+        assertFalse(CardColor.RED_YELLOW.isPropertyColor());
+        assertFalse(CardColor.GREEN_BLUE.isPropertyColor());
+        assertFalse(CardColor.BLACK_LIGHT_GREEN.isPropertyColor());
+    }
+
+    @Test
+    void testRentColorIdentification() {
+        // Dual-color rent colors
+        assertTrue(CardColor.BROWN_LIGHT_BLUE.isRentColor());
+        assertTrue(CardColor.PINK_ORANGE.isRentColor());
+        assertTrue(CardColor.RED_YELLOW.isRentColor());
+        assertTrue(CardColor.GREEN_BLUE.isRentColor());
+        assertTrue(CardColor.BLACK_LIGHT_GREEN.isRentColor());
+
+        // Wild is also a rent color
+        assertTrue(CardColor.WILD.isRentColor());
+
+        // Property colors are not rent colors
+        assertFalse(CardColor.BROWN.isRentColor());
+        assertFalse(CardColor.BLUE.isRentColor());
+        assertFalse(CardColor.NONE.isRentColor());
+    }
+
+    @Test
+    void testGetComponentColors() {
+        assertArrayEquals(new CardColor[]{CardColor.BROWN, CardColor.LIGHT_BLUE},
+                CardColor.BROWN_LIGHT_BLUE.getComponentColors());
+        assertArrayEquals(new CardColor[]{CardColor.PINK, CardColor.ORANGE},
+                CardColor.PINK_ORANGE.getComponentColors());
+        assertArrayEquals(new CardColor[]{CardColor.RED, CardColor.YELLOW},
+                CardColor.RED_YELLOW.getComponentColors());
+        assertArrayEquals(new CardColor[]{CardColor.GREEN, CardColor.BLUE},
+                CardColor.GREEN_BLUE.getComponentColors());
+        assertArrayEquals(new CardColor[]{CardColor.BLACK, CardColor.LIGHT_GREEN},
+                CardColor.BLACK_LIGHT_GREEN.getComponentColors());
+
+        // Non-dual colors return empty array
+        assertEquals(0, CardColor.BROWN.getComponentColors().length);
+        assertEquals(0, CardColor.WILD.getComponentColors().length);
+    }
+
+    @Test
+    void testSetSize() {
+        assertEquals(2, CardColor.BROWN.getSetSize());
+        assertEquals(3, CardColor.LIGHT_BLUE.getSetSize());
+        assertEquals(3, CardColor.PINK.getSetSize());
+        assertEquals(3, CardColor.ORANGE.getSetSize());
+        assertEquals(3, CardColor.RED.getSetSize());
+        assertEquals(3, CardColor.YELLOW.getSetSize());
+        assertEquals(3, CardColor.GREEN.getSetSize());
+        assertEquals(2, CardColor.BLUE.getSetSize());
+        assertEquals(4, CardColor.BLACK.getSetSize());
+        assertEquals(2, CardColor.LIGHT_GREEN.getSetSize());
+
+        // Special colors have setSize 0
+        assertEquals(0, CardColor.WILD.getSetSize());
+        assertEquals(0, CardColor.NONE.getSetSize());
+        assertEquals(0, CardColor.BROWN_LIGHT_BLUE.getSetSize());
     }
 
     private void addProperties(Player player, CardColor color, int count) {

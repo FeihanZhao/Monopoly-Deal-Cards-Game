@@ -88,8 +88,12 @@ public final class AppTheme {
                     new String[]{"BROWN", "LIGHT_BLUE"}),
             Map.entry("Orange/Pink Wild",
                     new String[]{"ORANGE", "PINK"}),
-            Map.entry("Light Green/Black Wild",
-                    new String[]{"LIGHT_GREEN", "BLACK"})
+            Map.entry("Railroad/Utility Wild",
+                    new String[]{"BLACK", "LIGHT_GREEN"}),
+            Map.entry("Green/Railroad Wild",
+                    new String[]{"GREEN", "BLACK"}),
+            Map.entry("Light Blue/Railroad Wild",
+                    new String[]{"LIGHT_BLUE", "BLACK"})
     );
 
     // ==================== Brand colors ====================

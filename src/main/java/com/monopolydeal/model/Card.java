@@ -6,36 +6,47 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.UUID;
 
 /**
- * Game card with immutable core properties and a mutable wild color.
- * Card types: MONEY, PROPERTY, RENT, ACTION.
- * Wild property cards can be assigned a color when played.
+ * Card class — represents a single card in the game.
+ *
+ * Each card has an immutable identity (id, type, name, value, color, description)
+ * and a mutable wildColor (set by the player only for wild property cards).
+ *
+ * Card type determines how it is used:
+ * - MONEY: deposited into the bank, denominations 1M–10M
+ * - PROPERTY: placed in the property zone, grouped by color
+ * - RENT: charges rent to other players
+ * - ACTION: executes a special effect
+ *
+ * Design note: Card is Cloneable; copy constructor supports testing and deep copies.
  */
 public class Card implements Cloneable {
-/** Unique card ID (first 8 chars of UUID) */
+    /** Unique card identifier (first 8 chars of UUID) */
     private final String id;
-    /** Card type: MONEY, PROPERTY, RENT, ACTION */
+    /** Card type (money / property / rent / action) */
     private final CardType type;
-    /** Card display name */
+    /** Card name (e.g. "Deal Breaker", "5M", "Red Property") */
     private final String name;
-    /** Monetary value (0 for non-money cards) */
+    /** Monetary value (only valid for money cards, 0 for others) — unit: M (millions) */
     private final int value;
-    /** Base card color */
+    /** Card color (property color / dual rent color / WILD / NONE) */
     private final CardColor color;
-    /** Card effect description */
+    /** Card description text */
     private final String description;
-    /** Assigned color for wild property cards */
+    /** Actual chosen color for wild property cards (non-null only for wilds, set by player when played) */
     private CardColor wildColor;
 
-   /**
-     * Create a new card
-     * @param id Unique ID
-     * @param type Card type
-     * @param name Display name
-     * @param value Money value (0 if not money)
-     * @param color Base color
-     * @param description Effect text
+    /**
+     * Primary constructor — creates a new card.
+     *
+     * @param id unique identifier
+     * @param type card type
+     * @param name card name
+     * @param value monetary value (pass 0 for non-money cards)
+     * @param color card color
+     * @param description description text
      */
     public Card(String id, CardType type, String name, int value,
                 CardColor color, String description) {
@@ -45,12 +56,13 @@ public class Card implements Cloneable {
         this.value = value;
         this.color = color;
         this.description = description;
-        this.wildColor = null;  
+        this.wildColor = null;  // No wild color chosen by default; set by player when placing
     }
 
-     /**
-     * Copy constructor (deep copy)
-     * @param other Card to copy
+    /**
+     * Copy constructor — creates a deep copy of a card (preserving the original ID).
+     * Used for testing and card cloning during GameState serialization.
+     * @param other card to copy
      */
     public Card(Card other) {
         this.id = other.id;
@@ -62,10 +74,29 @@ public class Card implements Cloneable {
         this.wildColor = other.wildColor;
     }
 
-    /** Create and return a deep copy of this card */
+    /**
+     * Transfer copy constructor — creates a copy with same content but a different ID.
+     * Used when transferring cards between players to avoid ID collisions.
+     */
+    private Card(Card template, String newId) {
+        this.id = newId;
+        this.type = template.type;
+        this.name = template.name;
+        this.value = template.value;
+        this.color = template.color;
+        this.description = template.description;
+        this.wildColor = template.wildColor;
+    }
+
+    /** Clone this card (deep copy, preserves original ID) */
     @Override
     public Card clone() {
         return new Card(this);
+    }
+
+    /** Create a transfer copy with a new ID (for cross-player transfers like payments/swaps) */
+    public Card transferCopy() {
+        return new Card(this, UUID.randomUUID().toString().substring(0, 8));
     }
 
     // ==================== Getters ====================
@@ -77,14 +108,15 @@ public class Card implements Cloneable {
     public CardColor getColor() { return color; }
     public String getDescription() { return description; }
 
-    /** Get assigned wild color (null if not wild) */
+    /** Get the chosen color of a wild property card (null for non-wilds) */
     public CardColor getWildColor() { return wildColor; }
-    /** Set color for wild property card */
+    /** Set the actual color of a wild property card */
     public void setWildColor(CardColor wildColor) { this.wildColor = wildColor; }
 
-     /**
-     * Get effective color (wild color if set, else base color)
-     * @return Active color for gameplay
+    /**
+     * Get the card's effective color.
+     * Returns the chosen color for wild properties, otherwise the card's own color.
+     * @return effective color
      */
     public CardColor getEffectiveColor() {
         return wildColor != null ? wildColor : color;
@@ -92,24 +124,24 @@ public class Card implements Cloneable {
 
     // ==================== Type Checks ====================
 
-    /** Check if this is a dedicated money card */
+    /** Whether this is a money card (MONEY type only) */
     public boolean isMoneyCard() { return type == CardType.MONEY; }
-    /** Check if card can be used as currency (value > 0) */
+    /** Whether it can be banked as currency (value > 0, includes action/rent cards) */
     public boolean canBeUsedAsMoney() { return value > 0; }
-    /** Check if this is a property card */
+    /** Whether this is a property card */
     public boolean isPropertyCard() { return type == CardType.PROPERTY; }
-    /** Check if this is an action card */
+    /** Whether this is an action card */
     public boolean isActionCard() { return type == CardType.ACTION; }
-    /** Check if this is a rent card */
+    /** Whether this is a rent card */
     public boolean isRentCard() { return type == CardType.RENT; }
-    /** Check if this is a wild property card */
+    /** Whether this is a wild property card (property + WILD color) */
     public boolean isWildProperty() {
         return type == CardType.PROPERTY && color == CardColor.WILD;
     }
 
-    // ==================== Wild Color Rules ====================
+    // ==================== Wild Card Color Rules ====================
 
-    /** Wild card name → allowed color list */
+    /** Wild property card name → allowed color list */
     private static final Map<String, List<CardColor>> WILD_COLOR_RULES = new HashMap<>();
     static {
         WILD_COLOR_RULES.put("Multi-Color Wild", Arrays.asList(
@@ -132,23 +164,25 @@ public class Card implements Cloneable {
                 Arrays.asList(CardColor.LIGHT_BLUE, CardColor.BLACK));
     }
 
-   /**
-     * Validate if target color is allowed for this wild card
-     * @param targetColor Color to check
-     * @return true if allowed
+    /**
+     * Check whether this wild property card can switch to the target color.
+     * Dual-color wilds can only switch between their two colors; multi-color wilds can use any property color.
+     * @param targetColor target color
+     * @return true=allowed, false=not in allowed range
      */
     public boolean isColorAllowed(CardColor targetColor) {
         if (!isWildProperty()) return false;
         List<CardColor> allowed = WILD_COLOR_RULES.get(name);
         if (allowed == null) {
+            // Unknown wild card type: reject defensively to prevent bypass via unknown names
             return false;
         }
         return allowed.contains(targetColor);
     }
 
-   /**
-     * Get unmodifiable list of allowed colors for wild card
-     * @return Allowed colors (empty if not wild)
+    /**
+     * Get the allowed color list for this wild property card (read-only).
+     * @return allowed color list, empty list for non-wilds
      */
     public List<CardColor> getAllowedColors() {
         if (!isWildProperty()) return Collections.emptyList();
@@ -158,7 +192,7 @@ public class Card implements Cloneable {
 
     // ==================== equals / hashCode / toString ====================
 
-    /** Equals based on unique card ID */
+    /** Equality based on card ID */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -167,13 +201,13 @@ public class Card implements Cloneable {
         return Objects.equals(id, card.id);
     }
 
-    /** Hash code based on unique card ID */
+    /** Hash code based on card ID */
     @Override
     public int hashCode() {
         return Objects.hash(id);
     }
 
-    /** Human-readable card string */
+    /** Generate a human-readable card description string */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

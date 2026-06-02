@@ -3,28 +3,27 @@ package com.monopolydeal.model;
 import java.util.*;
 
 /**
- * Bank class - manages a player's money card storage.
+ * Bank class — manages a player's money card storage.
  *
- * Each player has a bank that holds their played money cards.
- * Cards are grouped by denomination (1M/2M/3M/4M/5M/10M).
+ * Each player has one bank that holds their played money cards.
+ * The bank stores money cards grouped by denomination (1M/2M/3M/4M/5M/10M).
  *
- * Core functionality:
- * - deposit: adds a money card to the bank
- * - removeCardsByIds: player manually selects cards to pay, validates total >= debt, no change given
- * - removeCardsFallback: auto-payment on timeout (greedy descending order)
- * - getTotal: returns total bank balance
+ * Core features:
+ * - Deposit: add a money card to the bank
+ * - Withdraw by IDs (removeCardsByIds): player manually selects cards to pay; validates total >= debt; no change given
+ * - Fallback withdraw (removeCardsFallback): auto-select cards on timeout (greedy, largest first)
+ * - Balance query (getTotal): get the bank's total balance
  *
- * No-change rule: if the player pays with cards whose total exceeds the debt,
- * the excess is forfeited and not returned.
+ * No-change rule: if a player pays with cards exceeding the debt, the excess is forfeit (no refund).
  */
 public class Bank {
-    /** Money cards grouped by denomination. key=denomination (1/2/3/4/5/10), value=list of cards of that denomination */
+    /** Money cards grouped by denomination: key=denomination (1/2/3/4/5/10), value=list of cards */
     private final Map<Integer, List<Card>> moneyCards;
-    /** Flat list of all money cards (for quick total calculation) */
+    /** Flat list of all money cards (for fast total calculation) */
     private final List<Card> allMoneyCards;
 
     /**
-     * Constructor - initializes an empty bank.
+     * Constructor — initializes an empty bank.
      * Creates empty lists for each money denomination (1M/2M/3M/4M/5M/10M).
      */
     public Bank() {
@@ -36,15 +35,14 @@ public class Bank {
     }
 
     /**
-     * Deposits a card with a denomination into the bank as a monetary asset.
-     * Action cards and rent cards lose their original effects once deposited;
-     * they are treated purely as currency.
+     * Deposit a valued card into the bank as a monetary asset.
+     * Action cards and rent cards lose their original effects once banked; they only count as currency.
      * @param card any card with value > 0
-     * @throws IllegalArgumentException if the card has a value of 0
+     * @throws IllegalArgumentException if the card's value is 0
      */
     public void deposit(Card card) {
         if (!card.canBeUsedAsMoney()) {
-            throw new IllegalArgumentException("This card cannot be deposited (value is 0)");
+            throw new IllegalArgumentException("Card cannot be banked (value is 0)");
         }
         int denomination = card.getValue();
         moneyCards.computeIfAbsent(denomination, k -> new ArrayList<>()).add(card);
@@ -52,44 +50,47 @@ public class Bank {
     }
 
     /**
-     * Queries the number of money cards of a given denomination in the bank.
-     * @param denomination the denomination (1/2/3/4/5/10)
-     * @return the count of cards of that denomination
+     * Count the number of money cards of a specific denomination.
+     * @param denomination value (1/2/3/4/5/10)
+     * @return number of cards of that denomination
      */
     public int getCount(int denomination) {
         return moneyCards.getOrDefault(denomination, Collections.emptyList()).size();
     }
 
     /**
-     * Gets the total bank balance (sum of all money card denominations).
-     * @return total amount (in M/millions)
+     * Get the bank's total balance (sum of all money card values).
+     * @return total amount (unit: M / millions)
      */
     public int getTotal() {
         return allMoneyCards.stream().mapToInt(Card::getValue).sum();
     }
 
-    /** Returns an unmodifiable view of all money cards in the bank */
+    /** Get a read-only list of all money cards in the bank */
     public List<Card> getAllMoneyCards() {
         return Collections.unmodifiableList(allMoneyCards);
     }
 
     /**
-     * Player manually selects cards to pay — validates total value and removes them.
+     * Player manually selects cards for payment — validates total value and removes them.
      *
      * Validation rules:
      * 1. All cardIds must exist in the bank
      * 2. Total value of selected cards must be >= amount
-     * 3. No change given: all selected cards are removed and transferred;
-     *    the excess is forfeited
+     * 3. No change given: all selected cards are removed and transferred; excess is forfeit
      *
      * @param cardIds list of card IDs selected by the player
-     * @param amount  the amount to pay
-     * @return the list of removed cards
-     * @throws IllegalArgumentException if a card is not in the bank or total is insufficient
+     * @param amount  amount due
+     * @return list of removed cards
+     * @throws IllegalArgumentException if cards don't exist or total value is insufficient
      */
     public List<Card> removeCardsByIds(List<String> cardIds, int amount) {
         if (cardIds == null || cardIds.isEmpty()) {
             throw new IllegalArgumentException("No cards selected");
+        }
+        // Prevent duplicate card ID attacks: the same card cannot be paid twice
+        if (new HashSet<>(cardIds).size() != cardIds.size()) {
+            throw new IllegalArgumentException("Duplicate card IDs");
         }
 
         List<Card> selected = new ArrayList<>();
@@ -104,7 +105,7 @@ public class Bank {
         int totalValue = selected.stream().mapToInt(Card::getValue).sum();
         if (totalValue < amount) {
             throw new IllegalArgumentException(
-                "Insufficient payment. Required at least " + amount + "M, but only selected " + totalValue + "M");
+                    "Insufficient payment. Need at least " + amount + "M, but only selected " + totalValue + "M");
         }
 
         for (Card card : selected) {
@@ -115,20 +116,20 @@ public class Bank {
     }
 
     /**
-     * Timeout fallback auto-payment — greedy algorithm selects cards descending.
+     * Timeout fallback auto-payment — greedy algorithm, largest denominations first.
      *
-     * Used when the debtor times out; the server auto-selects cards to pay.
-     * Cards are selected in descending order of value until the total >= amount.
-     * Callers should first check balance via canPay(amount).
+     * Used when the debtor fails to respond in time; the server auto-selects cards.
+     * Takes cards in descending denomination order until the total >= amount.
+     * Callers should check canPay(amount) first.
      *
-     * @param amount the amount to pay
-     * @return the list of removed cards
+     * @param amount amount due
+     * @return list of removed cards
      * @throws InsufficientFundsException if balance is insufficient
      */
     public List<Card> removeCardsFallback(int amount) throws InsufficientFundsException {
         if (getTotal() < amount) {
-            throw new InsufficientFundsException("Insufficient balance. Requires " + amount +
-                    "M, but only " + getTotal() + "M");
+            throw new InsufficientFundsException("Insufficient balance. Need " + amount +
+                    "M, but only have " + getTotal() + "M");
         }
 
         List<Card> sorted = new ArrayList<>(allMoneyCards);
@@ -149,7 +150,7 @@ public class Bank {
         return selected;
     }
 
-    /** Finds a card in the bank by its ID */
+    /** Find a card in the bank by its ID */
     public Card findCardById(String cardId) {
         return allMoneyCards.stream()
                 .filter(c -> c.getId().equals(cardId))
@@ -158,22 +159,36 @@ public class Bank {
     }
 
     /**
-     * Checks whether the bank has enough balance to pay the specified amount.
-     * @param amount the amount to pay
-     * @return true if balance is sufficient, false otherwise
+     * Remove ALL money cards from the bank (used when player cannot afford the full debt).
+     * No validation — unconditionally takes everything.
+     * @return all cards that were in the bank
+     */
+    public List<Card> removeAllCards() {
+        List<Card> all = new ArrayList<>(allMoneyCards);
+        allMoneyCards.clear();
+        for (List<Card> list : moneyCards.values()) {
+            list.clear();
+        }
+        return all;
+    }
+
+    /**
+     * Check whether the bank has enough funds to pay the specified amount.
+     * @param amount amount due
+     * @return true=sufficient funds, false=insufficient
      */
     public boolean canPay(int amount) {
         return getTotal() >= amount;
     }
 
-    /** Clears the bank (removes all money cards) */
+    /** Clear the bank (remove all money cards) */
     public void clear() {
         moneyCards.values().forEach(List::clear);
         allMoneyCards.clear();
     }
 
     /**
-     * Gets a map of counts per denomination.
+     * Get a map of denomination counts.
      * @return key=denomination, value=number of cards of that denomination
      */
     public Map<Integer, Integer> getDenominationCounts() {
@@ -186,12 +201,11 @@ public class Bank {
 
     /**
      * Insufficient funds exception.
-     * Thrown when the player's bank balance is insufficient to pay the required amount.
+     * Thrown when the player's bank balance is not enough to cover the required payment.
      */
     public static class InsufficientFundsException extends Exception {
         public InsufficientFundsException(String message) {
             super(message);
         }
     }
-
 }
